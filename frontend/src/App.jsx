@@ -3,6 +3,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Upload from './pages/Upload';
+import UploadsView from './pages/UploadsView';
 import './index.css';
 
 // Simple PrivateRoute component
@@ -24,6 +25,7 @@ function App() {
           </PrivateRoute>
         } />
         <Route path="/upload" element={<Upload />} />
+        <Route path="/uploads" element={<UploadsView />} />
       </Routes>
     </Router>
   );

@@ -5,17 +5,25 @@ const {
   healthCheck,
   createNameEntry,
   createNameWithVideo,
+  getTranscriptChunksByUploadId,
+  getUploadsWithTranscripts,
 } = require("../controllers/upload.controller");
 
 const router = express.Router();
 
 router.get("/", healthCheck);
 router.post("/names", ensureGatewayAccess, createNameEntry);
+router.get("/uploads", ensureGatewayAccess, getUploadsWithTranscripts);
 router.post(
   "/names-with-video",
   ensureGatewayAccess,
   uploadVideo.single("video"),
   createNameWithVideo
+);
+router.get(
+  "/transcripts/:uploadId/chunks",
+  ensureGatewayAccess,
+  getTranscriptChunksByUploadId
 );
 
 module.exports = router;

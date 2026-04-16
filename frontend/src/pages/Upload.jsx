@@ -1,7 +1,9 @@
 import { useState } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
 
 const Upload = () => {
+  const navigate = useNavigate();
   const [name, setName] = useState("");
   const [videoFile, setVideoFile] = useState(null);
   const [message, setMessage] = useState("");
@@ -55,6 +57,9 @@ const Upload = () => {
   return (
     <div>
       <h1>Upload Dashboard</h1>
+      <button type="button" onClick={() => navigate("/uploads")}>
+        View Uploads
+      </button>
       <form onSubmit={handleSubmit}>
         <label htmlFor="name">Name</label>
         <input

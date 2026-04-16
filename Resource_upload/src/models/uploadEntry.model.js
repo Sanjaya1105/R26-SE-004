@@ -15,6 +15,16 @@ const uploadSchema = new mongoose.Schema(
       type: String,
       required: false,
     },
+    transcriptPreview: {
+      type: String,
+      required: false,
+      trim: true,
+    },
+    transcriptChunkCount: {
+      type: Number,
+      required: false,
+      default: 0,
+    },
   },
   { timestamps: true }
 );
