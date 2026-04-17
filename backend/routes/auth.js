@@ -1,6 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const Teacher = require('../models/Teacher');
 
 const router = express.Router();
 
@@ -18,11 +19,9 @@ router.post('/register', async (req, res) => {
   }
 
   try {
-    const db = req.db;
-    
     // Check if user exists
-    const [existing] = await db.query('SELECT id FROM teachers WHERE email = ?', [email]);
-    if (existing.length > 0) {
+    const existing = await Teacher.findOne({ email: email.toLowerCase() }).lean();
+    if (existing) {
       return res.status(400).json({ message: 'Email already registered' });
     }
 
@@ -30,10 +29,11 @@ router.post('/register', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Insert user
-    await db.query(
-      'INSERT INTO teachers (name, email, password) VALUES (?, ?, ?)',
-      [name, email, hashedPassword]
-    );
+    await Teacher.create({
+      name: name.trim(),
+      email: email.toLowerCase(),
+      password: hashedPassword,
+    });
 
     res.status(201).json({ message: 'Teacher registered successfully' });
   } catch (err) {
@@ -49,15 +49,11 @@ router.post('/login', async (req, res) => {
   }
 
   try {
-    const db = req.db;
-    
     // Find user
-    const [users] = await db.query('SELECT * FROM teachers WHERE email = ?', [email]);
-    if (users.length === 0) {
+    const user = await Teacher.findOne({ email: email.toLowerCase() });
+    if (!user) {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
-
-    const user = users[0];
 
     // Check password
     const isMatch = await bcrypt.compare(password, user.password);
@@ -67,7 +63,7 @@ router.post('/login', async (req, res) => {
 
     // Generate JWT
     const secret = process.env.JWT_SECRET || 'fallback_secret_key';
-    const token = jwt.sign({ id: user.id, name: user.name, email: user.email }, secret, {
+    const token = jwt.sign({ id: user._id, name: user.name, email: user.email }, secret, {
       expiresIn: '1d'
     });
 

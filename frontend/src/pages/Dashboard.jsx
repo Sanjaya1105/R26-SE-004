@@ -7,6 +7,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const gatewayBaseUrl = import.meta.env.VITE_API_GATEWAY_URL || 'http://localhost:4000';
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
 
@@ -19,7 +20,7 @@ const Dashboard = () => {
           return;
         }
 
-        const response = await axios.get('http://localhost:5000/api/dashboard', {
+        const response = await axios.get(`${gatewayBaseUrl}/api/dashboard`, {
           headers: {
             Authorization: `Bearer ${token}`
           }
@@ -40,7 +41,7 @@ const Dashboard = () => {
     };
 
     fetchDashboardData();
-  }, [navigate]);
+  }, [gatewayBaseUrl, navigate]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');

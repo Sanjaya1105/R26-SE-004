@@ -1,5 +1,6 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
+const Teacher = require('../models/Teacher');
 
 const router = express.Router();
 
@@ -27,12 +28,7 @@ const verifyToken = (req, res, next) => {
 // Protected Dashboard route
 router.get('/', verifyToken, async (req, res) => {
   try {
-    // In a real application, you might fetch specific data from the database here
-    // e.g., students assigned to this teacher, classes, etc.
-    const db = req.db;
-    
-    // We can fetch something from DB as a test or just return mock data
-    const [stats] = await db.query('SELECT COUNT(*) as courseCount FROM teachers WHERE id = ?', [req.user.id]);
+    const teacher = await Teacher.findById(req.user.id).lean();
     
     res.json({
       message: `Welcome to the Teacher Dashboard, ${req.user.name}!`,
@@ -41,7 +37,7 @@ router.get('/', verifyToken, async (req, res) => {
         activeCourses: 5,
         totalStudents: 120,
         upcomingClasses: 2,
-        dbConfirmed: stats.length > 0
+        dbConfirmed: Boolean(teacher)
       }
     });
 
