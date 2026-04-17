@@ -79,7 +79,7 @@ def main():
         model = whisper.load_model(model_name)
         result = model.transcribe(video_path)
         text = (result.get("text") or "").strip()
-        chunks = chunk_segments(result.get("segments", []), 10)
+        chunks = chunk_segments(result.get("segments", []), 30)
         print(json.dumps({"text": text, "chunks": chunks}))
     except Exception as exc:
         print(f"Transcription failed: {str(exc)}", file=sys.stderr)
