@@ -1,0 +1,70 @@
+from fastapi import APIRouter
+
+from app.schemas.event import RawInteractionEventInput
+from app.schemas.feature_window import FeatureWindowInput
+from app.schemas.prediction import CognitiveLoadInput
+from app.schemas.raw_prediction import RawPredictionInput
+from app.services.db_service import save_feature_window, save_raw_interaction_event
+from app.services.prediction_service import (
+    get_prediction_logs,
+    predict_cognitive_load,
+    predict_cognitive_load_from_raw,
+)
+
+
+router = APIRouter()
+
+
+@router.get("/")
+def root():
+    # Quick health check endpoint for confirming the API is up.
+    return {"message": "Cognitive Load Prediction API is running"}
+
+
+@router.post("/predict")
+def predict(data: CognitiveLoadInput):
+    # Predict cognitive load from a precomputed feature payload.
+    return predict_cognitive_load(data)
+
+
+@router.post("/predict/from-raw")
+def predict_from_raw(data: RawPredictionInput):
+    # Accept raw interaction inputs and run the full extraction + prediction flow.
+    return predict_cognitive_load_from_raw(data)
+
+
+@router.post("/events/raw")
+def create_raw_event(data: RawInteractionEventInput):
+    # This endpoint is mainly for the frontend event logger.
+    event_id = save_raw_interaction_event(data.model_dump())
+    return {
+        "message": "Raw interaction event processed",
+        "saved_to_mysql": event_id is not None,
+        "id": event_id,
+    }
+
+
+@router.post("/feature-windows")
+def create_feature_window(data: FeatureWindowInput):
+    # Keeping this separate is useful for manual testing or future scheduled extraction jobs.
+    feature_window_id = save_feature_window(data.model_dump())
+    return {
+        "message": "Feature window processed",
+        "saved_to_mysql": feature_window_id is not None,
+        "id": feature_window_id,
+    }
+
+
+@router.get("/xai/data")
+def get_xai_data(
+    student_id: str | None = None,
+    lesson_id: str | None = None,
+    minute_index: int | None = None,
+):
+    # Read-only route for teammates who need prediction-ready records.
+    # Optional query filters help narrow logs to a student, lesson, or minute.
+    return get_prediction_logs(
+        student_id=student_id,
+        lesson_id=lesson_id,
+        minute_index=minute_index,
+    )
