@@ -65,6 +65,13 @@ const Dashboard = () => {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <span style={{ color: 'var(--text-muted)' }}>Hello, {user.name}</span>
+          <button
+            onClick={() => navigate('/teacher-analysis')}
+            className="btn"
+            style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)', color: '#93c5fd', border: '1px solid rgba(59, 130, 246, 0.35)' }}
+          >
+            Teacher Analyze
+          </button>
           <button onClick={handleLogout} className="btn" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
             Logout
           </button>
