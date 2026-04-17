@@ -1,0 +1,6 @@
+student_id,lesson_id,minute_index,pause_frequency,navigation_count_video,rewatch_segments,playback_rate_change,idle_duration_video,time_on_content,navigation_count_adaptation,revisit_frequency,idle_duration_adaptation,quiz_response_time,error_rate,predicted_cognitive_load,predicted_score,predicted_label,confidence,created_at
+S001,L101,1,0,1,0,0,0,120,0,0,0,10,0.0,Very Low,1,Very Low,0.96,2026-04-16T03:03:45.858901+00:00
+S001,L101,1,1,1,1,0,28,92,0,0,0,112,0.0,Medium,3,Medium,0.34,2026-04-16T03:04:26.320897+00:00
+S001,L101,1,1,0,0,0,31,89,0,0,0,0,0.0,Low,2,Low,0.41,2026-04-16T03:08:26.274854+00:00
+S001,L101,1,1,0,0,0,28,92,0,0,0,0,0.0,Low,2,Low,0.41,2026-04-16T03:12:26.277872+00:00
+S001,L101,1,1,0,0,0,83,37,0,0,0,0,0.0,Low,2,Low,0.39,2026-04-16T03:14:26.988865+00:00
