@@ -2,6 +2,10 @@ const mongoose = require("mongoose");
 const cloudinary = require("../config/cloudinary");
 const CourseSection = require("../models/courseSection.model");
 const CourseSubSection = require("../models/courseSubSection.model");
+const SubsectionTranscriptChunk = require("../models/subsectionTranscriptChunk.model");
+const { runWhisperTranscription } = require("../services/transcription.service");
+const { extractPptText } = require("../services/pptText.service");
+const { extractPdfText } = require("../services/pdfText.service");
 const {
   resolveEducatorNameFromRequest,
   ensureCourseEducatorName,
@@ -49,15 +53,9 @@ const createSubSection = async (req, res) => {
   const pdfFile = files.pdf?.[0];
   const imageFiles = files.images || [];
 
-  const hasAny =
-    Boolean(videoFile?.buffer?.length) ||
-    Boolean(pptFile?.buffer?.length) ||
-    Boolean(pdfFile?.buffer?.length) ||
-    imageFiles.some((f) => f.buffer?.length);
-
-  if (!hasAny) {
+  if (!videoFile?.buffer?.length) {
     return res.status(400).json({
-      message: "Upload at least one file (video, PPT, PDF, or images).",
+      message: "Video is required for subsection. PPT, PDF, and images are optional.",
     });
   }
 
@@ -87,25 +85,41 @@ const createSubSection = async (req, res) => {
     pdfUrl: "",
     pdfPublicId: "",
     images: [],
+    pptText: "",
+    pdfText: "",
+    transcriptText: "",
+    transcriptPreview: "",
+    transcriptChunkCount: 0,
   };
 
   const rollbackIds = [];
 
   try {
+    let transcriptionResult = { text: "", chunks: [] };
     if (videoFile?.buffer?.length) {
       if (!videoFile.mimetype.startsWith("video/")) {
         return res.status(400).json({ message: "Video file must be a video." });
       }
+      transcriptionResult = await runWhisperTranscription(
+        videoFile.buffer,
+        videoFile.originalname
+      );
       const r = await uploadBuffer(videoFile.buffer, {
         folder: "upload_section_subsections/video",
         resource_type: "video",
       });
       uploaded.videoUrl = r.secure_url;
       uploaded.videoPublicId = r.public_id;
+      uploaded.transcriptText = transcriptionResult.text || "";
+      uploaded.transcriptPreview = (transcriptionResult.text || "").slice(0, 300);
+      uploaded.transcriptChunkCount = Array.isArray(transcriptionResult.chunks)
+        ? transcriptionResult.chunks.length
+        : 0;
       rollbackIds.push(r.public_id);
     }
 
     if (pptFile?.buffer?.length) {
+      uploaded.pptText = extractPptText(pptFile.buffer, pptFile.originalname);
       const r = await uploadBuffer(pptFile.buffer, {
         folder: "upload_section_subsections/ppt",
         resource_type: "raw",
@@ -116,6 +130,7 @@ const createSubSection = async (req, res) => {
     }
 
     if (pdfFile?.buffer?.length) {
+      uploaded.pdfText = await extractPdfText(pdfFile.buffer);
       const r = await uploadBuffer(pdfFile.buffer, {
         folder: "upload_section_subsections/pdf",
         resource_type: "raw",
@@ -146,6 +161,19 @@ const createSubSection = async (req, res) => {
       ...uploaded,
     });
 
+    if (Array.isArray(transcriptionResult.chunks) && transcriptionResult.chunks.length > 0) {
+      const chunkDocs = transcriptionResult.chunks.map((chunk, idx) => ({
+        courseId: section.courseId,
+        sectionId: sectionObjectId,
+        subsectionId: doc._id,
+        index: Number.isFinite(chunk.index) ? chunk.index : idx,
+        startSec: Number(chunk.startSec ?? idx * 10),
+        endSec: Number(chunk.endSec ?? (idx + 1) * 10),
+        text: chunk.text || "",
+      }));
+      await SubsectionTranscriptChunk.insertMany(chunkDocs);
+    }
+
     await ensureCourseEducatorName(
       section.courseId,
       resolveEducatorNameFromRequest(req)
@@ -168,8 +196,13 @@ const createSubSection = async (req, res) => {
           order: doc.order,
           videoUrl: doc.videoUrl,
           pptUrl: doc.pptUrl,
+          pptText: doc.pptText,
           pdfUrl: doc.pdfUrl,
+          pdfText: doc.pdfText,
           images: doc.images,
+          transcriptText: doc.transcriptText,
+          transcriptPreview: doc.transcriptPreview,
+          transcriptChunkCount: doc.transcriptChunkCount,
           createdAt: doc.createdAt,
         },
       },

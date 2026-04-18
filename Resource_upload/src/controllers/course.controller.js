@@ -138,7 +138,7 @@ const getPublicCourseDetail = async (req, res) => {
 
     const subs = await CourseSubSection.find({ courseId })
       .sort({ order: 1, createdAt: 1 })
-      .select("sectionId order videoUrl pptUrl pdfUrl images")
+      .select("sectionId order videoUrl pptUrl pdfUrl images transcriptText pptText pdfText")
       .lean();
 
     const subsectionsBySection = new Map();
@@ -152,7 +152,10 @@ const getPublicCourseDetail = async (req, res) => {
         order: sub.order,
         videoUrl: sub.videoUrl || "",
         pptUrl: sub.pptUrl || "",
+        pptText: sub.pptText || "",
         pdfUrl: sub.pdfUrl || "",
+        pdfText: sub.pdfText || "",
+        transcriptText: sub.transcriptText || "",
         images: Array.isArray(sub.images)
           ? sub.images.map((img) => ({ url: img.url }))
           : [],
