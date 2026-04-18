@@ -30,8 +30,16 @@ function App() {
             <TeacherAnalysis />
           </PrivateRoute>
         } />
-        <Route path="/upload" element={<Upload />} />
-        <Route path="/uploads" element={<UploadsView />} />
+        <Route path="/upload" element={
+          <PrivateRoute>
+            <Upload />
+          </PrivateRoute>
+        } />
+        <Route path="/uploads" element={
+          <PrivateRoute>
+            <UploadsView />
+          </PrivateRoute>
+        } />
       </Routes>
     </Router>
   );

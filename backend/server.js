@@ -12,9 +12,11 @@ app.use(express.json());
 // Import routes
 const authRoutes = require('./routes/auth');
 const dashboardRoutes = require('./routes/dashboard');
+const lessonsRoutes = require('./routes/lessons');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/lessons', lessonsRoutes);
 
 const mongoUri =
   process.env.MONGO_URI ||

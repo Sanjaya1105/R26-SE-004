@@ -38,14 +38,33 @@ const Upload = () => {
       formData.append("name", name);
       formData.append("video", videoFile);
 
+      const token = localStorage.getItem("token");
+      if (!token) {
+        navigate("/login");
+        return;
+      }
+
       const response = await axios.post(
-        `${gatewayBaseUrl}/api/resources/names-with-video`,
-        formData
+        `${gatewayBaseUrl}/api/lessons/names-with-video`,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          maxBodyLength: Infinity,
+          maxContentLength: Infinity,
+        }
       );
       setMessage(response.data.message || "Submitted successfully");
       setName("");
       setVideoFile(null);
     } catch (error) {
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        navigate("/login");
+        return;
+      }
       const serverMessage =
         error.response?.data?.message || "Failed to submit name";
       setMessage(serverMessage);

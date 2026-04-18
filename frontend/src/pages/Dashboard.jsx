@@ -66,6 +66,14 @@ const Dashboard = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <span style={{ color: 'var(--text-muted)' }}>Hello, {user.name}</span>
           <button
+            type="button"
+            onClick={() => navigate('/upload')}
+            className="btn"
+            style={{ backgroundColor: 'rgba(34, 197, 94, 0.12)', color: '#86efac', border: '1px solid rgba(34, 197, 94, 0.35)' }}
+          >
+            Upload Lesson
+          </button>
+          <button
             onClick={() => navigate('/teacher-analysis')}
             className="btn"
             style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)', color: '#93c5fd', border: '1px solid rgba(59, 130, 246, 0.35)' }}
