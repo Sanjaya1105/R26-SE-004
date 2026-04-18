@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
 
 const UploadsView = () => {
+  const navigate = useNavigate();
   const [uploads, setUploads] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState("");
@@ -12,9 +14,25 @@ const UploadsView = () => {
   useEffect(() => {
     const fetchUploads = async () => {
       try {
-        const response = await axios.get(`${gatewayBaseUrl}/api/resources/uploads`);
+        const token = localStorage.getItem("token");
+        if (!token) {
+          navigate("/login");
+          return;
+        }
+
+        const response = await axios.get(`${gatewayBaseUrl}/api/lessons/uploads`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
         setUploads(response.data.data || []);
       } catch (error) {
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          navigate("/login");
+          return;
+        }
         setMessage(error.response?.data?.message || "Failed to fetch uploads");
       } finally {
         setIsLoading(false);
@@ -22,7 +40,7 @@ const UploadsView = () => {
     };
 
     fetchUploads();
-  }, [gatewayBaseUrl]);
+  }, [gatewayBaseUrl, navigate]);
 
   if (isLoading) {
     return <p>Loading uploads...</p>;
