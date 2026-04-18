@@ -2,6 +2,8 @@ const mongoose = require("mongoose");
 const cloudinary = require("../config/cloudinary");
 const CourseSection = require("../models/courseSection.model");
 const CourseSubSection = require("../models/courseSubSection.model");
+const SubsectionTranscriptChunk = require("../models/subsectionTranscriptChunk.model");
+const { runWhisperTranscription } = require("../services/transcription.service");
 const {
   resolveEducatorNameFromRequest,
   ensureCourseEducatorName,
@@ -87,21 +89,34 @@ const createSubSection = async (req, res) => {
     pdfUrl: "",
     pdfPublicId: "",
     images: [],
+    transcriptText: "",
+    transcriptPreview: "",
+    transcriptChunkCount: 0,
   };
 
   const rollbackIds = [];
 
   try {
+    let transcriptionResult = { text: "", chunks: [] };
     if (videoFile?.buffer?.length) {
       if (!videoFile.mimetype.startsWith("video/")) {
         return res.status(400).json({ message: "Video file must be a video." });
       }
+      transcriptionResult = await runWhisperTranscription(
+        videoFile.buffer,
+        videoFile.originalname
+      );
       const r = await uploadBuffer(videoFile.buffer, {
         folder: "upload_section_subsections/video",
         resource_type: "video",
       });
       uploaded.videoUrl = r.secure_url;
       uploaded.videoPublicId = r.public_id;
+      uploaded.transcriptText = transcriptionResult.text || "";
+      uploaded.transcriptPreview = (transcriptionResult.text || "").slice(0, 300);
+      uploaded.transcriptChunkCount = Array.isArray(transcriptionResult.chunks)
+        ? transcriptionResult.chunks.length
+        : 0;
       rollbackIds.push(r.public_id);
     }
 
@@ -146,6 +161,19 @@ const createSubSection = async (req, res) => {
       ...uploaded,
     });
 
+    if (Array.isArray(transcriptionResult.chunks) && transcriptionResult.chunks.length > 0) {
+      const chunkDocs = transcriptionResult.chunks.map((chunk, idx) => ({
+        courseId: section.courseId,
+        sectionId: sectionObjectId,
+        subsectionId: doc._id,
+        index: Number.isFinite(chunk.index) ? chunk.index : idx,
+        startSec: Number(chunk.startSec ?? idx * 10),
+        endSec: Number(chunk.endSec ?? (idx + 1) * 10),
+        text: chunk.text || "",
+      }));
+      await SubsectionTranscriptChunk.insertMany(chunkDocs);
+    }
+
     await ensureCourseEducatorName(
       section.courseId,
       resolveEducatorNameFromRequest(req)
@@ -170,6 +198,9 @@ const createSubSection = async (req, res) => {
           pptUrl: doc.pptUrl,
           pdfUrl: doc.pdfUrl,
           images: doc.images,
+          transcriptText: doc.transcriptText,
+          transcriptPreview: doc.transcriptPreview,
+          transcriptChunkCount: doc.transcriptChunkCount,
           createdAt: doc.createdAt,
         },
       },
