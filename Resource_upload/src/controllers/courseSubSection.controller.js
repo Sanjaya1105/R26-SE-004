@@ -51,15 +51,9 @@ const createSubSection = async (req, res) => {
   const pdfFile = files.pdf?.[0];
   const imageFiles = files.images || [];
 
-  const hasAny =
-    Boolean(videoFile?.buffer?.length) ||
-    Boolean(pptFile?.buffer?.length) ||
-    Boolean(pdfFile?.buffer?.length) ||
-    imageFiles.some((f) => f.buffer?.length);
-
-  if (!hasAny) {
+  if (!videoFile?.buffer?.length) {
     return res.status(400).json({
-      message: "Upload at least one file (video, PPT, PDF, or images).",
+      message: "Video is required for subsection. PPT, PDF, and images are optional.",
     });
   }
 

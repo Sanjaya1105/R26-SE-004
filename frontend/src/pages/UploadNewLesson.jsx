@@ -291,15 +291,8 @@ const UploadNewLesson = () => {
       return;
     }
 
-    const hasFile =
-      subVideo ||
-      subPpt ||
-      subPdf ||
-      (Array.isArray(subImages) && subImages.length > 0);
-    if (!hasFile) {
-      setMessage(
-        'Add at least one file: video, PPT, PDF, or one or more images.'
-      );
+    if (!subVideo) {
+      setMessage('Subsection video is required. PPT, PDF, and images are optional.');
       return;
     }
 
@@ -729,9 +722,8 @@ const UploadNewLesson = () => {
                         marginBottom: '1rem',
                       }}
                     >
-                      Upload one video, and/or PPT, PDF, and multiple images
-                      (stored on Cloudinary). At least one file is required to
-                      submit.
+                      Upload subsection video (required). PPT, PDF, and multiple
+                      images are optional.
                     </p>
 
                     <div className="form-group">
