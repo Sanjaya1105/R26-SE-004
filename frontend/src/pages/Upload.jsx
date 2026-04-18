@@ -1,6 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { getGatewayBaseUrl } from "../config/gateway";
 
 const Upload = () => {
   const navigate = useNavigate();
@@ -10,8 +11,7 @@ const Upload = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const maxVideoSizeBytes = 40 * 1024 * 1024;
 
-  const gatewayBaseUrl =
-    import.meta.env.VITE_API_GATEWAY_URL || "http://localhost:4000";
+  const gatewayBaseUrl = getGatewayBaseUrl();
 
   const handleSubmit = async (event) => {
     event.preventDefault();

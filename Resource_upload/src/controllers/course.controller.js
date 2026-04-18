@@ -1,0 +1,410 @@
+const mongoose = require("mongoose");
+const cloudinary = require("../config/cloudinary");
+const Course = require("../models/course.model");
+const CourseSection = require("../models/courseSection.model");
+const CourseSubSection = require("../models/courseSubSection.model");
+const { resolveEducatorNameFromRequest } = require("../utils/educatorDisplay");
+
+function parseKeywords(raw) {
+  if (!raw || typeof raw !== "string") return [];
+  return raw
+    .split(",")
+    .map((k) => k.trim())
+    .filter(Boolean);
+}
+
+function uploadImageBuffer(buffer) {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: "upload_section_course_thumbnails",
+        resource_type: "image",
+      },
+      (error, result) => {
+        if (error) return reject(error);
+        return resolve(result);
+      }
+    );
+    uploadStream.end(buffer);
+  });
+}
+
+const createCourse = async (req, res) => {
+  const courseName = (req.body.courseName || "").trim();
+  const description = (req.body.description || "").trim();
+  const keywords = parseKeywords(req.body.keywords || "");
+  const educatorId = req.user?.id ? String(req.user.id).trim() : "";
+  const educatorName = resolveEducatorNameFromRequest(req);
+
+  if (!educatorId || !mongoose.Types.ObjectId.isValid(educatorId)) {
+    return res.status(400).json({ message: "Invalid educator session." });
+  }
+
+  if (!courseName) {
+    return res.status(400).json({ message: "Course name is required." });
+  }
+
+  if (!req.file?.buffer) {
+    return res.status(400).json({ message: "Thumbnail is required." });
+  }
+
+  let uploadResult;
+  try {
+    uploadResult = await uploadImageBuffer(req.file.buffer);
+  } catch (error) {
+    console.error("Cloudinary thumbnail upload failed:", error.message);
+    return res.status(502).json({ message: "Failed to upload thumbnail." });
+  }
+
+  const thumbnailUrl = uploadResult.secure_url;
+
+  try {
+    const course = await Course.create({
+      educatorId,
+      educatorName,
+      courseName,
+      thumbnailUrl,
+      keywords,
+      description,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Course saved successfully",
+      data: {
+        id: course._id,
+        courseName: course.courseName,
+        thumbnailUrl: course.thumbnailUrl,
+        keywords: course.keywords,
+        description: course.description,
+        educatorId: course.educatorId,
+        educatorName: course.educatorName,
+        createdAt: course.createdAt,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    if (uploadResult?.public_id) {
+      cloudinary.uploader.destroy(uploadResult.public_id).catch(() => {});
+    }
+    return res.status(500).json({ message: "Failed to save course." });
+  }
+};
+
+const listPublicCourses = async (req, res) => {
+  try {
+    const rows = await Course.find({})
+      .sort({ createdAt: -1 })
+      .select("courseName thumbnailUrl educatorName")
+      .lean();
+
+    const data = rows.map((c) => ({
+      id: c._id,
+      courseName: c.courseName,
+      thumbnailUrl: c.thumbnailUrl,
+      educatorName: (c.educatorName || "").trim(),
+    }));
+
+    return res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Failed to load courses." });
+  }
+};
+
+const getPublicCourseDetail = async (req, res) => {
+  const { courseId } = req.params;
+
+  if (!courseId || !mongoose.Types.ObjectId.isValid(courseId)) {
+    return res.status(400).json({ message: "Invalid course id." });
+  }
+
+  try {
+    const course = await Course.findById(courseId)
+      .select("courseName thumbnailUrl educatorName keywords description")
+      .lean();
+
+    if (!course) {
+      return res.status(404).json({ message: "Course not found." });
+    }
+
+    const sections = await CourseSection.find({ courseId })
+      .sort({ order: 1, createdAt: 1 })
+      .select("sectionName order")
+      .lean();
+
+    const subs = await CourseSubSection.find({ courseId })
+      .sort({ order: 1, createdAt: 1 })
+      .select("sectionId order videoUrl pptUrl pdfUrl images transcriptText pptText pdfText")
+      .lean();
+
+    const subsectionsBySection = new Map();
+    for (const sub of subs) {
+      const sid = String(sub.sectionId);
+      if (!subsectionsBySection.has(sid)) {
+        subsectionsBySection.set(sid, []);
+      }
+      subsectionsBySection.get(sid).push({
+        id: sub._id,
+        order: sub.order,
+        videoUrl: sub.videoUrl || "",
+        pptUrl: sub.pptUrl || "",
+        pptText: sub.pptText || "",
+        pdfUrl: sub.pdfUrl || "",
+        pdfText: sub.pdfText || "",
+        transcriptText: sub.transcriptText || "",
+        images: Array.isArray(sub.images)
+          ? sub.images.map((img) => ({ url: img.url }))
+          : [],
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        course: {
+          id: course._id,
+          courseName: course.courseName,
+          thumbnailUrl: course.thumbnailUrl,
+          educatorName: (course.educatorName || "").trim(),
+          keywords: course.keywords || [],
+          description: course.description || "",
+        },
+        sections: sections.map((s) => ({
+          id: s._id,
+          sectionName: s.sectionName,
+          order: s.order,
+          subsections: subsectionsBySection.get(String(s._id)) || [],
+        })),
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Failed to load course." });
+  }
+};
+
+const listMyCourses = async (req, res) => {
+  const educatorId = req.user?.id ? String(req.user.id).trim() : "";
+
+  if (!educatorId || !mongoose.Types.ObjectId.isValid(educatorId)) {
+    return res.status(400).json({ message: "Invalid educator session." });
+  }
+
+  try {
+    const rows = await Course.find({ educatorId })
+      .sort({ createdAt: -1 })
+      .select("courseName thumbnailUrl createdAt")
+      .lean();
+
+    const data = rows.map((c) => ({
+      id: c._id,
+      courseName: c.courseName,
+      thumbnailUrl: c.thumbnailUrl,
+      createdAt: c.createdAt,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Failed to load your courses." });
+  }
+};
+
+const getCourseForEdit = async (req, res) => {
+  const { courseId } = req.params;
+  const educatorId = req.user?.id ? String(req.user.id).trim() : "";
+
+  if (!educatorId || !mongoose.Types.ObjectId.isValid(educatorId)) {
+    return res.status(400).json({ message: "Invalid educator session." });
+  }
+
+  if (!courseId || !mongoose.Types.ObjectId.isValid(courseId)) {
+    return res.status(400).json({ message: "Invalid course id." });
+  }
+
+  try {
+    const course = await Course.findById(courseId)
+      .select("courseName thumbnailUrl keywords description educatorId")
+      .lean();
+
+    if (!course) {
+      return res.status(404).json({ message: "Course not found." });
+    }
+
+    if (String(course.educatorId) !== educatorId) {
+      return res.status(403).json({ message: "You can only edit your own courses." });
+    }
+
+    const cid = course._id;
+    const sections = await CourseSection.find({ courseId: cid })
+      .sort({ order: 1, createdAt: 1 })
+      .select("sectionName order")
+      .lean();
+
+    const subs = await CourseSubSection.find({ courseId: cid })
+      .sort({ order: 1, createdAt: 1 })
+      .select("sectionId order videoUrl pptUrl pdfUrl images")
+      .lean();
+
+    const subsectionsBySection = new Map();
+    for (const sub of subs) {
+      const sid = String(sub.sectionId);
+      if (!subsectionsBySection.has(sid)) {
+        subsectionsBySection.set(sid, []);
+      }
+      subsectionsBySection.get(sid).push({
+        id: sub._id,
+        order: sub.order,
+        videoUrl: sub.videoUrl || "",
+        pptUrl: sub.pptUrl || "",
+        pdfUrl: sub.pdfUrl || "",
+        images: Array.isArray(sub.images)
+          ? sub.images.map((img) => ({ url: img.url }))
+          : [],
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        id: course._id,
+        courseName: course.courseName,
+        thumbnailUrl: course.thumbnailUrl,
+        keywords: course.keywords || [],
+        description: course.description || "",
+        sections: sections.map((s) => ({
+          id: s._id,
+          sectionName: s.sectionName,
+          order: s.order,
+          subsections: subsectionsBySection.get(String(s._id)) || [],
+        })),
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Failed to load course." });
+  }
+};
+
+const updateCourse = async (req, res) => {
+  const { courseId } = req.params;
+  const educatorId = req.user?.id ? String(req.user.id).trim() : "";
+  const courseName = (req.body.courseName || "").trim();
+  const description = (req.body.description || "").trim();
+  const keywords = parseKeywords(req.body.keywords || "");
+  const educatorName = resolveEducatorNameFromRequest(req);
+
+  if (!educatorId || !mongoose.Types.ObjectId.isValid(educatorId)) {
+    return res.status(400).json({ message: "Invalid educator session." });
+  }
+
+  if (!courseId || !mongoose.Types.ObjectId.isValid(courseId)) {
+    return res.status(400).json({ message: "Invalid course id." });
+  }
+
+  if (!courseName) {
+    return res.status(400).json({ message: "Course name is required." });
+  }
+
+  try {
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({ message: "Course not found." });
+    }
+
+    if (String(course.educatorId) !== educatorId) {
+      return res.status(403).json({ message: "You can only update your own courses." });
+    }
+
+    course.courseName = courseName;
+    course.description = description;
+    course.keywords = keywords;
+    if (educatorName) {
+      course.educatorName = educatorName;
+    }
+
+    if (req.file?.buffer) {
+      let uploadResult;
+      try {
+        uploadResult = await uploadImageBuffer(req.file.buffer);
+      } catch (error) {
+        console.error("Cloudinary thumbnail upload failed:", error.message);
+        return res.status(502).json({ message: "Failed to upload thumbnail." });
+      }
+      course.thumbnailUrl = uploadResult.secure_url;
+    }
+
+    await course.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Course updated.",
+      data: {
+        id: course._id,
+        courseName: course.courseName,
+        thumbnailUrl: course.thumbnailUrl,
+        keywords: course.keywords,
+        description: course.description,
+        educatorName: course.educatorName,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Failed to update course." });
+  }
+};
+
+const deleteCourse = async (req, res) => {
+  const { courseId } = req.params;
+  const educatorId = req.user?.id ? String(req.user.id).trim() : "";
+
+  if (!educatorId || !mongoose.Types.ObjectId.isValid(educatorId)) {
+    return res.status(400).json({ message: "Invalid educator session." });
+  }
+
+  if (!courseId || !mongoose.Types.ObjectId.isValid(courseId)) {
+    return res.status(400).json({ message: "Invalid course id." });
+  }
+
+  try {
+    const course = await Course.findById(courseId).select("educatorId").lean();
+    if (!course) {
+      return res.status(404).json({ message: "Course not found." });
+    }
+
+    if (String(course.educatorId) !== educatorId) {
+      return res.status(403).json({ message: "You can only delete your own courses." });
+    }
+
+    const cid = new mongoose.Types.ObjectId(courseId);
+
+    await CourseSubSection.deleteMany({ courseId: cid });
+    await CourseSection.deleteMany({ courseId: cid });
+    await Course.deleteOne({ _id: cid });
+
+    return res.status(200).json({
+      success: true,
+      message: "Course deleted.",
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Failed to delete course." });
+  }
+};
+
+module.exports = {
+  createCourse,
+  listPublicCourses,
+  getPublicCourseDetail,
+  listMyCourses,
+  getCourseForEdit,
+  updateCourse,
+  deleteCourse,
+};

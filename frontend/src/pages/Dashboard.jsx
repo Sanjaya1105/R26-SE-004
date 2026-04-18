@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { getGatewayBaseUrl } from '../config/gateway';
 
 const Dashboard = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const navigate = useNavigate();
-  const gatewayBaseUrl = import.meta.env.VITE_API_GATEWAY_URL || 'http://localhost:4000';
+  const gatewayBaseUrl = getGatewayBaseUrl();
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
 
@@ -25,7 +26,7 @@ const Dashboard = () => {
             Authorization: `Bearer ${token}`
           }
         });
-        
+
         setData(response.data);
       } catch (err) {
         if (err.response?.status === 401 || err.response?.status === 403) {
@@ -67,7 +68,7 @@ const Dashboard = () => {
           <span style={{ color: 'var(--text-muted)' }}>Hello, {user.name}</span>
           <button
             type="button"
-            onClick={() => navigate('/upload')}
+            onClick={() => navigate('/upload-lesson')}
             className="btn"
             style={{ backgroundColor: 'rgba(34, 197, 94, 0.12)', color: '#86efac', border: '1px solid rgba(34, 197, 94, 0.35)' }}
           >
@@ -79,6 +80,13 @@ const Dashboard = () => {
             style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)', color: '#93c5fd', border: '1px solid rgba(59, 130, 246, 0.35)' }}
           >
             Teacher Analyze
+          </button>
+          <button
+            onClick={() => navigate('/gpt')}
+            className="btn"
+            style={{ backgroundColor: 'rgba(168, 85, 247, 0.15)', color: '#d8b4fe', border: '1px solid rgba(168, 85, 247, 0.35)' }}
+          >
+            Chat Assistant
           </button>
           <button
             onClick={() => navigate('/lesson-summary')}
@@ -107,12 +115,12 @@ const Dashboard = () => {
               <span className="stat-title">Active Courses</span>
               <span className="stat-value">{data.dashboardData.activeCourses}</span>
             </div>
-            
+
             <div className="stat-card glass-panel">
               <span className="stat-title">Total Students</span>
               <span className="stat-value">{data.dashboardData.totalStudents}</span>
             </div>
-            
+
             <div className="stat-card glass-panel" style={{ borderTop: '4px solid var(--secondary)' }}>
               <span className="stat-title">Upcoming Classes</span>
               <span className="stat-value">{data.dashboardData.upcomingClasses}</span>

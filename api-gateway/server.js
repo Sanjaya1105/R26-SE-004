@@ -9,6 +9,12 @@ const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 const FRONTEND_URLS = process.env.FRONTEND_URLS || "";
 const BACKEND_SERVICE_URL =
   process.env.BACKEND_SERVICE_URL || "http://localhost:5001";
+const GPT_SERVICE_URL =
+  process.env.GPT_SERVICE_URL || "http://localhost:5002";
+const RESOURCE_UPLOAD_URL =
+  process.env.RESOURCE_UPLOAD_URL || "http://localhost:5000";
+const GATEWAY_SHARED_SECRET =
+  process.env.GATEWAY_SHARED_SECRET || "gateway_secret_change_me";
 const EXPLAINABLE_AI_BACKEND_URL =
   process.env.EXPLAINABLE_AI_BACKEND_URL || "http://localhost:8000";
 const RECOMMENDATION_AI_URL = 
@@ -39,6 +45,8 @@ app.get("/", (req, res) => {
   res.json({
     message: "API Gateway server is running",
     backendService: BACKEND_SERVICE_URL,
+    gptService: GPT_SERVICE_URL,
+    resourceUploadService: RESOURCE_UPLOAD_URL,
   });
 });
 
@@ -66,6 +74,77 @@ app.use(
     target: BACKEND_SERVICE_URL,
     changeOrigin: true,
     pathRewrite: (path) => `/api/lessons${path}`,
+  })
+);
+
+app.use(
+  "/api/gpt",
+  createProxyMiddleware({
+    target: GPT_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: (path) => `/api/gpt${path}`,
+  })
+);
+
+app.use(
+  createProxyMiddleware({
+    target: RESOURCE_UPLOAD_URL,
+    changeOrigin: true,
+    pathFilter: (pathname) =>
+      pathname === "/api/public/courses" ||
+      pathname.startsWith("/api/public/courses/"),
+    pathRewrite: (path) =>
+      path.replace(/^\/api\/public\/courses/, "/public/courses"),
+    on: {
+      proxyReq: (proxyReq) => {
+        if (GATEWAY_SHARED_SECRET) {
+          proxyReq.setHeader("x-gateway-secret", GATEWAY_SHARED_SECRET);
+        }
+      },
+    },
+  })
+);
+
+// http-proxy-middleware v3 uses pathFilter (not filter). A missing pathFilter
+// defaults to "/" and would match every request, breaking /api/sections routing.
+app.use(
+  createProxyMiddleware({
+    target: RESOURCE_UPLOAD_URL,
+    changeOrigin: true,
+    pathFilter: (pathname) =>
+      pathname === "/api/courses" || pathname.startsWith("/api/courses/"),
+    pathRewrite: (path) => path.replace(/^\/api\/courses/, "/courses"),
+    on: {
+      proxyReq: (proxyReq) => {
+        if (GATEWAY_SHARED_SECRET) {
+          proxyReq.setHeader("x-gateway-secret", GATEWAY_SHARED_SECRET);
+        }
+      },
+    },
+  })
+);
+
+app.use(
+  createProxyMiddleware({
+    target: RESOURCE_UPLOAD_URL,
+    changeOrigin: true,
+    pathFilter: (pathname) => pathname.startsWith("/api/sections"),
+    pathRewrite: (path) => path.replace(/^\/api\/sections/, "/sections"),
+    on: {
+      proxyReq: (proxyReq) => {
+        if (GATEWAY_SHARED_SECRET) {
+          proxyReq.setHeader("x-gateway-secret", GATEWAY_SHARED_SECRET);
+        }
+      },
+    },
+  })
+);
+
+app.use(
+  "/files",
+  createProxyMiddleware({
+    target: RESOURCE_UPLOAD_URL,
+    changeOrigin: true,
   })
 );
 
