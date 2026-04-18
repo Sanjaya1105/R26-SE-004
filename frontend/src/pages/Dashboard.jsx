@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { getGatewayBaseUrl } from '../config/gateway';
 
 const Dashboard = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const navigate = useNavigate();
-  const gatewayBaseUrl = import.meta.env.VITE_API_GATEWAY_URL || 'http://localhost:4000';
+  const gatewayBaseUrl = getGatewayBaseUrl();
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
 

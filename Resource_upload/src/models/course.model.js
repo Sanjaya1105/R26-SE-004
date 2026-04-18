@@ -8,6 +8,7 @@ const courseSchema = new mongoose.Schema(
       index: true,
     },
     courseName: { type: String, required: true, trim: true },
+    educatorName: { type: String, default: "", trim: true },
     thumbnailUrl: { type: String, required: true },
     keywords: [{ type: String, trim: true }],
     description: { type: String, default: "", trim: true },

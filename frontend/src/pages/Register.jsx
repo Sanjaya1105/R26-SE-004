@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
+import { getGatewayBaseUrl } from '../config/gateway';
 
 const Register = () => {
   const [formData, setFormData] = useState({ name: '', email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const gatewayBaseUrl = import.meta.env.VITE_API_GATEWAY_URL || 'http://localhost:4000';
+  const gatewayBaseUrl = getGatewayBaseUrl();
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });

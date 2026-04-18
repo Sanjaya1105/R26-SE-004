@@ -7,6 +7,9 @@ import UploadsView from './pages/UploadsView';
 import LessonUploadHub from './pages/LessonUploadHub';
 import UploadNewLesson from './pages/UploadNewLesson';
 import TeacherAnalysis from './pages/TeacherAnalysis';
+import Course from './pages/Course';
+import CourseDetail from './pages/CourseDetail';
+import EditCourse from './pages/EditCourse';
 import './index.css';
 
 // Simple PrivateRoute component
@@ -22,6 +25,8 @@ function App() {
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/course/:courseId" element={<CourseDetail />} />
+        <Route path="/course" element={<Course />} />
         <Route path="/dashboard" element={
           <PrivateRoute>
             <Dashboard />
@@ -40,6 +45,11 @@ function App() {
         <Route path="/upload-new_lesson" element={
           <PrivateRoute>
             <UploadNewLesson />
+          </PrivateRoute>
+        } />
+        <Route path="/upload-course/edit/:courseId" element={
+          <PrivateRoute>
+            <EditCourse />
           </PrivateRoute>
         } />
         <Route path="/upload" element={

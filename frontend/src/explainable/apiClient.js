@@ -1,5 +1,6 @@
-const gatewayBaseUrl = import.meta.env.VITE_API_GATEWAY_URL || 'http://localhost:4000';
-const API_BASE = `${gatewayBaseUrl}/api/explainable/v1`;
+import { getGatewayBaseUrl } from '../config/gateway';
+
+const API_BASE = `${getGatewayBaseUrl()}/api/explainable/v1`;
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {

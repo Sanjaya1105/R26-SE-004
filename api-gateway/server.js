@@ -76,9 +76,46 @@ app.use(
   createProxyMiddleware({
     target: RESOURCE_UPLOAD_URL,
     changeOrigin: true,
-    filter: (pathname) =>
+    pathFilter: (pathname) =>
+      pathname === "/api/public/courses" ||
+      pathname.startsWith("/api/public/courses/"),
+    pathRewrite: (path) =>
+      path.replace(/^\/api\/public\/courses/, "/public/courses"),
+    on: {
+      proxyReq: (proxyReq) => {
+        if (GATEWAY_SHARED_SECRET) {
+          proxyReq.setHeader("x-gateway-secret", GATEWAY_SHARED_SECRET);
+        }
+      },
+    },
+  })
+);
+
+// http-proxy-middleware v3 uses pathFilter (not filter). A missing pathFilter
+// defaults to "/" and would match every request, breaking /api/sections routing.
+app.use(
+  createProxyMiddleware({
+    target: RESOURCE_UPLOAD_URL,
+    changeOrigin: true,
+    pathFilter: (pathname) =>
       pathname === "/api/courses" || pathname.startsWith("/api/courses/"),
     pathRewrite: (path) => path.replace(/^\/api\/courses/, "/courses"),
+    on: {
+      proxyReq: (proxyReq) => {
+        if (GATEWAY_SHARED_SECRET) {
+          proxyReq.setHeader("x-gateway-secret", GATEWAY_SHARED_SECRET);
+        }
+      },
+    },
+  })
+);
+
+app.use(
+  createProxyMiddleware({
+    target: RESOURCE_UPLOAD_URL,
+    changeOrigin: true,
+    pathFilter: (pathname) => pathname.startsWith("/api/sections"),
+    pathRewrite: (path) => path.replace(/^\/api\/sections/, "/sections"),
     on: {
       proxyReq: (proxyReq) => {
         if (GATEWAY_SHARED_SECRET) {
