@@ -10,6 +10,7 @@ import TeacherAnalysis from './pages/TeacherAnalysis';
 import Course from './pages/Course';
 import CourseDetail from './pages/CourseDetail';
 import EditCourse from './pages/EditCourse';
+import Gpt from './pages/Gpt';
 import './index.css';
 
 // Simple PrivateRoute component
@@ -60,6 +61,11 @@ function App() {
         <Route path="/uploads" element={
           <PrivateRoute>
             <UploadsView />
+          </PrivateRoute>
+        } />
+        <Route path="/gpt" element={
+          <PrivateRoute>
+            <Gpt />
           </PrivateRoute>
         } />
       </Routes>
