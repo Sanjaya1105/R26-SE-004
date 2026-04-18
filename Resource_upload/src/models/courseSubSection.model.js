@@ -35,6 +35,8 @@ const courseSubSectionSchema = new mongoose.Schema(
     pdfUrl: { type: String, default: "" },
     pdfPublicId: { type: String, default: "" },
     images: { type: [imageEntrySchema], default: [] },
+    pptText: { type: String, default: "" },
+    pdfText: { type: String, default: "" },
     transcriptText: { type: String, default: "" },
     transcriptPreview: { type: String, default: "" },
     transcriptChunkCount: { type: Number, default: 0 },

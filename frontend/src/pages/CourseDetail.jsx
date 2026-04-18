@@ -613,6 +613,8 @@ const CourseDetail = () => {
                                                     } · Subsection ${n}`,
                                                     transcriptText:
                                                       sub.transcriptText || '',
+                                                    pptText: sub.pptText || '',
+                                                    pdfText: sub.pdfText || '',
                                                   });
                                                 }}
                                               >
@@ -829,6 +831,76 @@ const CourseDetail = () => {
                   </p>
                 )}
               </div>
+              {mainVideo.pptText ? (
+                <div
+                  style={{
+                    marginTop: '0.75rem',
+                    padding: '1rem',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    background: 'rgba(15, 23, 42, 0.35)',
+                  }}
+                >
+                  <p
+                    className="form-label"
+                    style={{
+                      margin: 0,
+                      fontSize: '0.8rem',
+                      marginBottom: '0.5rem',
+                      letterSpacing: '0.02em',
+                    }}
+                  >
+                    Extracted PPT text
+                  </p>
+                  <div
+                    style={{
+                      maxHeight: '220px',
+                      overflowY: 'auto',
+                      whiteSpace: 'pre-wrap',
+                      lineHeight: 1.5,
+                      fontSize: '0.9rem',
+                      color: 'var(--text-muted)',
+                    }}
+                  >
+                    {mainVideo.pptText}
+                  </div>
+                </div>
+              ) : null}
+              {mainVideo.pdfText ? (
+                <div
+                  style={{
+                    marginTop: '0.75rem',
+                    padding: '1rem',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    background: 'rgba(15, 23, 42, 0.35)',
+                  }}
+                >
+                  <p
+                    className="form-label"
+                    style={{
+                      margin: 0,
+                      fontSize: '0.8rem',
+                      marginBottom: '0.5rem',
+                      letterSpacing: '0.02em',
+                    }}
+                  >
+                    Extracted PDF text
+                  </p>
+                  <div
+                    style={{
+                      maxHeight: '220px',
+                      overflowY: 'auto',
+                      whiteSpace: 'pre-wrap',
+                      lineHeight: 1.5,
+                      fontSize: '0.9rem',
+                      color: 'var(--text-muted)',
+                    }}
+                  >
+                    {mainVideo.pdfText}
+                  </div>
+                </div>
+              ) : null}
             </>
           ) : (
             <p

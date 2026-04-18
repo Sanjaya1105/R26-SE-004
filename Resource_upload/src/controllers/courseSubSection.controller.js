@@ -4,6 +4,8 @@ const CourseSection = require("../models/courseSection.model");
 const CourseSubSection = require("../models/courseSubSection.model");
 const SubsectionTranscriptChunk = require("../models/subsectionTranscriptChunk.model");
 const { runWhisperTranscription } = require("../services/transcription.service");
+const { extractPptText } = require("../services/pptText.service");
+const { extractPdfText } = require("../services/pdfText.service");
 const {
   resolveEducatorNameFromRequest,
   ensureCourseEducatorName,
@@ -83,6 +85,8 @@ const createSubSection = async (req, res) => {
     pdfUrl: "",
     pdfPublicId: "",
     images: [],
+    pptText: "",
+    pdfText: "",
     transcriptText: "",
     transcriptPreview: "",
     transcriptChunkCount: 0,
@@ -115,6 +119,7 @@ const createSubSection = async (req, res) => {
     }
 
     if (pptFile?.buffer?.length) {
+      uploaded.pptText = extractPptText(pptFile.buffer, pptFile.originalname);
       const r = await uploadBuffer(pptFile.buffer, {
         folder: "upload_section_subsections/ppt",
         resource_type: "raw",
@@ -125,6 +130,7 @@ const createSubSection = async (req, res) => {
     }
 
     if (pdfFile?.buffer?.length) {
+      uploaded.pdfText = await extractPdfText(pdfFile.buffer);
       const r = await uploadBuffer(pdfFile.buffer, {
         folder: "upload_section_subsections/pdf",
         resource_type: "raw",
@@ -190,7 +196,9 @@ const createSubSection = async (req, res) => {
           order: doc.order,
           videoUrl: doc.videoUrl,
           pptUrl: doc.pptUrl,
+          pptText: doc.pptText,
           pdfUrl: doc.pdfUrl,
+          pdfText: doc.pdfText,
           images: doc.images,
           transcriptText: doc.transcriptText,
           transcriptPreview: doc.transcriptPreview,
