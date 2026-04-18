@@ -11,6 +11,8 @@ const BACKEND_SERVICE_URL =
   process.env.BACKEND_SERVICE_URL || "http://localhost:5001";
 const EXPLAINABLE_AI_BACKEND_URL =
   process.env.EXPLAINABLE_AI_BACKEND_URL || "http://localhost:8000";
+const RECOMMENDATION_AI_URL = 
+  process.env.RECOMMENDATION_AI_URL || "http://localhost:5002";
 const allowedOrigins = [
   FRONTEND_URL,
   ...FRONTEND_URLS.split(",").map((origin) => origin.trim()).filter(Boolean),
@@ -73,6 +75,15 @@ app.use(
     target: EXPLAINABLE_AI_BACKEND_URL,
     changeOrigin: true,
     pathRewrite: (path) => `/api${path}`,
+  })
+);
+
+app.use(
+  "/api/recommendation",
+  createProxyMiddleware({
+    target: RECOMMENDATION_AI_URL,
+    changeOrigin: true,
+    pathRewrite: (path) => path.replace(/^\/api\/recommendation/, ""),
   })
 );
 

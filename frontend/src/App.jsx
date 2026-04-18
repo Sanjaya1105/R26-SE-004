@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import Upload from './pages/Upload';
 import UploadsView from './pages/UploadsView';
 import TeacherAnalysis from './pages/TeacherAnalysis';
+import LessonSummary from './pages/LessonSummary';
 import './index.css';
 
 // Simple PrivateRoute component
@@ -38,6 +39,11 @@ function App() {
         <Route path="/uploads" element={
           <PrivateRoute>
             <UploadsView />
+          </PrivateRoute>
+        } />
+        <Route path="/lesson-summary" element={
+          <PrivateRoute>
+            <LessonSummary />
           </PrivateRoute>
         } />
       </Routes>
