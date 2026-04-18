@@ -67,7 +67,7 @@ const Dashboard = () => {
           <span style={{ color: 'var(--text-muted)' }}>Hello, {user.name}</span>
           <button
             type="button"
-            onClick={() => navigate('/upload')}
+            onClick={() => navigate('/upload-lesson')}
             className="btn"
             style={{ backgroundColor: 'rgba(34, 197, 94, 0.12)', color: '#86efac', border: '1px solid rgba(34, 197, 94, 0.35)' }}
           >
