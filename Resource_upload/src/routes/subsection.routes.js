@@ -2,7 +2,10 @@ const express = require("express");
 const multer = require("multer");
 const ensureGatewayAccess = require("../middleware/gatewayAuth.middleware");
 const verifyTeacherJwt = require("../middleware/verifyTeacherJwt.middleware");
-const { createSubSection } = require("../controllers/courseSubSection.controller");
+const {
+  createSubSection,
+  updateSubSection,
+} = require("../controllers/courseSubSection.controller");
 
 const router = express.Router();
 
@@ -40,24 +43,34 @@ const uploadSub = multer({
   },
 });
 
+const subsectionUploadMiddleware = (req, res, next) => {
+  uploadSub.fields([
+    { name: "video", maxCount: 1 },
+    { name: "ppt", maxCount: 1 },
+    { name: "pdf", maxCount: 1 },
+    { name: "images", maxCount: 15 },
+  ])(req, res, (err) => {
+    if (!err) return next();
+    if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+      return res.status(400).json({ message: "One of the files exceeds the size limit." });
+    }
+    return res.status(400).json({ message: err.message || "Invalid upload." });
+  });
+};
+
+router.patch(
+  "/sections/:sectionId/subsections/:subsectionId",
+  ensureGatewayAccess,
+  verifyTeacherJwt,
+  subsectionUploadMiddleware,
+  updateSubSection
+);
+
 router.post(
   "/sections/:sectionId/subsections",
   ensureGatewayAccess,
   verifyTeacherJwt,
-  (req, res, next) => {
-    uploadSub.fields([
-      { name: "video", maxCount: 1 },
-      { name: "ppt", maxCount: 1 },
-      { name: "pdf", maxCount: 1 },
-      { name: "images", maxCount: 15 },
-    ])(req, res, (err) => {
-      if (!err) return next();
-      if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
-        return res.status(400).json({ message: "One of the files exceeds the size limit." });
-      }
-      return res.status(400).json({ message: err.message || "Invalid upload." });
-    });
-  },
+  subsectionUploadMiddleware,
   createSubSection
 );
 

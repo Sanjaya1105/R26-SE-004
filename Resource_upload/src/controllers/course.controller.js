@@ -239,6 +239,35 @@ const getCourseForEdit = async (req, res) => {
       return res.status(403).json({ message: "You can only edit your own courses." });
     }
 
+    const cid = course._id;
+    const sections = await CourseSection.find({ courseId: cid })
+      .sort({ order: 1, createdAt: 1 })
+      .select("sectionName order")
+      .lean();
+
+    const subs = await CourseSubSection.find({ courseId: cid })
+      .sort({ order: 1, createdAt: 1 })
+      .select("sectionId order videoUrl pptUrl pdfUrl images")
+      .lean();
+
+    const subsectionsBySection = new Map();
+    for (const sub of subs) {
+      const sid = String(sub.sectionId);
+      if (!subsectionsBySection.has(sid)) {
+        subsectionsBySection.set(sid, []);
+      }
+      subsectionsBySection.get(sid).push({
+        id: sub._id,
+        order: sub.order,
+        videoUrl: sub.videoUrl || "",
+        pptUrl: sub.pptUrl || "",
+        pdfUrl: sub.pdfUrl || "",
+        images: Array.isArray(sub.images)
+          ? sub.images.map((img) => ({ url: img.url }))
+          : [],
+      });
+    }
+
     return res.status(200).json({
       success: true,
       data: {
@@ -247,6 +276,12 @@ const getCourseForEdit = async (req, res) => {
         thumbnailUrl: course.thumbnailUrl,
         keywords: course.keywords || [],
         description: course.description || "",
+        sections: sections.map((s) => ({
+          id: s._id,
+          sectionName: s.sectionName,
+          order: s.order,
+          subsections: subsectionsBySection.get(String(s._id)) || [],
+        })),
       },
     });
   } catch (error) {
