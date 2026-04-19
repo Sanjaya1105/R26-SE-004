@@ -163,6 +163,28 @@
   gap: 0.65rem;
 }
 
+.human-explanation-card {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 12px;
+  padding: 0.85rem 0.95rem;
+}
+
+.human-explanation-title {
+  font-weight: 700;
+  margin-bottom: 0.2rem;
+}
+
+.human-explanation-source {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  margin-bottom: 0.45rem;
+}
+
+.human-explanation-text {
+  line-height: 1.55;
+}
+
 .impact-badge {
   display: inline-flex;
   align-items: center;
