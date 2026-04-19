@@ -15,8 +15,11 @@
     "react": "^19.2.4",
     "react-apexcharts": "^2.1.0",
     "react-dom": "^19.2.4",
-    "react-router-dom": "^7.14.0",
-    "recharts": "^2.15.4"
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^7.14.1",
+    "recharts": "^2.15.4",
+    "remark-breaks": "^4.0.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
