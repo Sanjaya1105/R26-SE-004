@@ -1,6 +1,6 @@
 import { getGatewayBaseUrl } from '../config/gateway';
 
-const API_BASE = `${getGatewayBaseUrl()}/api/lime-ai/v1`;
+const API_BASE = `${getGatewayBaseUrl()}/api/shap-ai/v1`;
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
@@ -26,31 +26,10 @@ async function request(path, options = {}) {
   return payload;
 }
 
-export async function fetchLimeLessons() {
-  return request('/lessons');
-}
-
-export async function fetchLimeStudentsByLesson(lessonId) {
-  return request(`/lessons/${lessonId}/students`);
-}
-
-export async function fetchLimePredictions(lessonId, { studentId = '', highOnly = true, limit = 200 } = {}) {
-  const query = new URLSearchParams();
-
-  if (studentId) {
-    query.set('student_id', studentId);
-  }
-
-  query.set('high_only', String(Boolean(highOnly)));
-  query.set('limit', String(limit));
-
-  return request(`/lessons/${lessonId}/predictions?${query.toString()}`);
-}
-
-export async function fetchLimeExplanation(lessonId, predictionId, { numFeatures = 6, numSamples = 200 } = {}) {
+export async function fetchShapExplanation(lessonId, predictionId, { numFeatures = 6, numSamples = 50 } = {}) {
   const query = new URLSearchParams();
   query.set('num_features', String(numFeatures));
   query.set('num_samples', String(numSamples));
 
-  return request(`/lessons/${lessonId}/predictions/${predictionId}/lime?${query.toString()}`);
+  return request(`/lessons/${lessonId}/predictions/${predictionId}/shap?${query.toString()}`);
 }

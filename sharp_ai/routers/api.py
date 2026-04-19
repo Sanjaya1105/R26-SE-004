@@ -2,38 +2,25 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from config.database import get_db
-from schemas.prediction import CognitiveLoadInput
-from services.prediction_service import (
-    get_lime_explanation_for_prediction,
+from services.shap_service import (
+    get_shap_explanation_for_prediction,
     list_lessons,
-    list_predictions,
     list_predictions_filtered,
     list_students_for_lesson,
-    predict_and_store,
 )
 
 
-router = APIRouter(tags=["lime-ai"])
+router = APIRouter(tags=["shap-ai"])
 
 
 @router.get("/health")
 def health() -> dict[str, object]:
     return {
         "success": True,
-        "message": "LIME AI Service is running.",
+        "message": "SHAP AI Service is running.",
         "data": None,
         "errors": [],
     }
-
-
-@router.post("/predict")
-def predict(data: CognitiveLoadInput, db: Session = Depends(get_db)):
-    return predict_and_store(db, data)
-
-
-@router.get("/predictions")
-def get_predictions(limit: int = 50, db: Session = Depends(get_db)):
-    return list_predictions(db, limit=limit)
 
 
 @router.get("/lessons")
@@ -63,15 +50,15 @@ def get_lesson_predictions(
     )
 
 
-@router.get("/lessons/{lesson_id}/predictions/{prediction_id}/lime")
-def get_prediction_lime_explanation(
+@router.get("/lessons/{lesson_id}/predictions/{prediction_id}/shap")
+def get_prediction_shap_explanation(
     lesson_id: str,
     prediction_id: int,
     num_features: int = 6,
-    num_samples: int = 200,
+    num_samples: int = 50,
     db: Session = Depends(get_db),
 ):
-    return get_lime_explanation_for_prediction(
+    return get_shap_explanation_for_prediction(
         db,
         lesson_id=lesson_id,
         prediction_id=prediction_id,

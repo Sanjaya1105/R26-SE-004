@@ -163,6 +163,24 @@
   gap: 0.65rem;
 }
 
+.shap-panel .lime-content {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.shap-alert {
+  margin-bottom: 0.75rem;
+}
+
+.shap-summary {
+  padding: 0.8rem 0.9rem;
+  border-left: 3px solid rgba(59, 130, 246, 0.7);
+  background: rgba(59, 130, 246, 0.08);
+  border-radius: 10px;
+  color: #dbeafe;
+  line-height: 1.5;
+}
+
 .human-explanation-card {
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(15, 23, 42, 0.5);

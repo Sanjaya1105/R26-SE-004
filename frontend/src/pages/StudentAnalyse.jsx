@@ -7,6 +7,7 @@ import {
   fetchLimePredictions,
   fetchLimeStudentsByLesson,
 } from '../lime/apiClient';
+import { fetchShapExplanation } from '../shap/apiClient';
 import '../styles/studentAnalyse.css';
 
 export default function StudentAnalyse() {
@@ -19,6 +20,8 @@ export default function StudentAnalyse() {
   const [analysisLoadingId, setAnalysisLoadingId] = useState(null);
   const [selectedAnalysisRowId, setSelectedAnalysisRowId] = useState(null);
   const [limeExplanation, setLimeExplanation] = useState(null);
+  const [shapExplanation, setShapExplanation] = useState(null);
+  const [shapError, setShapError] = useState('');
   const [error, setError] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
 
@@ -39,6 +42,8 @@ export default function StudentAnalyse() {
     loadStudents(selectedLessonId);
     setPredictions([]);
     setLimeExplanation(null);
+    setShapExplanation(null);
+    setShapError('');
     setSelectedAnalysisRowId(null);
     setStatusMessage('Select a student and click "Show High Cognitive Load".');
   }, [selectedLessonId]);
@@ -83,6 +88,8 @@ export default function StudentAnalyse() {
       });
       setPredictions(rows ?? []);
       setLimeExplanation(null);
+      setShapExplanation(null);
+      setShapError('');
       setSelectedAnalysisRowId(null);
 
       if (!rows?.length) {
@@ -104,16 +111,45 @@ export default function StudentAnalyse() {
     try {
       setAnalysisLoadingId(row.id);
       setError('');
-      const explanation = await fetchLimeExplanation(selectedLessonId, row.id, {
-        numFeatures: 8,
-        numSamples: 500,
-      });
+      setShapError('');
+
+      const [limeResult, shapResult] = await Promise.allSettled([
+        fetchLimeExplanation(selectedLessonId, row.id, {
+          numFeatures: 8,
+          numSamples: 200,
+        }),
+        fetchShapExplanation(selectedLessonId, row.id, {
+          numFeatures: 8,
+          numSamples: 50,
+        }),
+      ]);
+
+      if (limeResult.status === 'fulfilled') {
+        setLimeExplanation(limeResult.value);
+      } else {
+        setLimeExplanation(null);
+        setError(limeResult.reason?.message || 'LIME analysis failed.');
+      }
+
+      if (shapResult.status === 'fulfilled') {
+        setShapExplanation(shapResult.value);
+      } else {
+        setShapExplanation(null);
+        setShapError(shapResult.reason?.message || 'SHAP analysis failed.');
+      }
+
       setSelectedAnalysisRowId(row.id);
-      setLimeExplanation(explanation);
-      setStatusMessage(`LIME explanation generated for record #${row.id}.`);
+      if (limeResult.status === 'fulfilled' && shapResult.status === 'fulfilled') {
+        setStatusMessage(`LIME and SHAP explanations generated for record #${row.id}.`);
+      } else if (limeResult.status === 'fulfilled') {
+        setStatusMessage(`LIME explanation generated for record #${row.id}. SHAP is unavailable.`);
+      } else if (shapResult.status === 'fulfilled') {
+        setStatusMessage(`SHAP explanation generated for record #${row.id}. LIME is unavailable.`);
+      }
     } catch (err) {
       setError(err.message);
       setLimeExplanation(null);
+      setShapExplanation(null);
       setSelectedAnalysisRowId(null);
     } finally {
       setAnalysisLoadingId(null);
@@ -265,6 +301,50 @@ export default function StudentAnalyse() {
                       <td>{Number(factor.weight).toFixed(6)}</td>
                       <td>
                         <span className={`impact-badge ${factor.impact}`}>{factor.impact}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="student-analyse-results glass-panel shap-panel">
+        <h2>Raw SHAP Explanation</h2>
+        {shapError ? <div className="alert error shap-alert">{shapError}</div> : null}
+        {!shapExplanation ? (
+          <p className="empty-state">Click Raw Analyse on a row to generate real SHAP output.</p>
+        ) : (
+          <div className="lime-content">
+            <p>
+              <strong>Record:</strong> #{shapExplanation.prediction_id} | <strong>Student:</strong> {shapExplanation.student_id} |{' '}
+              <strong>Cognitive Load:</strong> {shapExplanation.predicted_cognitive_load}
+            </p>
+            <p>
+              <strong>Base Value:</strong> {Number(shapExplanation.expected_value).toFixed(4)}
+            </p>
+            <p className="shap-summary">{shapExplanation.summary}</p>
+
+            <div className="results-table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Feature Value</th>
+                    <th>SHAP Value</th>
+                    <th>Impact</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(shapExplanation.shap_values ?? []).map((item, index) => (
+                    <tr key={`${item.feature}-${index}`}>
+                      <td>{item.feature}</td>
+                      <td>{Number(item.value).toFixed(4)}</td>
+                      <td>{Number(item.shap_value).toFixed(6)}</td>
+                      <td>
+                        <span className={`impact-badge ${item.impact}`}>{item.impact}</span>
                       </td>
                     </tr>
                   ))}

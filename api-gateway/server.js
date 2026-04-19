@@ -19,6 +19,8 @@ const EXPLAINABLE_AI_BACKEND_URL =
   process.env.EXPLAINABLE_AI_BACKEND_URL || "http://localhost:8000";
 const LIME_AI_SERVICE_URL =
   process.env.LIME_AI_SERVICE_URL || "http://localhost:8010";
+const SHAP_AI_SERVICE_URL =
+  process.env.SHAP_AI_SERVICE_URL || "http://localhost:8011";
 const RECOMMENDATION_AI_URL = 
   process.env.RECOMMENDATION_AI_URL || "http://localhost:5002";
 const allowedOrigins = [
@@ -49,6 +51,7 @@ app.get("/", (req, res) => {
     backendService: BACKEND_SERVICE_URL,
     gptService: GPT_SERVICE_URL,
     resourceUploadService: RESOURCE_UPLOAD_URL,
+    shapAiService: SHAP_AI_SERVICE_URL,
   });
 });
 
@@ -163,6 +166,15 @@ app.use(
   "/api/lime-ai",
   createProxyMiddleware({
     target: LIME_AI_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: (path) => `/api${path}`,
+  })
+);
+
+app.use(
+  "/api/shap-ai",
+  createProxyMiddleware({
+    target: SHAP_AI_SERVICE_URL,
     changeOrigin: true,
     pathRewrite: (path) => `/api${path}`,
   })

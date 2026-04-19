@@ -464,7 +464,7 @@ def get_lime_explanation_for_prediction(
     lesson_id: str,
     prediction_id: int,
     num_features: int = 6,
-    num_samples: int = 400,
+    num_samples: int = 200,
 ) -> dict[str, Any]:
     target_row = (
         db.query(CognitiveLoadPrediction)
@@ -490,7 +490,7 @@ def get_lime_explanation_for_prediction(
         db.query(CognitiveLoadPrediction)
         .filter(CognitiveLoadPrediction.lesson_id == lesson_id)
         .order_by(CognitiveLoadPrediction.created_at.desc(), CognitiveLoadPrediction.id.desc())
-        .limit(300)
+        .limit(150)
         .all()
     )
 
@@ -523,7 +523,7 @@ def get_lime_explanation_for_prediction(
             data_row=target_vector,
             predict_fn=lambda matrix: _predict_scores_for_matrix(matrix, target_row),
             num_features=max(1, min(num_features, len(RAW_FEATURE_FIELDS))),
-            num_samples=max(100, num_samples),
+            num_samples=max(60, num_samples),
         )
     except ModelClientError as exc:
         raise HTTPException(
