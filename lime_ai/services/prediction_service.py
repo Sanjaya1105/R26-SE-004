@@ -7,6 +7,7 @@ from lime.lime_tabular import LimeTabularExplainer
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from config.settings import settings
 from models.prediction import CognitiveLoadPrediction
 from schemas.prediction import CognitiveLoadInput
 from services.model_client import ModelClientError, request_prediction
@@ -38,6 +39,123 @@ INT_FEATURE_FIELDS = {
     "idle_duration_adaptation",
     "quiz_response_time",
 }
+
+
+def _has_gpt_api_key() -> bool:
+    return bool(settings.GPT_API_KEY and settings.GPT_API_KEY.strip())
+
+
+def _build_human_prompt(
+    *,
+    student_id: str,
+    lesson_id: str,
+    predicted_label: str,
+    predicted_score: int,
+    confidence: float,
+    factors: list[dict[str, Any]],
+) -> str:
+    factors_text = "\n".join(
+        f"- rule: {factor['rule']}, weight: {factor['weight']:.6f}, impact: {factor['impact']}"
+        for factor in factors
+    )
+
+    return (
+        "Write a short human-readable classroom explanation for a teacher.\n"
+        f"Student ID: {student_id}\n"
+        f"Lesson ID: {lesson_id}\n"
+        f"Predicted cognitive load: {predicted_label} (score {predicted_score})\n"
+        f"Confidence: {confidence:.2f}\n"
+        "LIME factors:\n"
+        f"{factors_text}\n\n"
+        "Rules:\n"
+        "1) Use plain language.\n"
+        "2) Mention top contributing factors.\n"
+        "3) Give one practical teacher action.\n"
+        "4) Keep it under 120 words."
+    )
+
+
+def _generate_gpt_text(system_prompt: str, user_prompt: str) -> str:
+    from openai import OpenAI
+
+    client = OpenAI(api_key=settings.GPT_API_KEY, timeout=settings.GPT_TIMEOUT_SECONDS)
+    response = client.chat.completions.create(
+        model=settings.GPT_MODEL,
+        temperature=0.2,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+    )
+    content = response.choices[0].message.content if response.choices else ""
+    return (content or "").strip()
+
+
+def _fallback_human_explanation(
+    *,
+    predicted_label: str,
+    confidence: float,
+    factors: list[dict[str, Any]],
+) -> str:
+    positive = [factor for factor in factors if factor["impact"] == "positive"]
+    strongest_positive = sorted(positive, key=lambda item: abs(item["weight"]), reverse=True)[:3]
+
+    if strongest_positive:
+        joined = ", ".join(f"{item['rule']}" for item in strongest_positive)
+        return (
+            f"This learner is predicted as {predicted_label} (confidence {confidence:.2f}). "
+            f"The strongest factors increasing cognitive load are: {joined}. "
+            "Consider slowing the pace and adding short guidance checkpoints for this student."
+        )
+
+    strongest = sorted(factors, key=lambda item: abs(item["weight"]), reverse=True)[:3]
+    joined = ", ".join(f"{item['rule']}" for item in strongest) if strongest else "no strong factors detected"
+    return (
+        f"This learner is predicted as {predicted_label} (confidence {confidence:.2f}). "
+        f"Top LIME signals are: {joined}. "
+        "Use this as a quick indicator and combine with teacher observation before intervention."
+    )
+
+
+def _generate_human_explanation(
+    *,
+    student_id: str,
+    lesson_id: str,
+    predicted_label: str,
+    predicted_score: int,
+    confidence: float,
+    factors: list[dict[str, Any]],
+) -> tuple[str, str]:
+    fallback = _fallback_human_explanation(
+        predicted_label=predicted_label,
+        confidence=confidence,
+        factors=factors,
+    )
+
+    if not _has_gpt_api_key():
+        return fallback, "fallback"
+
+    system_prompt = (
+        "You are an educational analytics assistant. Provide concise, practical,"
+        " teacher-friendly explanations from model factors."
+    )
+    user_prompt = _build_human_prompt(
+        student_id=student_id,
+        lesson_id=lesson_id,
+        predicted_label=predicted_label,
+        predicted_score=predicted_score,
+        confidence=confidence,
+        factors=factors,
+    )
+
+    try:
+        generated = _generate_gpt_text(system_prompt, user_prompt)
+        if generated:
+            return generated, "gpt"
+    except Exception:
+        pass
+
+    return fallback, "fallback"
 
 
 def _prediction_label(payload: dict[str, Any]) -> str:
@@ -427,6 +545,15 @@ def get_lime_explanation_for_prediction(
         for rule, weight in explanation.as_list()
     ]
 
+    human_explanation, explanation_source = _generate_human_explanation(
+        student_id=target_row.student_id,
+        lesson_id=target_row.lesson_id,
+        predicted_label=target_row.predicted_cognitive_load,
+        predicted_score=target_row.predicted_score,
+        confidence=target_row.confidence,
+        factors=factors,
+    )
+
     return {
         "success": True,
         "message": "LIME explanation generated successfully.",
@@ -439,6 +566,8 @@ def get_lime_explanation_for_prediction(
             "confidence": target_row.confidence,
             "intercept": float(explanation.intercept[0]) if explanation.intercept else 0.0,
             "factors": factors,
+            "human_explanation": human_explanation,
+            "explanation_source": explanation_source,
         },
         "errors": [],
     }

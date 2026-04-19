@@ -239,6 +239,16 @@ export default function StudentAnalyse() {
               <strong>Intercept:</strong> {Number(limeExplanation.intercept).toFixed(4)}
             </p>
 
+            <div className="human-explanation-card">
+              <p className="human-explanation-title">Human-Readable Explanation</p>
+              <p className="human-explanation-source">
+                Source: {(limeExplanation.explanation_source || 'fallback').toUpperCase()}
+              </p>
+              <p className="human-explanation-text">
+                {limeExplanation.human_explanation || 'No explanation text returned.'}
+              </p>
+            </div>
+
             <div className="results-table-wrapper">
               <table>
                 <thead>

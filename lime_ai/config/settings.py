@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     MODEL_API_PREDICT_PATH: str = "/predict"
     MODEL_API_TIMEOUT_SECONDS: int = 30
 
+    GPT_API_KEY: str = ""
+    GPT_MODEL: str = "gpt-4o-mini"
+    GPT_TIMEOUT_SECONDS: int = 20
+
     @property
     def SQLALCHEMY_DATABASE_URL(self) -> str:
         return (
