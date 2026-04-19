@@ -49,3 +49,27 @@ class PredictionRead(BaseModel):
     predicted_score: int
     confidence: float
     created_at: datetime
+
+
+class AggregateLimeFactor(BaseModel):
+    rule: str
+    weight: float
+    impact: str | None = None
+
+
+class AggregateShapValue(BaseModel):
+    feature: str
+    shap_value: float
+    impact: str | None = None
+    value: float | None = None
+
+
+class AggregateExplanationRequest(BaseModel):
+    lesson_id: str
+    prediction_id: int
+    student_id: str
+    predicted_cognitive_load: str
+    predicted_score: int
+    confidence: float
+    lime_factors: list[AggregateLimeFactor]
+    shap_values: list[AggregateShapValue]

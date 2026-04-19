@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from config.settings import settings
 from models.prediction import CognitiveLoadPrediction
-from schemas.prediction import CognitiveLoadInput
+from schemas.prediction import AggregateExplanationRequest, CognitiveLoadInput
 from services.model_client import ModelClientError, request_prediction
 
 
@@ -156,6 +156,157 @@ def _generate_human_explanation(
         pass
 
     return fallback, "fallback"
+
+
+def _build_aggregate_prompt(
+    *,
+    student_id: str,
+    lesson_id: str,
+    predicted_label: str,
+    predicted_score: int,
+    confidence: float,
+    top_signals: list[dict[str, Any]],
+) -> str:
+    signals_text = "\n".join(
+        f"- source: {item['source']}, signal: {item['signal']}, strength: {item['strength']:.6f}, impact: {item['impact']}"
+        for item in top_signals
+    )
+
+    return (
+        "Write a short teacher-friendly explanation using combined LIME and SHAP evidence.\n"
+        f"Student ID: {student_id}\n"
+        f"Lesson ID: {lesson_id}\n"
+        f"Predicted cognitive load: {predicted_label} (score {predicted_score})\n"
+        f"Confidence: {confidence:.2f}\n"
+        "Top combined signals (LIME+SHAP):\n"
+        f"{signals_text}\n\n"
+        "Rules:\n"
+        "1) Mention only the most influential factors.\n"
+        "2) Explain what they imply in plain language.\n"
+        "3) Give one practical teacher action.\n"
+        "4) Keep under 120 words."
+    )
+
+
+def _top_aggregate_signals(
+    *,
+    lime_factors: list[dict[str, Any]],
+    shap_values: list[dict[str, Any]],
+    limit: int = 3,
+) -> list[dict[str, Any]]:
+    combined: list[dict[str, Any]] = []
+
+    for factor in lime_factors:
+        weight = float(factor.get("weight", 0.0))
+        combined.append(
+            {
+                "source": "lime",
+                "signal": str(factor.get("rule", "unknown")),
+                "raw_value": weight,
+                "strength": abs(weight),
+                "impact": "positive" if weight > 0 else "negative" if weight < 0 else "neutral",
+            }
+        )
+
+    for item in shap_values:
+        shap_value = float(item.get("shap_value", 0.0))
+        combined.append(
+            {
+                "source": "shap",
+                "signal": str(item.get("feature", "unknown")),
+                "raw_value": shap_value,
+                "strength": abs(shap_value),
+                "impact": "positive" if shap_value > 0 else "negative" if shap_value < 0 else "neutral",
+            }
+        )
+
+    combined.sort(key=lambda entry: entry["strength"], reverse=True)
+    return combined[: max(1, limit)]
+
+
+def _fallback_aggregate_explanation(
+    *,
+    predicted_label: str,
+    confidence: float,
+    top_signals: list[dict[str, Any]],
+) -> str:
+    if not top_signals:
+        return (
+            f"This learner is predicted as {predicted_label} (confidence {confidence:.2f}). "
+            "No strong combined LIME/SHAP signals were detected, so use teacher observation for final decisions."
+        )
+
+    highlights = ", ".join(
+        f"{item['source'].upper()}: {item['signal']}"
+        for item in top_signals[:3]
+    )
+    return (
+        f"This learner is predicted as {predicted_label} (confidence {confidence:.2f}). "
+        f"Top combined signals are {highlights}. "
+        "Use these factors to guide a short targeted intervention in the next lesson segment."
+    )
+
+
+def generate_aggregate_explanation(payload: AggregateExplanationRequest) -> dict[str, Any]:
+    lime_factors = [factor.model_dump(mode="json") for factor in payload.lime_factors]
+    shap_values = [item.model_dump(mode="json") for item in payload.shap_values]
+    top_signals = _top_aggregate_signals(
+        lime_factors=lime_factors,
+        shap_values=shap_values,
+        limit=3,
+    )
+
+    fallback = _fallback_aggregate_explanation(
+        predicted_label=payload.predicted_cognitive_load,
+        confidence=payload.confidence,
+        top_signals=top_signals,
+    )
+
+    if not _has_gpt_api_key():
+        explanation_text = fallback
+        source = "fallback"
+    else:
+        system_prompt = (
+            "You are an educational analytics assistant. Create concise, practical, teacher-friendly"
+            " explanations from combined LIME and SHAP signals."
+        )
+        user_prompt = _build_aggregate_prompt(
+            student_id=payload.student_id,
+            lesson_id=payload.lesson_id,
+            predicted_label=payload.predicted_cognitive_load,
+            predicted_score=payload.predicted_score,
+            confidence=payload.confidence,
+            top_signals=top_signals,
+        )
+
+        try:
+            generated = _generate_gpt_text(system_prompt, user_prompt)
+            if generated:
+                explanation_text = generated
+                source = "gpt"
+            else:
+                explanation_text = fallback
+                source = "fallback"
+        except Exception:
+            explanation_text = fallback
+            source = "fallback"
+
+    return {
+        "success": True,
+        "message": "Aggregate explanation generated successfully.",
+        "data": {
+            "lesson_id": payload.lesson_id,
+            "prediction_id": payload.prediction_id,
+            "student_id": payload.student_id,
+            "predicted_cognitive_load": payload.predicted_cognitive_load,
+            "predicted_score": payload.predicted_score,
+            "confidence": payload.confidence,
+            "top_signals": top_signals,
+            "human_explanation": explanation_text,
+            "explanation_source": source,
+        },
+        "errors": [],
+    }
 
 
 def _prediction_label(payload: dict[str, Any]) -> str:

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import {
+  fetchAggregateExplanation,
   fetchLimeExplanation,
   fetchLimeLessons,
   fetchLimePredictions,
@@ -21,6 +22,8 @@ export default function StudentAnalyse() {
   const [selectedAnalysisRowId, setSelectedAnalysisRowId] = useState(null);
   const [limeExplanation, setLimeExplanation] = useState(null);
   const [shapExplanation, setShapExplanation] = useState(null);
+  const [aggregateExplanation, setAggregateExplanation] = useState(null);
+  const [aggregateError, setAggregateError] = useState('');
   const [shapError, setShapError] = useState('');
   const [error, setError] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
@@ -43,6 +46,8 @@ export default function StudentAnalyse() {
     setPredictions([]);
     setLimeExplanation(null);
     setShapExplanation(null);
+    setAggregateExplanation(null);
+    setAggregateError('');
     setShapError('');
     setSelectedAnalysisRowId(null);
     setStatusMessage('Select a student and click "Show High Cognitive Load".');
@@ -89,6 +94,8 @@ export default function StudentAnalyse() {
       setPredictions(rows ?? []);
       setLimeExplanation(null);
       setShapExplanation(null);
+      setAggregateExplanation(null);
+      setAggregateError('');
       setShapError('');
       setSelectedAnalysisRowId(null);
 
@@ -111,6 +118,7 @@ export default function StudentAnalyse() {
     try {
       setAnalysisLoadingId(row.id);
       setError('');
+      setAggregateError('');
       setShapError('');
 
       const [limeResult, shapResult] = await Promise.allSettled([
@@ -138,6 +146,27 @@ export default function StudentAnalyse() {
         setShapError(shapResult.reason?.message || 'SHAP analysis failed.');
       }
 
+      if (limeResult.status === 'fulfilled' && shapResult.status === 'fulfilled') {
+        try {
+          const aggregate = await fetchAggregateExplanation({
+            lesson_id: String(selectedLessonId),
+            prediction_id: Number(row.id),
+            student_id: String(row.student_id),
+            predicted_cognitive_load: String(row.predicted_cognitive_load),
+            predicted_score: Number(row.predicted_score),
+            confidence: Number(row.confidence),
+            lime_factors: limeResult.value.factors ?? [],
+            shap_values: shapResult.value.shap_values ?? [],
+          });
+          setAggregateExplanation(aggregate);
+        } catch (aggregateErr) {
+          setAggregateExplanation(null);
+          setAggregateError(aggregateErr.message || 'Aggregate explanation generation failed.');
+        }
+      } else {
+        setAggregateExplanation(null);
+      }
+
       setSelectedAnalysisRowId(row.id);
       if (limeResult.status === 'fulfilled' && shapResult.status === 'fulfilled') {
         setStatusMessage(`LIME and SHAP explanations generated for record #${row.id}.`);
@@ -150,6 +179,7 @@ export default function StudentAnalyse() {
       setError(err.message);
       setLimeExplanation(null);
       setShapExplanation(null);
+      setAggregateExplanation(null);
       setSelectedAnalysisRowId(null);
     } finally {
       setAnalysisLoadingId(null);
@@ -276,13 +306,26 @@ export default function StudentAnalyse() {
             </p>
 
             <div className="human-explanation-card">
-              <p className="human-explanation-title">Human-Readable Explanation</p>
+              <p className="human-explanation-title">Combined Human-Readable Explanation (LIME + SHAP)</p>
               <p className="human-explanation-source">
-                Source: {(limeExplanation.explanation_source || 'fallback').toUpperCase()}
+                Source: {(aggregateExplanation?.explanation_source || limeExplanation.explanation_source || 'fallback').toUpperCase()}
               </p>
               <p className="human-explanation-text">
-                {limeExplanation.human_explanation || 'No explanation text returned.'}
+                {aggregateExplanation?.human_explanation || limeExplanation.human_explanation || 'No explanation text returned.'}
               </p>
+              {aggregateError ? <p className="aggregate-error-text">{aggregateError}</p> : null}
+              {aggregateExplanation?.top_signals?.length ? (
+                <div className="aggregate-top-signals">
+                  <p className="aggregate-top-signals-title">Top 3 Combined Signals</p>
+                  <ul>
+                    {aggregateExplanation.top_signals.map((signal, index) => (
+                      <li key={`${signal.source}-${signal.signal}-${index}`}>
+                        {signal.source.toUpperCase()}: {signal.signal} ({Number(signal.raw_value).toFixed(6)})
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </div>
 
             <div className="results-table-wrapper">

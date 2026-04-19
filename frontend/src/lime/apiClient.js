@@ -54,3 +54,10 @@ export async function fetchLimeExplanation(lessonId, predictionId, { numFeatures
 
   return request(`/lessons/${lessonId}/predictions/${predictionId}/lime?${query.toString()}`);
 }
+
+export async function fetchAggregateExplanation(payload) {
+  return request('/aggregate-explanation', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}

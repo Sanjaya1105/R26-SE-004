@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from config.database import get_db
-from schemas.prediction import CognitiveLoadInput
+from schemas.prediction import AggregateExplanationRequest, CognitiveLoadInput
 from services.prediction_service import (
+    generate_aggregate_explanation,
     get_lime_explanation_for_prediction,
     list_lessons,
     list_predictions,
@@ -78,3 +79,8 @@ def get_prediction_lime_explanation(
         num_features=num_features,
         num_samples=num_samples,
     )
+
+
+@router.post("/aggregate-explanation")
+def create_aggregate_explanation(payload: AggregateExplanationRequest):
+    return generate_aggregate_explanation(payload)
