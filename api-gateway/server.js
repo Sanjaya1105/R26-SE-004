@@ -17,6 +17,8 @@ const GATEWAY_SHARED_SECRET =
   process.env.GATEWAY_SHARED_SECRET || "gateway_secret_change_me";
 const EXPLAINABLE_AI_BACKEND_URL =
   process.env.EXPLAINABLE_AI_BACKEND_URL || "http://localhost:8000";
+const LIME_AI_SERVICE_URL =
+  process.env.LIME_AI_SERVICE_URL || "http://localhost:8010";
 const RECOMMENDATION_AI_URL = 
   process.env.RECOMMENDATION_AI_URL || "http://localhost:5002";
 const allowedOrigins = [
@@ -152,6 +154,15 @@ app.use(
   "/api/explainable",
   createProxyMiddleware({
     target: EXPLAINABLE_AI_BACKEND_URL,
+    changeOrigin: true,
+    pathRewrite: (path) => `/api${path}`,
+  })
+);
+
+app.use(
+  "/api/lime-ai",
+  createProxyMiddleware({
+    target: LIME_AI_SERVICE_URL,
     changeOrigin: true,
     pathRewrite: (path) => `/api${path}`,
   })
