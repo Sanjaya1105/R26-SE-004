@@ -62,3 +62,24 @@ CREATE TABLE IF NOT EXISTS prediction_logs (
     INDEX idx_prediction_student_lesson (student_id, lesson_id),
     INDEX idx_prediction_feature_window (feature_window_id)
 );
+
+CREATE TABLE IF NOT EXISTS feature_window_dispatches (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    feature_window_id BIGINT DEFAULT NULL,
+    student_id VARCHAR(50) NOT NULL,
+    lesson_id VARCHAR(50) NOT NULL,
+    session_id VARCHAR(100) DEFAULT NULL,
+    minute_index INT NOT NULL,
+    window_start DATETIME DEFAULT NULL,
+    window_end DATETIME DEFAULT NULL,
+    target_service VARCHAR(50) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    response_message VARCHAR(1000) DEFAULT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    CONSTRAINT fk_dispatch_feature_window
+        FOREIGN KEY (feature_window_id) REFERENCES feature_windows(id)
+        ON DELETE SET NULL,
+    INDEX idx_dispatch_window_target (student_id, lesson_id, session_id, window_start, window_end, target_service),
+    INDEX idx_dispatch_status (status, created_at)
+);

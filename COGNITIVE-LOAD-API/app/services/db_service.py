@@ -33,6 +33,36 @@ def save_raw_interaction_event(event_data: dict):
     return _execute_insert(query, values)
 
 
+def get_feature_window_by_bounds(
+    student_id: str,
+    lesson_id: str,
+    session_id: str,
+    window_start,
+    window_end,
+):
+    query = """
+        SELECT
+            id,
+            student_id,
+            lesson_id,
+            session_id,
+            minute_index,
+            window_start,
+            window_end
+        FROM feature_windows
+        WHERE student_id = %s
+          AND lesson_id = %s
+          AND session_id = %s
+          AND window_start = %s
+          AND window_end = %s
+        ORDER BY id DESC
+        LIMIT 1
+    """
+    values = (student_id, lesson_id, session_id, window_start, window_end)
+    rows = _execute_select(query, values)
+    return rows[0] if rows else None
+
+
 def save_feature_window(feature_data: dict):
     query = """
         INSERT INTO feature_windows (
@@ -75,6 +105,69 @@ def save_feature_window(feature_data: dict):
         feature_data["error_rate"],
     )
     return _execute_insert(query, values)
+
+
+def save_feature_window_dispatch(dispatch_data: dict):
+    query = """
+        INSERT INTO feature_window_dispatches (
+            feature_window_id,
+            student_id,
+            lesson_id,
+            session_id,
+            minute_index,
+            window_start,
+            window_end,
+            target_service,
+            status,
+            response_message
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """
+    values = (
+        dispatch_data.get("feature_window_id"),
+        dispatch_data["student_id"],
+        dispatch_data["lesson_id"],
+        dispatch_data.get("session_id"),
+        dispatch_data["minute_index"],
+        dispatch_data["window_start"],
+        dispatch_data["window_end"],
+        dispatch_data["target_service"],
+        dispatch_data["status"],
+        dispatch_data.get("response_message"),
+    )
+    return _execute_insert(query, values)
+
+
+def has_successful_feature_window_dispatch(
+    student_id: str,
+    lesson_id: str,
+    session_id: str,
+    window_start,
+    window_end,
+    target_service: str,
+):
+    query = """
+        SELECT id
+        FROM feature_window_dispatches
+        WHERE student_id = %s
+          AND lesson_id = %s
+          AND session_id = %s
+          AND window_start = %s
+          AND window_end = %s
+          AND target_service = %s
+          AND status = 'success'
+        ORDER BY id DESC
+        LIMIT 1
+    """
+    values = (
+        student_id,
+        lesson_id,
+        session_id,
+        window_start,
+        window_end,
+        target_service,
+    )
+    rows = _execute_select(query, values)
+    return bool(rows)
 
 
 def save_prediction_log(prediction_data: dict):
@@ -133,6 +226,47 @@ def get_raw_interaction_events(
     """
     values = (student_id, lesson_id, session_id, window_start, window_end)
     return _execute_select(query, values)
+
+
+def get_event_time_bounds(
+    student_id: str,
+    lesson_id: str,
+    session_id: str,
+):
+    query = """
+        SELECT
+            MIN(event_time) AS first_event_time,
+            MAX(event_time) AS last_event_time
+        FROM raw_interaction_events
+        WHERE student_id = %s
+          AND lesson_id = %s
+          AND session_id = %s
+    """
+    values = (student_id, lesson_id, session_id)
+    rows = _execute_select(query, values)
+    return rows[0] if rows else None
+
+
+def get_latest_successful_dispatch_end(
+    student_id: str,
+    lesson_id: str,
+    session_id: str,
+    target_service: str,
+):
+    query = """
+        SELECT window_end
+        FROM feature_window_dispatches
+        WHERE student_id = %s
+          AND lesson_id = %s
+          AND session_id = %s
+          AND target_service = %s
+          AND status = 'success'
+        ORDER BY window_end DESC, id DESC
+        LIMIT 1
+    """
+    values = (student_id, lesson_id, session_id, target_service)
+    rows = _execute_select(query, values)
+    return rows[0]["window_end"] if rows else None
 
 
 def _execute_insert(query: str, values: tuple):
