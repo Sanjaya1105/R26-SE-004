@@ -5,6 +5,7 @@ from app.schemas.feature_window import FeatureWindowInput
 from app.schemas.prediction import CognitiveLoadInput
 from app.schemas.raw_prediction import RawPredictionInput
 from app.services.db_service import save_feature_window, save_raw_interaction_event
+from app.services.lime_dispatch_service import process_completed_windows_for_event
 from app.services.prediction_service import (
     get_prediction_logs,
     predict_cognitive_load,
@@ -37,10 +38,12 @@ def predict_from_raw(data: RawPredictionInput):
 def create_raw_event(data: RawInteractionEventInput):
     # This endpoint is mainly for the frontend event logger.
     event_id = save_raw_interaction_event(data.model_dump())
+    automation_result = process_completed_windows_for_event(data.model_dump())
     return {
         "message": "Raw interaction event processed",
         "saved_to_mysql": event_id is not None,
         "id": event_id,
+        "auto_dispatch": automation_result,
     }
 
 
