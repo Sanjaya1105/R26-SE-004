@@ -2,6 +2,12 @@ const express = require("express");
 const axios = require("axios");
 const verifyToken = require("../middleware/verifyToken");
 const ChatMessage = require("../models/ChatMessage");
+const {
+  buildPedagogicalPrompt,
+  COGNITIVE_STYLES,
+  LOAD_LEVELS,
+  FRUSTRATION_LEVELS,
+} = require("../components/promptBuilder");
 
 const router = express.Router();
 
@@ -23,6 +29,41 @@ function parseModelList() {
     (m, i, arr) => Boolean(m) && arr.indexOf(m) === i
   );
 }
+
+/**
+ * Assembles the pedagogical prompt from client-provided subsection extracts.
+ * Public (no JWT): course detail page is public; payload is user-supplied text only.
+ */
+router.post("/build-prompt", (req, res) => {
+  try {
+    const body = req.body || {};
+    const prompt = buildPedagogicalPrompt({
+      courseName: body.courseName,
+      subsectionTitle: body.subsectionTitle,
+      transcriptText: body.transcriptText,
+      pptText: body.pptText,
+      pdfText: body.pdfText,
+      studentProfile: body.studentProfile,
+      cognitiveStyle: body.cognitiveStyle,
+      cognitiveLoad: body.cognitiveLoad,
+    });
+    return res.status(200).json({
+      success: true,
+      data: {
+        prompt,
+        schema: {
+          cognitiveStyles: COGNITIVE_STYLES,
+          loadLevels: LOAD_LEVELS,
+          frustrationLevels: FRUSTRATION_LEVELS,
+        },
+      },
+    });
+  } catch (error) {
+    return res.status(400).json({
+      message: error?.message || "Failed to build prompt.",
+    });
+  }
+});
 
 router.post("/ask", verifyToken, async (req, res) => {
   const hfToken = process.env.HF_API_TOKEN;

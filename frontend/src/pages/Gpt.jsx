@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { getGatewayBaseUrl } from '../config/gateway';
+import AssistantMarkdown from '../components/AssistantMarkdown';
 
 function buildGptAskUrls() {
   const base = getGatewayBaseUrl();
@@ -9,7 +10,7 @@ function buildGptAskUrls() {
     `${base}/api/gpt/ask`,
     'http://localhost:4000/api/gpt/ask',
     'http://127.0.0.1:4000/api/gpt/ask',
-    'http://localhost:5001/api/gpt/ask',
+    'http://localhost:5002/api/gpt/ask',
   ].filter((url, i, arr) => arr.indexOf(url) === i);
 }
 
@@ -139,9 +140,9 @@ const Gpt = () => {
               <p className="form-label" style={{ marginBottom: '0.5rem' }}>
                 Assistant response
               </p>
-              <p style={{ margin: 0, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+              <AssistantMarkdown style={{ maxHeight: 'min(60vh, 520px)', overflowY: 'auto' }}>
                 {answer}
-              </p>
+              </AssistantMarkdown>
             </div>
           ) : null}
         </div>

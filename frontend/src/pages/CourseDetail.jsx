@@ -1,7 +1,28 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { getGatewayBaseUrl } from '../config/gateway';
+import AssistantMarkdown from '../components/AssistantMarkdown';
+
+function buildGptAskUrls() {
+  const base = getGatewayBaseUrl();
+  return [
+    `${base}/api/gpt/ask`,
+    'http://localhost:4000/api/gpt/ask',
+    'http://127.0.0.1:4000/api/gpt/ask',
+    'http://localhost:5002/api/gpt/ask',
+  ].filter((url, i, arr) => arr.indexOf(url) === i);
+}
+
+function buildGptPromptUrls() {
+  const base = getGatewayBaseUrl();
+  return [
+    `${base}/api/gpt/build-prompt`,
+    'http://localhost:4000/api/gpt/build-prompt',
+    'http://127.0.0.1:4000/api/gpt/build-prompt',
+    'http://localhost:5002/api/gpt/build-prompt',
+  ].filter((url, i, arr) => arr.indexOf(url) === i);
+}
 
 const ABOUT_PREVIEW_WORDS = 20;
 
@@ -14,6 +35,7 @@ function splitWords(text) {
 
 const CourseDetail = () => {
   const { courseId } = useParams();
+  const navigate = useNavigate();
   /** Below this width, sidebar stacks full-width (fixed ¼ width is unreadable). */
   const [stackLayout, setStackLayout] = useState(() =>
     typeof window !== 'undefined'
@@ -32,6 +54,21 @@ const CourseDetail = () => {
   const [mainVideo, setMainVideo] = useState(null);
   /** About description: collapsed shows ~20 words */
   const [aboutExpanded, setAboutExpanded] = useState(false);
+  /** Inline GPT assistant (below extracted text when a subsection video is open) */
+  const [gptQuestion, setGptQuestion] = useState('');
+  const [gptAnswer, setGptAnswer] = useState('');
+  const [gptLoading, setGptLoading] = useState(false);
+  const [gptError, setGptError] = useState('');
+  /** Pedagogical prompt (gpt-service prompt builder) */
+  const [pedagogicalPrompt, setPedagogicalPrompt] = useState('');
+  const [promptLoading, setPromptLoading] = useState(false);
+  const [promptError, setPromptError] = useState('');
+  const [studentMajor, setStudentMajor] = useState('');
+  const [studentYear, setStudentYear] = useState('');
+  const [studentInterests, setStudentInterests] = useState('');
+  const [cognitiveStyle, setCognitiveStyle] = useState('Visual');
+  const [loadLevel, setLoadLevel] = useState('Medium');
+  const [frustration, setFrustration] = useState('Low');
 
   const toggleSection = (sectionId) => {
     const k = String(sectionId);
@@ -47,7 +84,100 @@ const CourseDetail = () => {
     setOpenSubsectionId(null);
     setMainVideo(null);
     setAboutExpanded(false);
+    setGptQuestion('');
+    setGptAnswer('');
+    setGptError('');
+    setPedagogicalPrompt('');
+    setPromptError('');
   }, [courseId]);
+
+  useEffect(() => {
+    setGptQuestion('');
+    setGptAnswer('');
+    setGptError('');
+    setPedagogicalPrompt('');
+    setPromptError('');
+  }, [mainVideo?.url]);
+
+  useEffect(() => {
+    if (!mainVideo?.url) {
+      setPedagogicalPrompt('');
+      setPromptLoading(false);
+      setPromptError('');
+      return undefined;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setPromptLoading(true);
+      setPromptError('');
+      const body = {
+        courseName: course?.courseName || '',
+        subsectionTitle: mainVideo.title || '',
+        transcriptText: mainVideo.transcriptText || '',
+        pptText: mainVideo.pptText || '',
+        pdfText: mainVideo.pdfText || '',
+        studentProfile: {
+          major: studentMajor,
+          year: studentYear,
+          interests: studentInterests,
+        },
+        cognitiveStyle,
+        cognitiveLoad: { level: loadLevel, frustration },
+      };
+
+      const urls = buildGptPromptUrls();
+      let lastErr;
+      try {
+        let res;
+        for (const url of urls) {
+          try {
+            res = await axios.post(url, body);
+            lastErr = null;
+            break;
+          } catch (e) {
+            lastErr = e;
+            if (e.response?.status === 404) continue;
+            if (!e.response && e.code === 'ERR_NETWORK') continue;
+            throw e;
+          }
+        }
+        if (!res && lastErr) throw lastErr;
+        if (!cancelled) {
+          setPedagogicalPrompt(String(res.data?.data?.prompt || '').trim());
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setPedagogicalPrompt('');
+          setPromptError(
+            [err.response?.data?.message, err.response?.data?.detail, err.message]
+              .filter(Boolean)
+              .join('\n\n') || 'Could not build pedagogical prompt.'
+          );
+        }
+      } finally {
+        if (!cancelled) setPromptLoading(false);
+      }
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    mainVideo?.url,
+    mainVideo?.title,
+    mainVideo?.transcriptText,
+    mainVideo?.pptText,
+    mainVideo?.pdfText,
+    course?.courseName,
+    studentMajor,
+    studentYear,
+    studentInterests,
+    cognitiveStyle,
+    loadLevel,
+    frustration,
+  ]);
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 760px)');
@@ -103,6 +233,81 @@ const CourseDetail = () => {
     Array.isArray(course?.keywords) && course.keywords.length > 0
       ? course.keywords
       : [];
+
+  const askCourseGpt = async () => {
+    setGptError('');
+    setGptAnswer('');
+    const q = gptQuestion.trim();
+    if (!q) {
+      setGptError('Enter a question for the assistant.');
+      return;
+    }
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setGptError('Sign in to use the assistant (open /login in another tab).');
+      return;
+    }
+
+    const ctxParts = [
+      mainVideo?.title ? `Subsection: ${mainVideo.title}` : '',
+      course?.courseName ? `Course: ${course.courseName}` : '',
+    ].filter(Boolean);
+    const ctxBody = [
+      mainVideo?.transcriptText
+        ? `Video transcript:\n${mainVideo.transcriptText}`.slice(0, 6000)
+        : '',
+      mainVideo?.pptText
+        ? `PPT text:\n${mainVideo.pptText}`.slice(0, 4000)
+        : '',
+      mainVideo?.pdfText
+        ? `PDF text:\n${mainVideo.pdfText}`.slice(0, 4000)
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+    const composedQuestion = ctxBody
+      ? `${ctxParts.join(' · ')}\n\n---\n${ctxBody}\n---\n\nQuestion: ${q}`
+      : `${ctxParts.join(' · ')}\n\nQuestion: ${q}`;
+
+    try {
+      setGptLoading(true);
+      const urls = buildGptAskUrls();
+      let lastErr;
+      let res;
+      for (const url of urls) {
+        try {
+          res = await axios.post(
+            url,
+            { question: composedQuestion },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          lastErr = null;
+          break;
+        } catch (e) {
+          lastErr = e;
+          if (e.response?.status === 404) continue;
+          if (!e.response && e.code === 'ERR_NETWORK') continue;
+          throw e;
+        }
+      }
+      if (!res && lastErr) throw lastErr;
+      setGptAnswer(String(res.data?.data?.answer || '').trim());
+    } catch (err) {
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        navigate('/login');
+        return;
+      }
+      setGptError(
+        [err.response?.data?.message, err.response?.data?.detail, err.message]
+          .filter(Boolean)
+          .join('\n\n') || 'Assistant request failed.'
+      );
+    } finally {
+      setGptLoading(false);
+    }
+  };
 
   return (
     <div
@@ -901,6 +1106,236 @@ const CourseDetail = () => {
                   </div>
                 </div>
               ) : null}
+
+              <div
+                style={{
+                  marginTop: '0.75rem',
+                  padding: '1rem',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(34, 197, 94, 0.22)',
+                  background: 'rgba(22, 101, 52, 0.12)',
+                }}
+              >
+                <p
+                  className="form-label"
+                  style={{
+                    margin: 0,
+                    fontSize: '0.8rem',
+                    marginBottom: '0.5rem',
+                    letterSpacing: '0.02em',
+                  }}
+                >
+                  Pedagogical prompt (subsection)
+                </p>
+                <p
+                  style={{
+                    margin: '0 0 0.65rem 0',
+                    fontSize: '0.75rem',
+                    color: 'var(--text-muted)',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Built from this subsection’s extracted video, PPT, and PDF text.
+                  Adjust profile fields to refresh the template.
+                </p>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+                    gap: '0.5rem',
+                    marginBottom: '0.65rem',
+                  }}
+                >
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Major"
+                    value={studentMajor}
+                    onChange={(e) => setStudentMajor(e.target.value)}
+                    style={{ fontSize: '0.82rem' }}
+                  />
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Year"
+                    value={studentYear}
+                    onChange={(e) => setStudentYear(e.target.value)}
+                    style={{ fontSize: '0.82rem' }}
+                  />
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Interests"
+                    value={studentInterests}
+                    onChange={(e) => setStudentInterests(e.target.value)}
+                    style={{ gridColumn: '1 / -1', fontSize: '0.82rem' }}
+                  />
+                  <select
+                    className="form-input"
+                    value={cognitiveStyle}
+                    onChange={(e) => setCognitiveStyle(e.target.value)}
+                    style={{ fontSize: '0.82rem' }}
+                  >
+                    <option value="Visual">Visual</option>
+                    <option value="Auditory">Auditory</option>
+                    <option value="Read/Write">Read/Write</option>
+                    <option value="Kinesthetic">Kinesthetic</option>
+                  </select>
+                  <select
+                    className="form-input"
+                    value={loadLevel}
+                    onChange={(e) => setLoadLevel(e.target.value)}
+                    style={{ fontSize: '0.82rem' }}
+                  >
+                    <option value="Very Low">Load: Very Low</option>
+                    <option value="Low">Load: Low</option>
+                    <option value="Medium">Load: Medium</option>
+                    <option value="High">Load: High</option>
+                    <option value="Very High">Load: Very High</option>
+                  </select>
+                  <select
+                    className="form-input"
+                    value={frustration}
+                    onChange={(e) => setFrustration(e.target.value)}
+                    style={{ fontSize: '0.82rem' }}
+                  >
+                    <option value="Low">Frustration: Low</option>
+                    <option value="Moderate">Frustration: Moderate</option>
+                    <option value="High">Frustration: High</option>
+                  </select>
+                </div>
+                {promptLoading ? (
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: '0.82rem',
+                      color: 'var(--text-muted)',
+                    }}
+                  >
+                    Building prompt…
+                  </p>
+                ) : null}
+                {promptError ? (
+                  <p
+                    style={{
+                      margin: '0.35rem 0 0 0',
+                      fontSize: '0.82rem',
+                      color: 'var(--danger)',
+                      whiteSpace: 'pre-wrap',
+                    }}
+                  >
+                    {promptError}
+                  </p>
+                ) : null}
+                <textarea
+                  className="form-input"
+                  readOnly
+                  rows={14}
+                  value={pedagogicalPrompt}
+                  placeholder={
+                    promptLoading
+                      ? ''
+                      : 'Prompt will appear here when the subsection has loaded.'
+                  }
+                  style={{
+                    marginTop: '0.5rem',
+                    resize: 'vertical',
+                    fontSize: '0.78rem',
+                    lineHeight: 1.45,
+                    fontFamily: 'ui-monospace, monospace',
+                    maxHeight: '360px',
+                  }}
+                />
+              </div>
+
+              <div
+                style={{
+                  marginTop: '0.75rem',
+                  padding: '1rem',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(129, 140, 248, 0.25)',
+                  background: 'rgba(79, 70, 229, 0.08)',
+                }}
+              >
+                <p
+                  className="form-label"
+                  style={{
+                    margin: 0,
+                    fontSize: '0.8rem',
+                    marginBottom: '0.5rem',
+                    letterSpacing: '0.02em',
+                  }}
+                >
+                  Ask the assistant
+                </p>
+                <p
+                  style={{
+                    margin: '0 0 0.65rem 0',
+                    fontSize: '0.75rem',
+                    color: 'var(--text-muted)',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Questions use this subsection’s extracted text when available.{' '}
+                  <Link to="/login" style={{ color: '#93c5fd' }}>
+                    Sign in
+                  </Link>{' '}
+                  to ask.
+                </p>
+                <textarea
+                  className="form-input"
+                  rows={3}
+                  value={gptQuestion}
+                  onChange={(e) => setGptQuestion(e.target.value)}
+                  placeholder="Ask about this lesson…"
+                  style={{ resize: 'vertical', fontSize: '0.88rem' }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={askCourseGpt}
+                  disabled={gptLoading}
+                  style={{ marginTop: '0.5rem', width: '100%', fontSize: '0.85rem' }}
+                >
+                  {gptLoading ? 'Asking…' : 'Ask'}
+                </button>
+                {gptError ? (
+                  <p
+                    style={{
+                      marginTop: '0.65rem',
+                      marginBottom: 0,
+                      fontSize: '0.82rem',
+                      color: 'var(--danger)',
+                      whiteSpace: 'pre-wrap',
+                    }}
+                  >
+                    {gptError}
+                  </p>
+                ) : null}
+                {gptAnswer ? (
+                  <div
+                    style={{
+                      marginTop: '0.75rem',
+                      padding: '0.75rem',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      background: 'rgba(15, 23, 42, 0.45)',
+                    }}
+                  >
+                    <p
+                      className="form-label"
+                      style={{ marginBottom: '0.35rem', fontSize: '0.75rem' }}
+                    >
+                      Assistant reply
+                    </p>
+                    <AssistantMarkdown
+                      style={{ maxHeight: '240px', overflowY: 'auto' }}
+                    >
+                      {gptAnswer}
+                    </AssistantMarkdown>
+                  </div>
+                ) : null}
+              </div>
             </>
           ) : (
             <p
