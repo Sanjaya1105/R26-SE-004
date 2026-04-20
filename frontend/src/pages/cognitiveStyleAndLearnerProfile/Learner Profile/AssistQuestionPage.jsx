@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const questions = [
   "I usually try to understand the meaning of what I learn rather than just memorising it.",
@@ -15,6 +16,7 @@ const questions = [
 ];
 
 const scaleOptions = [1, 2, 3, 4, 5];
+const navigate = useNavigate();
 
 export default function AssistQuestionPage() {
   const initialAnswers = useMemo(
@@ -55,7 +57,7 @@ export default function AssistQuestionPage() {
     try {
       setLoading(true);
 
-      await fetch("http://127.0.0.1:8000/assist-questions", {
+      await fetch("http://localhost:4000/cognitive-style/assist-questions/", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -65,6 +67,7 @@ export default function AssistQuestionPage() {
 
       setSuccess("Responses collected successfully.");
       console.log("Submitted payload:", payload);
+      navigate("/next-page");
     } catch (submitError) {
       setError("Submission failed. Add your backend URL and try again.");
       console.error(submitError);
