@@ -2,7 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import StudentLogin from './pages/student/StudentLogin';
 import StudentRegistration from './pages/student/StudentRegistration';
 import AssistQuestionPage from './pages/cognitiveStyleAndLearnerProfile/Learner Profile/AssistQuestionPage';
-
+import Module2 from './pages/cognitiveStyleAndLearnerProfile/CognitiveStyle/SplitScreenModule/Module2';
 
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -38,6 +38,7 @@ function App() {
         <Route path="/course/:courseId" element={<CourseDetail />} />
         <Route path="/course" element={<Course />} />
         <Route path="/learner-profile" element={<AssistQuestionPage />} />
+        <Route path="/split-screen" element={<Module2 />} />
   
 
 

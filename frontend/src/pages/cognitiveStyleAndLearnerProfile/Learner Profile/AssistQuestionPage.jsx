@@ -16,14 +16,14 @@ const questions = [
 ];
 
 const scaleOptions = [1, 2, 3, 4, 5];
-const navigate = useNavigate();
+
 
 export default function AssistQuestionPage() {
   const initialAnswers = useMemo(
     () => Object.fromEntries(questions.map((_, index) => [index, ""])),
     []
   );
-
+const navigate = useNavigate();
   const [answers, setAnswers] = useState(initialAnswers);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -67,7 +67,7 @@ export default function AssistQuestionPage() {
 
       setSuccess("Responses collected successfully.");
       console.log("Submitted payload:", payload);
-      navigate("/next-page");
+      navigate("/split-screen");
     } catch (submitError) {
       setError("Submission failed. Add your backend URL and try again.");
       console.error(submitError);
