@@ -1,4 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import StudentLogin from './pages/student/StudentLogin';
+import StudentRegistration from './pages/student/StudentRegistration';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
@@ -26,6 +28,8 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/student/login" element={<StudentLogin />} />
+        <Route path="/student/register" element={<StudentRegistration />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/course/:courseId" element={<CourseDetail />} />
