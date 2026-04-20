@@ -29,7 +29,7 @@ const StudentLogin = () => {
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
 
-      navigate('/student/dashboard');
+      navigate('/learner-profile');
     } catch (err) {
       setError(
         err.response?.data?.message || 'Login failed. Please check credentials.'
