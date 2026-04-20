@@ -1,8 +1,10 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import CursorTracker from "./CursorTracker";
 import GazeTracker from "./GazeTracker2";
 
 function Module2() {
+  const navigate = useNavigate();
   const handleChoice = (type) => {
     alert(`You selected: ${type}`);
   };
@@ -173,6 +175,24 @@ function Module2() {
               <li>Oxygen is released into the air</li>
             </ul>
           </div>
+          <div style={{ display: "flex", justifyContent: "center", marginTop: "24px" }}>
+            <button
+              onClick={() => navigate("/geft")}
+              style={{
+                padding: "12px 24px",
+                border: "none",
+                borderRadius: "10px",
+                backgroundColor: "#778197",
+                color: "#fff",
+                fontSize: "16px",
+                fontWeight: "bold",
+                cursor: "pointer",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+              }}
+            >
+              I Prefer This
+            </button>
+          </div>
         </div>
 
         <p
@@ -202,142 +222,160 @@ function Module2() {
         <h2 style={{ textAlign: "center" }}>Verbal</h2>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "16px", color: "#333" }}>
-  <div
-    style={{
-      backgroundColor: "#ffffff",
-      border: "1px solid #e3e3e3",
-      borderRadius: "12px",
-      padding: "18px",
-      boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-    }}
-  >
-    <p style={{ margin: 0, fontSize: "18px", lineHeight: "1.8" }}>
-      <strong>Photosynthesis</strong> is the process by which green plants make their own food.
-    </p>
-  </div>
+          <div
+            style={{
+              backgroundColor: "#ffffff",
+              border: "1px solid #e3e3e3",
+              borderRadius: "12px",
+              padding: "18px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+            }}
+          >
+            <p style={{ margin: 0, fontSize: "18px", lineHeight: "1.8" }}>
+              <strong>Photosynthesis</strong> is the process by which green plants make their own food.
+            </p>
+          </div>
 
-  <div
-    style={{
-      backgroundColor: "#ffffff",
-      border: "1px solid #e3e3e3",
-      borderRadius: "12px",
-      padding: "18px",
-      boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-    }}
-  >
-    <p style={{ margin: "0 0 12px 0", fontWeight: "bold", fontSize: "18px" }}>
-      Main idea
-    </p>
-    <hr style={{ border: "none", borderTop: "1px solid #e5e5e5", margin: "0 0 14px 0" }} />
+          <div
+            style={{
+              backgroundColor: "#ffffff",
+              border: "1px solid #e3e3e3",
+              borderRadius: "12px",
+              padding: "18px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+            }}
+          >
+            <p style={{ margin: "0 0 12px 0", fontWeight: "bold", fontSize: "18px" }}>
+              Main idea
+            </p>
+            <hr style={{ border: "none", borderTop: "1px solid #e5e5e5", margin: "0 0 14px 0" }} />
 
-    <ul style={{ margin: 0, paddingLeft: "24px", fontSize: "18px", lineHeight: "1.8" }}>
-      <li style={{ marginBottom: "10px" }}>Plants use sunlight as their main energy source.</li>
-      <li style={{ marginBottom: "10px" }}>They take in carbon dioxide from the air.</li>
-      <li style={{ marginBottom: "10px" }}>They absorb water from the soil through their roots.</li>
-      <li style={{ marginBottom: "10px" }}>They produce glucose as food.</li>
-      <li style={{ marginBottom: "0" }}>They release oxygen into the air.</li>
-    </ul>
-  </div>
+            <ul style={{ margin: 0, paddingLeft: "24px", fontSize: "18px", lineHeight: "1.8" }}>
+              <li style={{ marginBottom: "10px" }}>Plants use sunlight as their main energy source.</li>
+              <li style={{ marginBottom: "10px" }}>They take in carbon dioxide from the air.</li>
+              <li style={{ marginBottom: "10px" }}>They absorb water from the soil through their roots.</li>
+              <li style={{ marginBottom: "10px" }}>They produce glucose as food.</li>
+              <li style={{ marginBottom: "0" }}>They release oxygen into the air.</li>
+            </ul>
+          </div>
 
-  <div
-    style={{
-      backgroundColor: "#ffffff",
-      border: "1px solid #e3e3e3",
-      borderRadius: "12px",
-      padding: "18px",
-      boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-    }}
-  >
-    <p style={{ margin: "0 0 12px 0", fontWeight: "bold", fontSize: "18px" }}>
-      Step-by-step process
-    </p>
-    <hr style={{ border: "none", borderTop: "1px solid #e5e5e5", margin: "0 0 14px 0" }} />
+          <div
+            style={{
+              backgroundColor: "#ffffff",
+              border: "1px solid #e3e3e3",
+              borderRadius: "12px",
+              padding: "18px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+            }}
+          >
+            <p style={{ margin: "0 0 12px 0", fontWeight: "bold", fontSize: "18px" }}>
+              Step-by-step process
+            </p>
+            <hr style={{ border: "none", borderTop: "1px solid #e5e5e5", margin: "0 0 14px 0" }} />
 
-    <div style={{ fontSize: "18px", lineHeight: "1.8" }}>
-      <p style={{ margin: "0 0 12px 0" }}>
-        <strong>Step 1:</strong> The plant absorbs <strong>water</strong> from the soil through its roots.
-      </p>
-      <hr style={{ border: "none", borderTop: "1px solid #f0f0f0", margin: "0 0 12px 0" }} />
+            <div style={{ fontSize: "18px", lineHeight: "1.8" }}>
+              <p style={{ margin: "0 0 12px 0" }}>
+                <strong>Step 1:</strong> The plant absorbs <strong>water</strong> from the soil through its roots.
+              </p>
+              <hr style={{ border: "none", borderTop: "1px solid #f0f0f0", margin: "0 0 12px 0" }} />
 
-      <p style={{ margin: "0 0 12px 0" }}>
-        <strong>Step 2:</strong> The leaves take in <strong>carbon dioxide</strong> from the air.
-      </p>
-      <hr style={{ border: "none", borderTop: "1px solid #f0f0f0", margin: "0 0 12px 0" }} />
+              <p style={{ margin: "0 0 12px 0" }}>
+                <strong>Step 2:</strong> The leaves take in <strong>carbon dioxide</strong> from the air.
+              </p>
+              <hr style={{ border: "none", borderTop: "1px solid #f0f0f0", margin: "0 0 12px 0" }} />
 
-      <p style={{ margin: "0 0 12px 0" }}>
-        <strong>Step 3:</strong> <strong>Sunlight</strong> is captured by chlorophyll, the green pigment in leaves.
-      </p>
-      <hr style={{ border: "none", borderTop: "1px solid #f0f0f0", margin: "0 0 12px 0" }} />
+              <p style={{ margin: "0 0 12px 0" }}>
+                <strong>Step 3:</strong> <strong>Sunlight</strong> is captured by chlorophyll, the green pigment in leaves.
+              </p>
+              <hr style={{ border: "none", borderTop: "1px solid #f0f0f0", margin: "0 0 12px 0" }} />
 
-      <p style={{ margin: "0 0 12px 0" }}>
-        <strong>Step 4:</strong> The plant uses sunlight energy to convert water and carbon dioxide into <strong>glucose</strong>.
-      </p>
-      <hr style={{ border: "none", borderTop: "1px solid #f0f0f0", margin: "0 0 12px 0" }} />
+              <p style={{ margin: "0 0 12px 0" }}>
+                <strong>Step 4:</strong> The plant uses sunlight energy to convert water and carbon dioxide into <strong>glucose</strong>.
+              </p>
+              <hr style={{ border: "none", borderTop: "1px solid #f0f0f0", margin: "0 0 12px 0" }} />
 
-      <p style={{ margin: 0 }}>
-        <strong>Step 5:</strong> <strong>Oxygen</strong> is produced and released into the atmosphere.
-      </p>
-    </div>
-  </div>
+              <p style={{ margin: 0 }}>
+                <strong>Step 5:</strong> <strong>Oxygen</strong> is produced and released into the atmosphere.
+              </p>
+            </div>
+          </div>
 
-  <div
-    style={{
-      backgroundColor: "#ffffff",
-      border: "1px solid #e3e3e3",
-      borderRadius: "12px",
-      padding: "18px",
-      boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-    }}
-  >
-    <p style={{ margin: "0 0 12px 0", fontWeight: "bold", fontSize: "18px" }}>
-      Important parts involved
-    </p>
-    <hr style={{ border: "none", borderTop: "1px solid #e5e5e5", margin: "0 0 14px 0" }} />
+          <div
+            style={{
+              backgroundColor: "#ffffff",
+              border: "1px solid #e3e3e3",
+              borderRadius: "12px",
+              padding: "18px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+            }}
+          >
+            <p style={{ margin: "0 0 12px 0", fontWeight: "bold", fontSize: "18px" }}>
+              Important parts involved
+            </p>
+            <hr style={{ border: "none", borderTop: "1px solid #e5e5e5", margin: "0 0 14px 0" }} />
 
-    <ul style={{ margin: 0, paddingLeft: "24px", fontSize: "18px", lineHeight: "1.8" }}>
-      <li style={{ marginBottom: "10px" }}><strong>Roots</strong> - absorb water from the soil</li>
-      <li style={{ marginBottom: "10px" }}><strong>Leaves</strong> - take in carbon dioxide and capture sunlight</li>
-      <li style={{ marginBottom: "10px" }}><strong>Chlorophyll</strong> - helps trap sunlight energy</li>
-      <li style={{ marginBottom: "0" }}><strong>Stomata</strong> - tiny openings in leaves for gas exchange</li>
-    </ul>
-  </div>
+            <ul style={{ margin: 0, paddingLeft: "24px", fontSize: "18px", lineHeight: "1.8" }}>
+              <li style={{ marginBottom: "10px" }}><strong>Roots</strong> - absorb water from the soil</li>
+              <li style={{ marginBottom: "10px" }}><strong>Leaves</strong> - take in carbon dioxide and capture sunlight</li>
+              <li style={{ marginBottom: "10px" }}><strong>Chlorophyll</strong> - helps trap sunlight energy</li>
+              <li style={{ marginBottom: "0" }}><strong>Stomata</strong> - tiny openings in leaves for gas exchange</li>
+            </ul>
+          </div>
 
-  <div
-    style={{
-      backgroundColor: "#ffffff",
-      border: "1px solid #e3e3e3",
-      borderRadius: "12px",
-      padding: "18px",
-      boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-    }}
-  >
-    <p style={{ margin: "0 0 12px 0", fontWeight: "bold", fontSize: "18px" }}>
-      Why photosynthesis is important
-    </p>
-    <hr style={{ border: "none", borderTop: "1px solid #e5e5e5", margin: "0 0 14px 0" }} />
+          <div
+            style={{
+              backgroundColor: "#ffffff",
+              border: "1px solid #e3e3e3",
+              borderRadius: "12px",
+              padding: "18px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+            }}
+          >
+            <p style={{ margin: "0 0 12px 0", fontWeight: "bold", fontSize: "18px" }}>
+              Why photosynthesis is important
+            </p>
+            <hr style={{ border: "none", borderTop: "1px solid #e5e5e5", margin: "0 0 14px 0" }} />
 
-    <ul style={{ margin: 0, paddingLeft: "24px", fontSize: "18px", lineHeight: "1.8" }}>
-      <li style={{ marginBottom: "10px" }}>It provides food for plants.</li>
-      <li style={{ marginBottom: "10px" }}>It supports the food chain.</li>
-      <li style={{ marginBottom: "10px" }}>It releases oxygen needed by humans and animals.</li>
-      <li style={{ marginBottom: "0" }}>It helps maintain the balance of gases in the atmosphere.</li>
-    </ul>
-  </div>
+            <ul style={{ margin: 0, paddingLeft: "24px", fontSize: "18px", lineHeight: "1.8" }}>
+              <li style={{ marginBottom: "10px" }}>It provides food for plants.</li>
+              <li style={{ marginBottom: "10px" }}>It supports the food chain.</li>
+              <li style={{ marginBottom: "10px" }}>It releases oxygen needed by humans and animals.</li>
+              <li style={{ marginBottom: "0" }}>It helps maintain the balance of gases in the atmosphere.</li>
+            </ul>
+          </div>
 
-  <div
-    style={{
-      backgroundColor: "#ffffff",
-      border: "1px solid #e3e3e3",
-      borderRadius: "12px",
-      padding: "18px",
-      boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-    }}
-  >
-    <p style={{ margin: 0, fontSize: "18px", lineHeight: "1.8", color: "#555" }}>
-      <strong>In short:</strong> sunlight + water + carbon dioxide = food for the plant + oxygen for the air.
-    </p>
-  </div>
-</div>
+          <div
+            style={{
+              backgroundColor: "#ffffff",
+              border: "1px solid #e3e3e3",
+              borderRadius: "12px",
+              padding: "18px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+            }}
+          >
+            <p style={{ margin: 0, fontSize: "18px", lineHeight: "1.8", color: "#555" }}>
+              <strong>In short:</strong> sunlight + water + carbon dioxide = food for the plant + oxygen for the air.
+            </p>
+          </div>
+          <div style={{ display: "flex", justifyContent: "center", marginTop: "24px" }}>
+            <button
+              onClick={() => navigate("/geft")}
+              style={{
+                padding: "12px 24px",
+                border: "none",
+                borderRadius: "10px",
+                backgroundColor: "#778197",
+                color: "#fff",
+                fontSize: "16px",
+                fontWeight: "bold",
+                cursor: "pointer",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+              }}
+            >
+              I Prefer This
+            </button>
+          </div>
+        </div>
 
         <p
           style={{
