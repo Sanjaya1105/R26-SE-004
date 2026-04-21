@@ -70,11 +70,16 @@
         let lastInteractionTime = Date.now();
         let isSeeking = false;
         let seekStartTime = 0;
+        let hasCapturedSeekStart = false;
+        let pendingSeekTarget = null;
+        let seekSettleTimeoutId = null;
         let lastSeekEventTime = 0;
         let lastRewatchEventTime = 0;
         let lastPlaybackRate = video.playbackRate;
         let suppressPauseCountUntil = 0;
         let pauseConfirmTimeoutId = null;
+        const MIN_SEEK_DELTA_SECONDS = 0.25;
+        const SEEK_SETTLE_DELAY_MS = 250;
 
         // Required by the API schemas.
         const studentId = "S001";
@@ -154,7 +159,10 @@
         // Detect seek start
         video.addEventListener("seeking", () => {
             isSeeking = true;
-            seekStartTime = lastVideoTime;
+            if (!hasCapturedSeekStart) {
+                seekStartTime = lastVideoTime;
+                hasCapturedSeekStart = true;
+            }
             lastSeekEventTime = Date.now();
             suppressPauseCountUntil = Date.now() + 2000;
             markInteraction();
@@ -199,44 +207,62 @@
 
         // Seek tracking
         video.addEventListener("seeked", () => {
-            lastSeekEventTime = Date.now();
-            suppressPauseCountUntil = Date.now() + 2000;
+            pendingSeekTarget = Number(video.currentTime.toFixed(2));
 
-            if (pauseConfirmTimeoutId) {
-                clearTimeout(pauseConfirmTimeoutId);
-                pauseConfirmTimeoutId = null;
+            if (seekSettleTimeoutId) {
+                clearTimeout(seekSettleTimeoutId);
             }
 
-            // If user moved backward, count as rewatch
-            const isBackwardSeek = video.currentTime < seekStartTime - 0.25;
+            seekSettleTimeoutId = setTimeout(() => {
+                const nextTime = Number(pendingSeekTarget || 0);
+                const previousTime = Number(seekStartTime.toFixed(2));
+                const delta = nextTime - previousTime;
 
-            if (isBackwardSeek) {
-                rewatchCount++;
-                lastRewatchEventTime = Date.now();
-                suppressPauseCountUntil = Date.now() + 2500;
-                console.log("Rewatch count:", rewatchCount);
-                sendRawEvent({
-                    event_type: "seek_backward",
-                    from_position: Number(seekStartTime.toFixed(2)),
-                    to_position: Number(video.currentTime.toFixed(2))
-                });
-            } else {
-                seekCount++;
-                console.log("Seek count:", seekCount);
-                sendRawEvent({
-                    event_type: "seek_forward",
-                    from_position: Number(seekStartTime.toFixed(2)),
-                    to_position: Number(video.currentTime.toFixed(2))
-                });
-            }
+                lastSeekEventTime = Date.now();
+                suppressPauseCountUntil = Date.now() + 2000;
 
-            updateUI();
-            markInteraction();
+                if (pauseConfirmTimeoutId) {
+                    clearTimeout(pauseConfirmTimeoutId);
+                    pauseConfirmTimeoutId = null;
+                }
 
-            // Reset seek flag after pause/play events settle.
-            setTimeout(() => {
-                isSeeking = false;
-            }, 0);
+                seekSettleTimeoutId = null;
+                pendingSeekTarget = null;
+                hasCapturedSeekStart = false;
+
+                if (Math.abs(delta) < MIN_SEEK_DELTA_SECONDS) {
+                    isSeeking = false;
+                    return;
+                }
+
+                if (delta < 0) {
+                    rewatchCount++;
+                    lastRewatchEventTime = Date.now();
+                    suppressPauseCountUntil = Date.now() + 2500;
+                    console.log("Rewatch count:", rewatchCount);
+                    sendRawEvent({
+                        event_type: "seek_backward",
+                        from_position: previousTime,
+                        to_position: nextTime
+                    });
+                } else {
+                    seekCount++;
+                    console.log("Seek count:", seekCount);
+                    sendRawEvent({
+                        event_type: "seek_forward",
+                        from_position: previousTime,
+                        to_position: nextTime
+                    });
+                }
+
+                updateUI();
+                markInteraction();
+
+                // Reset seek flag after pause/play events settle.
+                setTimeout(() => {
+                    isSeeking = false;
+                }, 0);
+            }, SEEK_SETTLE_DELAY_MS);
         });
 
         // Playback rate change tracking
