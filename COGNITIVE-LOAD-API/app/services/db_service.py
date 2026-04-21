@@ -1,4 +1,8 @@
 from app.core.database import get_db_connection
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 def save_raw_interaction_event(event_data: dict):
@@ -284,7 +288,7 @@ def _execute_insert(query: str, values: tuple):
         connection.commit()
         return cursor.lastrowid
     except Exception as exc:
-        print(f"MySQL insert failed: {exc}")
+        logger.exception("MySQL insert failed: %s", exc)
         return None
     finally:
         if cursor is not None:
@@ -306,7 +310,7 @@ def _execute_select(query: str, values: tuple):
         cursor.execute(query, values)
         return cursor.fetchall()
     except Exception as exc:
-        print(f"MySQL select failed: {exc}")
+        logger.exception("MySQL select failed: %s", exc)
         return []
     finally:
         if cursor is not None:

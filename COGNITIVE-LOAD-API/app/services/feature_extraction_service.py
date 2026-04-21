@@ -70,6 +70,7 @@ def extract_feature_window_from_raw(data: dict):
         int((data["window_end"] - data["window_start"]).total_seconds()),
     )
     time_on_content = max(window_seconds - idle_duration_video, 0)
+    # Keep the model schema stable for 2-minute windows that have no quiz interaction yet.
     error_rate = (quiz_errors / quiz_attempts) if quiz_attempts > 0 else 0
 
     return {

@@ -23,6 +23,9 @@ const SHAP_AI_SERVICE_URL =
   process.env.SHAP_AI_SERVICE_URL || "http://localhost:8011";
 const RECOMMENDATION_AI_URL = 
   process.env.RECOMMENDATION_AI_URL || "http://localhost:5002";
+const COGNITIVE_STYLE_SERVICE_URL = 
+  process.env.COGNITIVE_STYLE_SERVICE_URL || "http://localhost:8003";
+
 const allowedOrigins = [
   FRONTEND_URL,
   ...FRONTEND_URLS.split(",").map((origin) => origin.trim()).filter(Boolean),
@@ -188,6 +191,17 @@ app.use(
     pathRewrite: (path) => path.replace(/^\/api\/recommendation/, ""),
   })
 );
+
+app.use(
+  "/cognitive-style",
+  createProxyMiddleware({
+    target: "http://localhost:8003",
+    changeOrigin: true,
+    pathRewrite: (path) => path.replace(/^\/cognitive-style/, ""),
+  })
+);
+
+
 
 app.listen(PORT, () => {
   console.log(`API Gateway running on http://localhost:${PORT}`);

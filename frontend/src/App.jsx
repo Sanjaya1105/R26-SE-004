@@ -1,4 +1,9 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import StudentLogin from './pages/student/StudentLogin';
+import StudentRegistration from './pages/student/StudentRegistration';
+import AssistQuestionPage from './pages/cognitiveStyleAndLearnerProfile/Learner Profile/AssistQuestionPage';
+import Module2 from './pages/cognitiveStyleAndLearnerProfile/CognitiveStyle/SplitScreenModule/Module2';
+import QuestionRunner from './pages/cognitiveStyleAndLearnerProfile/CognitiveStyle/GeftModule/QuestionRunner';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
@@ -26,10 +31,17 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/student/login" element={<StudentLogin />} />
+        <Route path="/student/register" element={<StudentRegistration />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/course/:courseId" element={<CourseDetail />} />
         <Route path="/course" element={<Course />} />
+        <Route path="/learner-profile" element={<AssistQuestionPage />} />
+        <Route path="/split-screen" element={<Module2 />} />
+        <Route path="/geft" element={<QuestionRunner />} />
+
+
         <Route path="/dashboard" element={
           <PrivateRoute>
             <Dashboard />
