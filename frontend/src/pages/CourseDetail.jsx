@@ -26,6 +26,12 @@ function buildGptPromptUrls() {
 
 const ABOUT_PREVIEW_WORDS = 20;
 const COGNITIVE_LOAD_WINDOW_MS = 120000;
+const MIN_SEEK_DELTA_SECONDS = 0.25;
+const SEEK_SETTLE_DELAY_MS = 250;
+const SEEK_PAUSE_GRACE_MS = 600;
+const REWATCH_PAUSE_GRACE_MS = 3000;
+const PAUSE_CONFIRM_DELAY_MS = 350;
+const PAUSE_POSITION_CHANGE_THRESHOLD = 0.15;
 
 function getActiveStudentId() {
   try {
@@ -91,6 +97,13 @@ const CourseDetail = () => {
   const sessionStartRef = useRef(null);
   const lastVideoTimeRef = useRef(0);
   const seekStartTimeRef = useRef(0);
+  const pendingSeekTargetRef = useRef(null);
+  const seekSettleTimeoutRef = useRef(null);
+  const seekInProgressRef = useRef(false);
+  const lastSeekEventTimeRef = useRef(0);
+  const lastRewatchEventTimeRef = useRef(0);
+  const suppressPauseCountUntilRef = useRef(0);
+  const pauseConfirmTimeoutRef = useRef(null);
   const lastPlaybackRateRef = useRef(1);
   const predictTimeoutRef = useRef(null);
 
@@ -117,6 +130,16 @@ const CourseDetail = () => {
     setCognitiveLoadError('');
     setCognitiveLoadLoading(false);
     setVideoSessionId('');
+    seekStartTimeRef.current = 0;
+    pendingSeekTargetRef.current = null;
+    seekInProgressRef.current = false;
+    lastSeekEventTimeRef.current = 0;
+    lastRewatchEventTimeRef.current = 0;
+    suppressPauseCountUntilRef.current = 0;
+    if (pauseConfirmTimeoutRef.current) {
+      window.clearTimeout(pauseConfirmTimeoutRef.current);
+      pauseConfirmTimeoutRef.current = null;
+    }
   }, [courseId]);
 
   useEffect(() => {
@@ -135,6 +158,20 @@ const CourseDetail = () => {
       setVideoSessionId('');
       lastVideoTimeRef.current = 0;
       lastPlaybackRateRef.current = 1;
+      seekStartTimeRef.current = 0;
+      pendingSeekTargetRef.current = null;
+      seekInProgressRef.current = false;
+      lastSeekEventTimeRef.current = 0;
+      lastRewatchEventTimeRef.current = 0;
+      suppressPauseCountUntilRef.current = 0;
+      if (seekSettleTimeoutRef.current) {
+        window.clearTimeout(seekSettleTimeoutRef.current);
+        seekSettleTimeoutRef.current = null;
+      }
+      if (pauseConfirmTimeoutRef.current) {
+        window.clearTimeout(pauseConfirmTimeoutRef.current);
+        pauseConfirmTimeoutRef.current = null;
+      }
       if (predictTimeoutRef.current) {
         window.clearTimeout(predictTimeoutRef.current);
         predictTimeoutRef.current = null;
@@ -171,6 +208,14 @@ const CourseDetail = () => {
     }).catch(() => {});
 
     return () => {
+      if (seekSettleTimeoutRef.current) {
+        window.clearTimeout(seekSettleTimeoutRef.current);
+        seekSettleTimeoutRef.current = null;
+      }
+      if (pauseConfirmTimeoutRef.current) {
+        window.clearTimeout(pauseConfirmTimeoutRef.current);
+        pauseConfirmTimeoutRef.current = null;
+      }
       if (predictTimeoutRef.current) {
         window.clearTimeout(predictTimeoutRef.current);
         predictTimeoutRef.current = null;
@@ -252,29 +297,103 @@ const CourseDetail = () => {
     }
   };
 
+  const isPauseFromSeek = () => {
+    const recentlySought =
+      Date.now() - lastSeekEventTimeRef.current < SEEK_PAUSE_GRACE_MS;
+    const recentlyRewatched =
+      Date.now() - lastRewatchEventTimeRef.current < REWATCH_PAUSE_GRACE_MS;
+    const inSuppressionWindow =
+      Date.now() < suppressPauseCountUntilRef.current;
+
+    return (
+      seekInProgressRef.current ||
+      videoRef.current?.seeking ||
+      recentlySought ||
+      recentlyRewatched ||
+      inSuppressionWindow
+    );
+  };
+
   const handleVideoPause = () => {
-    const currentTime = Number(videoRef.current?.currentTime?.toFixed(2) || 0);
-    sendCognitiveLoadEvent({
-      event_type: 'pause',
-      video_time: currentTime,
-    });
+    const pausePosition = Number(videoRef.current?.currentTime?.toFixed(2) || 0);
+
+    if (pauseConfirmTimeoutRef.current) {
+      window.clearTimeout(pauseConfirmTimeoutRef.current);
+    }
+
+    pauseConfirmTimeoutRef.current = window.setTimeout(() => {
+      const currentTime = Number(videoRef.current?.currentTime?.toFixed(2) || 0);
+      const positionChanged =
+        Math.abs(currentTime - pausePosition) > PAUSE_POSITION_CHANGE_THRESHOLD;
+
+      if (videoRef.current?.paused && !isPauseFromSeek() && !positionChanged) {
+        sendCognitiveLoadEvent({
+          event_type: 'pause',
+          video_time: pausePosition,
+        });
+      }
+
+      pauseConfirmTimeoutRef.current = null;
+    }, PAUSE_CONFIRM_DELAY_MS);
+  };
+
+  const handleVideoPlay = () => {
+    if (pauseConfirmTimeoutRef.current) {
+      window.clearTimeout(pauseConfirmTimeoutRef.current);
+      pauseConfirmTimeoutRef.current = null;
+    }
   };
 
   const handleVideoSeeking = () => {
-    seekStartTimeRef.current = lastVideoTimeRef.current;
+    if (!seekInProgressRef.current) {
+      seekStartTimeRef.current = lastVideoTimeRef.current;
+      seekInProgressRef.current = true;
+    }
+    lastSeekEventTimeRef.current = Date.now();
+    suppressPauseCountUntilRef.current = Date.now() + 2000;
   };
 
   const handleVideoSeeked = () => {
-    const nextTime = Number(videoRef.current?.currentTime?.toFixed(2) || 0);
-    const previousTime = Number(seekStartTimeRef.current?.toFixed?.(2) || seekStartTimeRef.current || 0);
-    const isBackwardSeek = nextTime < previousTime - 0.25;
+    pendingSeekTargetRef.current = Number(videoRef.current?.currentTime?.toFixed(2) || 0);
 
-    sendCognitiveLoadEvent({
-      event_type: isBackwardSeek ? 'seek_backward' : 'seek_forward',
-      from_position: previousTime,
-      to_position: nextTime,
-      video_time: nextTime,
-    });
+    if (seekSettleTimeoutRef.current) {
+      window.clearTimeout(seekSettleTimeoutRef.current);
+    }
+
+    seekSettleTimeoutRef.current = window.setTimeout(() => {
+      const nextTime = Number(pendingSeekTargetRef.current || 0);
+      const previousTime = Number(
+        seekStartTimeRef.current?.toFixed?.(2) || seekStartTimeRef.current || 0
+      );
+      const delta = nextTime - previousTime;
+      lastSeekEventTimeRef.current = Date.now();
+      suppressPauseCountUntilRef.current = Date.now() + 2000;
+
+      if (pauseConfirmTimeoutRef.current) {
+        window.clearTimeout(pauseConfirmTimeoutRef.current);
+        pauseConfirmTimeoutRef.current = null;
+      }
+
+      seekSettleTimeoutRef.current = null;
+      pendingSeekTargetRef.current = null;
+      seekInProgressRef.current = false;
+
+      if (Math.abs(delta) < MIN_SEEK_DELTA_SECONDS) {
+        return;
+      }
+
+      sendCognitiveLoadEvent({
+        event_type: delta < 0 ? 'seek_backward' : 'seek_forward',
+        from_position: previousTime,
+        to_position: nextTime,
+        video_time: nextTime,
+      });
+
+      if (delta < 0) {
+        lastRewatchEventTimeRef.current = Date.now();
+        suppressPauseCountUntilRef.current = Date.now() + 2500;
+      }
+    }, SEEK_SETTLE_DELAY_MS);
   };
 
   const handleVideoRateChange = () => {
@@ -1166,6 +1285,7 @@ const CourseDetail = () => {
                   preload="metadata"
                   src={mainVideo.url}
                   onPause={handleVideoPause}
+                  onPlay={handleVideoPlay}
                   onSeeking={handleVideoSeeking}
                   onSeeked={handleVideoSeeked}
                   onRateChange={handleVideoRateChange}
