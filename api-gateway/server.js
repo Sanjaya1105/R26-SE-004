@@ -13,6 +13,8 @@ const GPT_SERVICE_URL =
   process.env.GPT_SERVICE_URL || "http://localhost:5002";
 const RESOURCE_UPLOAD_URL =
   process.env.RESOURCE_UPLOAD_URL || "http://localhost:5000";
+const COGNITIVE_LOAD_SERVICE_URL =
+  process.env.COGNITIVE_LOAD_SERVICE_URL || "http://localhost:8004";
 const GATEWAY_SHARED_SECRET =
   process.env.GATEWAY_SHARED_SECRET || "gateway_secret_change_me";
 const EXPLAINABLE_AI_BACKEND_URL =
@@ -54,6 +56,7 @@ app.get("/", (req, res) => {
     backendService: BACKEND_SERVICE_URL,
     gptService: GPT_SERVICE_URL,
     resourceUploadService: RESOURCE_UPLOAD_URL,
+    cognitiveLoadService: COGNITIVE_LOAD_SERVICE_URL,
     shapAiService: SHAP_AI_SERVICE_URL,
   });
 });
@@ -91,6 +94,15 @@ app.use(
     target: GPT_SERVICE_URL,
     changeOrigin: true,
     pathRewrite: (path) => `/api/gpt${path}`,
+  })
+);
+
+app.use(
+  "/api/cognitive-load",
+  createProxyMiddleware({
+    target: COGNITIVE_LOAD_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: (path) => path.replace(/^\/api\/cognitive-load/, ""),
   })
 );
 

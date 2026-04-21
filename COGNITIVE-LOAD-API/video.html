@@ -110,7 +110,7 @@
         const studentId = "S001";
         const lessonId = "L101";
         const sessionId = `sess_${Date.now()}`;
-        const apiBaseUrl = "http://127.0.0.1:8000";
+        const apiBaseUrl = "http://127.0.0.1:8004";
         const windowDurationMs = 120000;
         let currentMinuteIndex = 1;
         let currentWindowStart = new Date();
@@ -231,9 +231,6 @@
                 clearTimeout(pauseConfirmTimeoutId);
                 pauseConfirmTimeoutId = null;
             }
-            sendRawEvent({
-                event_type: "play"
-            });
             markInteraction();
         });
 
