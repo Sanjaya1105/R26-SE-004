@@ -5,7 +5,6 @@ from pydantic import BaseModel
 
 
 RawInteractionEventType = Literal[
-    "play",
     "pause",
     "seek_forward",
     "seek_backward",

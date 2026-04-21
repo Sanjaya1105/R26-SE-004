@@ -194,6 +194,9 @@
                 clearTimeout(pauseConfirmTimeoutId);
                 pauseConfirmTimeoutId = null;
             }
+            sendRawEvent({
+                event_type: "play"
+            });
             markInteraction();
         });
 
