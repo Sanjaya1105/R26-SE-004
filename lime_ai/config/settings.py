@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     MODEL_API_PREDICT_PATH: str = "/predict"
     MODEL_API_TIMEOUT_SECONDS: int = 30
 
+    LLM_PROVIDER: str = "ollama"
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_MODEL: str = "tinyllama"
+    OLLAMA_TIMEOUT_SECONDS: int = 90
+
     GPT_API_KEY: str = ""
     GPT_MODEL: str = "gpt-4o-mini"
     GPT_TIMEOUT_SECONDS: int = 20

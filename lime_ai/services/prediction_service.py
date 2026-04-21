@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException
+import httpx
 import numpy as np
 from lime.lime_tabular import LimeTabularExplainer
 from sqlalchemy import func
@@ -43,6 +44,46 @@ INT_FEATURE_FIELDS = {
 
 def _has_gpt_api_key() -> bool:
     return bool(settings.GPT_API_KEY and settings.GPT_API_KEY.strip())
+
+
+def _selected_llm_provider() -> str:
+    provider = settings.LLM_PROVIDER.strip().lower()
+    return provider or "ollama"
+
+
+def _has_ollama_config() -> bool:
+    return bool(settings.OLLAMA_BASE_URL.strip() and settings.OLLAMA_MODEL.strip())
+
+
+def _signal_to_teacher_phrase(signal: str) -> str:
+    normalized = signal.lower()
+
+    phrase_map = {
+        "pause_frequency": "the student paused the video frequently",
+        "navigation_count_video": "the student jumped around the video often",
+        "rewatch_segments": "the student rewatched video sections",
+        "playback_rate_change": "the student changed playback speed a lot",
+        "idle_duration_video": "the student stayed inactive during the video for long periods",
+        "time_on_content": "the student spent a long time on the lesson content",
+        "navigation_count_adaptation": "the student moved around the adaptation content often",
+        "revisit_frequency": "the student returned to earlier parts several times",
+        "idle_duration_adaptation": "the student paused during the adaptation content for long periods",
+        "quiz_response_time": "the student took a long time to answer quiz items",
+        "error_rate": "the student made more quiz errors",
+    }
+
+    for feature_name, phrase in phrase_map.items():
+        if feature_name in normalized:
+            return phrase
+
+    if any(token in normalized for token in ["pause", "idle", "wait"]):
+        return "the student showed signs of delay or waiting"
+    if any(token in normalized for token in ["error", "quiz"]):
+        return "the quiz activity suggests the student needed more support"
+    if any(token in normalized for token in ["rewatch", "revisit"]):
+        return "the student went back over the material repeatedly"
+
+    return "the signal points to higher cognitive load"
 
 
 def _build_human_prompt(
@@ -91,6 +132,77 @@ def _generate_gpt_text(system_prompt: str, user_prompt: str) -> str:
     return (content or "").strip()
 
 
+def _generate_ollama_text(system_prompt: str, user_prompt: str) -> str:
+    base_url = settings.OLLAMA_BASE_URL.strip().rstrip("/")
+    if not base_url:
+        raise ValueError("OLLAMA_BASE_URL is not configured.")
+
+    url = f"{base_url}/api/chat"
+    timeout = httpx.Timeout(settings.OLLAMA_TIMEOUT_SECONDS)
+    payload = {
+        "model": settings.OLLAMA_MODEL.strip(),
+        "stream": False,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+    }
+
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            response = client.post(url, json=payload)
+    except httpx.TimeoutException as exc:
+        raise RuntimeError(f"Ollama request timed out for {url}.") from exc
+    except httpx.RequestError as exc:
+        raise RuntimeError(f"Could not connect to Ollama at {url}.") from exc
+
+    if response.status_code >= 400:
+        raise RuntimeError(f"Ollama returned HTTP {response.status_code}: {response.text.strip()}")
+
+    try:
+        response_json = response.json()
+    except ValueError as exc:
+        raise RuntimeError("Ollama response was not valid JSON.") from exc
+
+    content = ""
+    if isinstance(response_json, dict):
+        message = response_json.get("message")
+        if isinstance(message, dict):
+            content = str(message.get("content", ""))
+        elif isinstance(response_json.get("response"), str):
+            content = str(response_json.get("response", ""))
+
+    return content.strip()
+
+
+def _generate_llm_text(system_prompt: str, user_prompt: str) -> tuple[str, str]:
+    provider = _selected_llm_provider()
+
+    if provider == "gpt":
+        if not _has_gpt_api_key():
+            return "", "gpt"
+        try:
+            generated = _generate_gpt_text(system_prompt, user_prompt)
+            if generated:
+                return generated, "gpt"
+        except Exception:
+            return "", "gpt"
+        return "", "gpt"
+
+    if provider == "ollama":
+        if not _has_ollama_config():
+            return "", "ollama"
+        try:
+            generated = _generate_ollama_text(system_prompt, user_prompt)
+            if generated:
+                return generated, "ollama"
+        except Exception:
+            return "", "ollama"
+        return "", "ollama"
+
+    return "", provider
+
+
 def _fallback_human_explanation(
     *,
     predicted_label: str,
@@ -132,9 +244,6 @@ def _generate_human_explanation(
         factors=factors,
     )
 
-    if not _has_gpt_api_key():
-        return fallback, "fallback"
-
     system_prompt = (
         "You are an educational analytics assistant. Provide concise, practical,"
         " teacher-friendly explanations from model factors."
@@ -148,12 +257,9 @@ def _generate_human_explanation(
         factors=factors,
     )
 
-    try:
-        generated = _generate_gpt_text(system_prompt, user_prompt)
-        if generated:
-            return generated, "gpt"
-    except Exception:
-        pass
+    generated, source = _generate_llm_text(system_prompt, user_prompt)
+    if generated:
+        return generated, source
 
     return fallback, "fallback"
 
@@ -168,12 +274,15 @@ def _build_aggregate_prompt(
     top_signals: list[dict[str, Any]],
 ) -> str:
     signals_text = "\n".join(
-        f"- source: {item['source']}, signal: {item['signal']}, strength: {item['strength']:.6f}, impact: {item['impact']}"
+        (
+            f"- source: {item['source']}, signal: {item['signal']}, strength: {item['strength']:.6f}, "
+            f"impact: {item['impact']}, teacher meaning: {_signal_to_teacher_phrase(item['signal'])}"
+        )
         for item in top_signals
     )
 
     return (
-        "Write a short teacher-friendly explanation using combined LIME and SHAP evidence.\n"
+        "Write one short, natural teacher-friendly paragraph using combined LIME and SHAP evidence.\n"
         f"Student ID: {student_id}\n"
         f"Lesson ID: {lesson_id}\n"
         f"Predicted cognitive load: {predicted_label} (score {predicted_score})\n"
@@ -181,10 +290,11 @@ def _build_aggregate_prompt(
         "Top combined signals (LIME+SHAP):\n"
         f"{signals_text}\n\n"
         "Rules:\n"
-        "1) Mention only the most influential factors.\n"
-        "2) Explain what they imply in plain language.\n"
+        "1) Explain the likely reason for high cognitive load in a natural sentence.\n"
+        "2) Mention the strongest signals and what they mean for the student.\n"
         "3) Give one practical teacher action.\n"
-        "4) Keep under 120 words."
+        "4) Avoid bullet points and keep under 120 words.\n"
+        "5) Use wording like: 'The student likely has high cognitive load because they paused the video often, spent a long time on the lesson, and revisited parts repeatedly.'"
     )
 
 
@@ -237,13 +347,13 @@ def _fallback_aggregate_explanation(
         )
 
     highlights = ", ".join(
-        f"{item['source'].upper()}: {item['signal']}"
+        f"{item['source'].upper()}: {_signal_to_teacher_phrase(item['signal'])}"
         for item in top_signals[:3]
     )
     return (
         f"This learner is predicted as {predicted_label} (confidence {confidence:.2f}). "
         f"Top combined signals are {highlights}. "
-        "Use these factors to guide a short targeted intervention in the next lesson segment."
+        "This suggests the student may be struggling with the pace or structure of the lesson, so slow down, add checkpoints, and give brief support."
     )
 
 
@@ -262,34 +372,23 @@ def generate_aggregate_explanation(payload: AggregateExplanationRequest) -> dict
         top_signals=top_signals,
     )
 
-    if not _has_gpt_api_key():
+    system_prompt = (
+        "You are an educational analytics assistant. Create concise, practical, teacher-friendly"
+        " explanations from combined LIME and SHAP signals."
+    )
+    user_prompt = _build_aggregate_prompt(
+        student_id=payload.student_id,
+        lesson_id=payload.lesson_id,
+        predicted_label=payload.predicted_cognitive_load,
+        predicted_score=payload.predicted_score,
+        confidence=payload.confidence,
+        top_signals=top_signals,
+    )
+
+    explanation_text, source = _generate_llm_text(system_prompt, user_prompt)
+    if not explanation_text:
         explanation_text = fallback
         source = "fallback"
-    else:
-        system_prompt = (
-            "You are an educational analytics assistant. Create concise, practical, teacher-friendly"
-            " explanations from combined LIME and SHAP signals."
-        )
-        user_prompt = _build_aggregate_prompt(
-            student_id=payload.student_id,
-            lesson_id=payload.lesson_id,
-            predicted_label=payload.predicted_cognitive_load,
-            predicted_score=payload.predicted_score,
-            confidence=payload.confidence,
-            top_signals=top_signals,
-        )
-
-        try:
-            generated = _generate_gpt_text(system_prompt, user_prompt)
-            if generated:
-                explanation_text = generated
-                source = "gpt"
-            else:
-                explanation_text = fallback
-                source = "fallback"
-        except Exception:
-            explanation_text = fallback
-            source = "fallback"
 
     return {
         "success": True,
