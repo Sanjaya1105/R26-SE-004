@@ -15,7 +15,7 @@
             margin-bottom: 20px;
         }
 
-        .box, .quiz-box {
+        .box {
             padding: 15px;
             border: 1px solid #ccc;
             width: 600px;
@@ -53,39 +53,9 @@
         <p><span class="label">Rewatch Count:</span> <span id="rewatchCount">0</span></p>
         <p><span class="label">Playback Rate Changes:</span> <span id="rateChangeCount">0</span></p>
         <p><span class="label">Idle Duration (sec):</span> <span id="idleDuration">0</span></p>
-        <p><span class="label">Quiz Response Time (sec):</span> <span id="quizTime">0</span></p>
-        <p><span class="label">Error Rate:</span> <span id="errorRate">0</span></p>
         <p><span class="label">Prediction:</span> <span id="predictionResult">Waiting...</span></p>
     </div>
 
-    <div class="quiz-box">
-        <h3>Quiz</h3>
-        <p>What is the main organelle responsible for photosynthesis?</p>
-
-        <div class="option">
-            <input type="radio" name="quiz" value="Mitochondria" id="opt1">
-            <label for="opt1">Mitochondria</label>
-        </div>
-
-        <div class="option">
-            <input type="radio" name="quiz" value="Chloroplast" id="opt2">
-            <label for="opt2">Chloroplast</label>
-        </div>
-
-        <div class="option">
-            <input type="radio" name="quiz" value="Nucleus" id="opt3">
-            <label for="opt3">Nucleus</label>
-        </div>
-
-        <div class="option">
-            <input type="radio" name="quiz" value="Ribosome" id="opt4">
-            <label for="opt4">Ribosome</label>
-        </div>
-
-        <button id="submitQuizBtn">Submit Quiz</button>
-        <p><span class="label">Quiz Status:</span> <span id="quizStatus">Not answered</span></p>
-    </div>
-    
     <script>
         const video = document.getElementById("video");
 
@@ -110,16 +80,11 @@
         const studentId = "S001";
         const lessonId = "L101";
         const sessionId = `sess_${Date.now()}`;
-        const apiBaseUrl = "http://127.0.0.1:8004";
+        const apiBaseUrl = "http://127.0.0.1:8000";
         const windowDurationMs = 120000;
         let currentMinuteIndex = 1;
         let currentWindowStart = new Date();
-
-        // Quiz variables
-        let quizStartTime = Date.now();
-        let quizResponseTime = 0;
-        let totalQuizAttempts = 0;
-        let totalQuizErrors = 0;
+        let apiWarningShown = false;
 
         const pauseCountEl = document.getElementById("pauseCount");
         const seekCountEl = document.getElementById("seekCount");
@@ -128,21 +93,12 @@
         const idleDurationEl = document.getElementById("idleDuration");
         const predictionResultEl = document.getElementById("predictionResult");
 
-        const quizTimeEl = document.getElementById("quizTime");
-        const errorRateEl = document.getElementById("errorRate");
-        const submitQuizBtn = document.getElementById("submitQuizBtn");
-        const quizStatusEl = document.getElementById("quizStatus");
-
         function updateUI() {
             pauseCountEl.textContent = pauseCount;
             seekCountEl.textContent = seekCount;
             rewatchCountEl.textContent = rewatchCount;
             rateChangeCountEl.textContent = rateChangeCount;
             idleDurationEl.textContent = idleDuration;
-            quizTimeEl.textContent = quizResponseTime;
-            errorRateEl.textContent = totalQuizAttempts > 0
-                ? (totalQuizErrors / totalQuizAttempts).toFixed(2)
-                : "0";
         }
 
         function markInteraction() {
@@ -153,6 +109,12 @@
             }
             lastInteractionTime = Date.now();
             idleStart = null;
+        }
+
+        function showApiWarning(message) {
+            if (apiWarningShown) return;
+            apiWarningShown = true;
+            predictionResultEl.textContent = message;
         }
 
         function sendRawEvent(payload) {
@@ -176,6 +138,7 @@
                 })
             }).catch(error => {
                 console.error("Raw event API error:", error);
+                showApiWarning("Cognitive load API is not reachable on http://127.0.0.1:8000");
             });
         }
 
@@ -325,38 +288,6 @@
             }
         }, 1000);
 
-        // Quiz submit logic
-        submitQuizBtn.addEventListener("click", () => {
-            const selected = document.querySelector('input[name="quiz"]:checked');
-
-            if (!selected) {
-                quizStatusEl.textContent = "Please select an answer";
-                return;
-            }
-
-            totalQuizAttempts++;
-            quizResponseTime = Math.round((Date.now() - quizStartTime) / 1000);
-
-            const correctAnswer = "Chloroplast";
-
-            if (selected.value !== correctAnswer) {
-                totalQuizErrors++;
-                quizStatusEl.textContent = "Incorrect";
-            } else {
-                quizStatusEl.textContent = "Correct";
-            }
-
-            sendRawEvent({
-                event_type: "quiz_submit",
-                event_value: String(quizResponseTime),
-                question_id: "quiz_001",
-                is_correct: selected.value === correctAnswer
-            });
-
-            updateUI();
-            markInteraction();
-        });
-
         // Build feature window from raw logs and predict every 2 minutes
         setInterval(() => {
             const windowEnd = new Date();
@@ -395,7 +326,7 @@
             })
             .catch(error => {
                 console.error("API error:", error);
-                predictionResultEl.textContent = "API error";
+                predictionResultEl.textContent = "API error - check that the cognitive load API is running on port 8000";
             });
 
             // Reset counters for next 2-minute window
@@ -405,8 +336,6 @@
             rateChangeCount = 0;
             idleDuration = 0;
             isSeeking = false;
-            quizResponseTime = 0;
-            quizStartTime = Date.now();
             currentWindowStart = windowEnd;
             currentMinuteIndex += 1;
             updateUI();
