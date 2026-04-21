@@ -1,9 +1,12 @@
 from fastapi import APIRouter
 
-from app.schemas.event import RawInteractionEventInput
+from app.core.database import get_db_status
+from app.core.model_loader import get_model_metadata
+from app.schemas.event import ALLOWED_RAW_EVENT_TYPES, RawInteractionEventInput
 from app.schemas.feature_window import FeatureWindowInput
 from app.schemas.prediction import CognitiveLoadInput
 from app.schemas.raw_prediction import RawPredictionInput
+from app.schemas.video_quiz import VideoQuizRequest
 from app.services.db_service import save_feature_window, save_raw_interaction_event
 from app.services.lime_dispatch_service import process_completed_windows_for_event
 from app.services.prediction_service import (
@@ -11,6 +14,7 @@ from app.services.prediction_service import (
     predict_cognitive_load,
     predict_cognitive_load_from_raw,
 )
+from app.services.video_quiz_service import build_video_quiz_payload
 
 
 router = APIRouter()
@@ -20,6 +24,17 @@ router = APIRouter()
 def root():
     # Quick health check endpoint for confirming the API is up.
     return {"message": "Cognitive Load Prediction API is running"}
+
+
+@router.get("/health")
+def health():
+    return {
+        "service": "cognitive-load-api",
+        "status": "ok",
+        "database": get_db_status(),
+        "model": get_model_metadata(),
+        "allowed_event_types": ALLOWED_RAW_EVENT_TYPES,
+    }
 
 
 @router.post("/predict")
@@ -56,6 +71,12 @@ def create_feature_window(data: FeatureWindowInput):
         "saved_to_mysql": feature_window_id is not None,
         "id": feature_window_id,
     }
+
+
+@router.post("/quiz/video-windows")
+def generate_video_quiz_windows(data: VideoQuizRequest):
+    # Build quiz-ready 2-minute windows from a video transcript without using the GPT service.
+    return build_video_quiz_payload(data.model_dump())
 
 
 @router.get("/xai/data")
