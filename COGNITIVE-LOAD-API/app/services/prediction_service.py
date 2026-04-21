@@ -36,6 +36,9 @@ CSV_FIELDS = [
     "created_at",
 ]
 
+DEFAULT_QUIZ_RESPONSE_TIME = 20
+DEFAULT_ERROR_RATE = 0.22
+
 
 def get_label(score: int):
     labels = {
@@ -133,6 +136,11 @@ def _normalize_csv_row(row: dict):
 
 
 def predict_cognitive_load(data):
+    normalized_quiz_response_time, normalized_error_rate = _normalize_quiz_inputs(
+        data.quiz_response_time,
+        data.error_rate,
+    )
+
     # This is the feature snapshot we persist for downstream modules such as logs and XAI.
     feature_window_data = {
         "student_id": data.student_id,
@@ -150,8 +158,8 @@ def predict_cognitive_load(data):
         "navigation_count_adaptation": data.navigation_count_adaptation,
         "revisit_frequency": data.revisit_frequency,
         "idle_duration_adaptation": data.idle_duration_adaptation,
-        "quiz_response_time": data.quiz_response_time,
-        "error_rate": data.error_rate,
+        "quiz_response_time": normalized_quiz_response_time,
+        "error_rate": normalized_error_rate,
     }
 
     input_df = pd.DataFrame(
@@ -166,8 +174,8 @@ def predict_cognitive_load(data):
                 "navigation_count_adaptation": data.navigation_count_adaptation,
                 "revisit_frequency": data.revisit_frequency,
                 "idle_duration_adaptation": data.idle_duration_adaptation,
-                "quiz_response_time": data.quiz_response_time,
-                "error_rate": data.error_rate,
+                "quiz_response_time": normalized_quiz_response_time,
+                "error_rate": normalized_error_rate,
             }
         ]
     )
@@ -190,8 +198,8 @@ def predict_cognitive_load(data):
         "navigation_count_adaptation": data.navigation_count_adaptation,
         "revisit_frequency": data.revisit_frequency,
         "idle_duration_adaptation": data.idle_duration_adaptation,
-        "quiz_response_time": data.quiz_response_time,
-        "error_rate": data.error_rate,
+        "quiz_response_time": normalized_quiz_response_time,
+        "error_rate": normalized_error_rate,
         "predicted_cognitive_load": label,
         "predicted_score": int(prediction),
         "predicted_label": label,
@@ -243,3 +251,20 @@ def _build_prediction_input(feature_window_data: dict):
         setattr(payload, key, value)
 
     return payload
+
+
+def _normalize_quiz_inputs(quiz_response_time: int | None, error_rate: float | None):
+    quiz_response_time = 0 if quiz_response_time is None else int(quiz_response_time)
+    error_rate = 0.0 if error_rate is None else float(error_rate)
+
+    # The frontend sends zeros before a learner reaches any quiz activity.
+    # The model was trained on real quiz metrics, so replace the "no quiz yet"
+    # shape with neutral defaults instead of letting it look like perfect quiz performance.
+    if quiz_response_time <= 0 and error_rate <= 0:
+        return DEFAULT_QUIZ_RESPONSE_TIME, DEFAULT_ERROR_RATE
+
+    normalized_quiz_response_time = (
+        quiz_response_time if quiz_response_time > 0 else DEFAULT_QUIZ_RESPONSE_TIME
+    )
+    normalized_error_rate = error_rate if error_rate >= 0 else DEFAULT_ERROR_RATE
+    return normalized_quiz_response_time, round(normalized_error_rate, 2)
