@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { getGatewayBaseUrl } from '../config/gateway';
@@ -25,20 +25,6 @@ function buildGptPromptUrls() {
 }
 
 const ABOUT_PREVIEW_WORDS = 20;
-const COGNITIVE_LOAD_WINDOW_MS = 120000;
-
-function getActiveStudentId() {
-  try {
-    const raw = localStorage.getItem('user');
-    if (!raw) return 'guest-user';
-    const user = JSON.parse(raw);
-    return String(
-      user?.id ?? user?._id ?? user?.studentId ?? user?.email ?? 'guest-user'
-    ).trim();
-  } catch {
-    return 'guest-user';
-  }
-}
 
 function splitWords(text) {
   return String(text ?? '')
@@ -83,16 +69,6 @@ const CourseDetail = () => {
   const [cognitiveStyle, setCognitiveStyle] = useState('Visual');
   const [loadLevel, setLoadLevel] = useState('Medium');
   const [frustration, setFrustration] = useState('Low');
-  const [cognitiveLoadResult, setCognitiveLoadResult] = useState(null);
-  const [cognitiveLoadError, setCognitiveLoadError] = useState('');
-  const [cognitiveLoadLoading, setCognitiveLoadLoading] = useState(false);
-  const [videoSessionId, setVideoSessionId] = useState('');
-  const videoRef = useRef(null);
-  const sessionStartRef = useRef(null);
-  const lastVideoTimeRef = useRef(0);
-  const seekStartTimeRef = useRef(0);
-  const lastPlaybackRateRef = useRef(1);
-  const predictTimeoutRef = useRef(null);
 
   const toggleSection = (sectionId) => {
     const k = String(sectionId);
@@ -113,10 +89,6 @@ const CourseDetail = () => {
     setGptError('');
     setPedagogicalPrompt('');
     setPromptError('');
-    setCognitiveLoadResult(null);
-    setCognitiveLoadError('');
-    setCognitiveLoadLoading(false);
-    setVideoSessionId('');
   }, [courseId]);
 
   useEffect(() => {
@@ -125,172 +97,7 @@ const CourseDetail = () => {
     setGptError('');
     setPedagogicalPrompt('');
     setPromptError('');
-    setCognitiveLoadResult(null);
-    setCognitiveLoadError('');
   }, [mainVideo?.url]);
-
-  useEffect(() => {
-    if (!mainVideo?.url) {
-      sessionStartRef.current = null;
-      setVideoSessionId('');
-      lastVideoTimeRef.current = 0;
-      lastPlaybackRateRef.current = 1;
-      if (predictTimeoutRef.current) {
-        window.clearTimeout(predictTimeoutRef.current);
-        predictTimeoutRef.current = null;
-      }
-      return undefined;
-    }
-
-    const startedAt = new Date();
-    const sessionId = `video-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    sessionStartRef.current = startedAt;
-    setVideoSessionId(sessionId);
-    lastVideoTimeRef.current = 0;
-    lastPlaybackRateRef.current = 1;
-
-    const sendRawEvent = async (payload) => {
-      await axios.post(`${getGatewayBaseUrl()}/api/cognitive-load/events/raw`, {
-        student_id: getActiveStudentId(),
-        lesson_id: String(mainVideo.lessonId || mainVideo.subsectionId || courseId),
-        session_id: sessionId,
-        event_time: new Date().toISOString(),
-        video_time: payload.video_time ?? null,
-        from_position: payload.from_position ?? null,
-        to_position: payload.to_position ?? null,
-        event_value: payload.event_value ?? null,
-        question_id: payload.question_id ?? null,
-        is_correct: payload.is_correct ?? null,
-        event_type: payload.event_type,
-      });
-    };
-
-    sendRawEvent({
-      event_type: 'adaptation_navigation',
-      event_value: mainVideo.url,
-    }).catch(() => {});
-
-    return () => {
-      if (predictTimeoutRef.current) {
-        window.clearTimeout(predictTimeoutRef.current);
-        predictTimeoutRef.current = null;
-      }
-    };
-  }, [courseId, mainVideo?.lessonId, mainVideo?.subsectionId, mainVideo?.url]);
-
-  const scheduleCognitiveLoadPrediction = () => {
-    if (!mainVideo?.url || !videoSessionId || !sessionStartRef.current) {
-      return;
-    }
-
-    if (predictTimeoutRef.current) {
-      window.clearTimeout(predictTimeoutRef.current);
-    }
-
-    predictTimeoutRef.current = window.setTimeout(async () => {
-      const now = new Date();
-      const sessionStart = sessionStartRef.current;
-      const elapsedMs = Math.max(0, now.getTime() - sessionStart.getTime());
-      const minuteIndex = Math.floor(elapsedMs / COGNITIVE_LOAD_WINDOW_MS) + 1;
-      const windowStart = new Date(
-        sessionStart.getTime() + (minuteIndex - 1) * COGNITIVE_LOAD_WINDOW_MS
-      );
-
-      try {
-        setCognitiveLoadLoading(true);
-        setCognitiveLoadError('');
-        const res = await axios.post(
-          `${getGatewayBaseUrl()}/api/cognitive-load/predict/from-raw`,
-          {
-            student_id: getActiveStudentId(),
-            lesson_id: String(
-              mainVideo.lessonId || mainVideo.subsectionId || courseId
-            ),
-            session_id: videoSessionId,
-            minute_index: minuteIndex,
-            window_start: windowStart.toISOString(),
-            window_end: now.toISOString(),
-          }
-        );
-        setCognitiveLoadResult(res.data);
-      } catch (error) {
-        setCognitiveLoadError(
-          error.response?.data?.detail?.[0]?.msg ||
-            error.response?.data?.message ||
-            error.message ||
-            'Could not predict cognitive load for this video session.'
-        );
-      } finally {
-        setCognitiveLoadLoading(false);
-      }
-    }, 700);
-  };
-
-  const sendCognitiveLoadEvent = async (payload) => {
-    if (!mainVideo?.url || !videoSessionId) return;
-
-    try {
-      await axios.post(`${getGatewayBaseUrl()}/api/cognitive-load/events/raw`, {
-        student_id: getActiveStudentId(),
-        lesson_id: String(mainVideo.lessonId || mainVideo.subsectionId || courseId),
-        session_id: videoSessionId,
-        event_time: new Date().toISOString(),
-        video_time: payload.video_time ?? null,
-        from_position: payload.from_position ?? null,
-        to_position: payload.to_position ?? null,
-        event_value: payload.event_value ?? null,
-        question_id: payload.question_id ?? null,
-        is_correct: payload.is_correct ?? null,
-        event_type: payload.event_type,
-      });
-
-      scheduleCognitiveLoadPrediction();
-    } catch (_) {
-      setCognitiveLoadError(
-        'Could not send video interaction data to the cognitive load API.'
-      );
-    }
-  };
-
-  const handleVideoPause = () => {
-    const currentTime = Number(videoRef.current?.currentTime?.toFixed(2) || 0);
-    sendCognitiveLoadEvent({
-      event_type: 'pause',
-      video_time: currentTime,
-    });
-  };
-
-  const handleVideoSeeking = () => {
-    seekStartTimeRef.current = lastVideoTimeRef.current;
-  };
-
-  const handleVideoSeeked = () => {
-    const nextTime = Number(videoRef.current?.currentTime?.toFixed(2) || 0);
-    const previousTime = Number(seekStartTimeRef.current?.toFixed?.(2) || seekStartTimeRef.current || 0);
-    const isBackwardSeek = nextTime < previousTime - 0.25;
-
-    sendCognitiveLoadEvent({
-      event_type: isBackwardSeek ? 'seek_backward' : 'seek_forward',
-      from_position: previousTime,
-      to_position: nextTime,
-      video_time: nextTime,
-    });
-  };
-
-  const handleVideoRateChange = () => {
-    const currentRate = Number(videoRef.current?.playbackRate || 1);
-    if (currentRate === lastPlaybackRateRef.current) return;
-    lastPlaybackRateRef.current = currentRate;
-    sendCognitiveLoadEvent({
-      event_type: 'rate_change',
-      event_value: String(currentRate),
-      video_time: Number(videoRef.current?.currentTime?.toFixed(2) || 0),
-    });
-  };
-
-  const handleVideoTimeUpdate = () => {
-    lastVideoTimeRef.current = Number(videoRef.current?.currentTime || 0);
-  };
 
   useEffect(() => {
     if (!mainVideo?.url) {
@@ -1005,8 +812,6 @@ const CourseDetail = () => {
                                                   e.preventDefault();
                                                   setMainVideo({
                                                     url: sub.videoUrl,
-                                                    lessonId: sub.id,
-                                                    subsectionId: sub.id,
                                                     title: `${
                                                       s.sectionName ||
                                                       'Section'
@@ -1159,17 +964,11 @@ const CourseDetail = () => {
                 }}
               >
                 <video
-                  ref={videoRef}
                   key={mainVideo.url}
                   controls
                   playsInline
                   preload="metadata"
                   src={mainVideo.url}
-                  onPause={handleVideoPause}
-                  onSeeking={handleVideoSeeking}
-                  onSeeked={handleVideoSeeked}
-                  onRateChange={handleVideoRateChange}
-                  onTimeUpdate={handleVideoTimeUpdate}
                   style={{
                     width: '100%',
                     height: '100%',
@@ -1192,53 +991,6 @@ const CourseDetail = () => {
                   Open video in new tab
                 </a>
               </p>
-              <div
-                style={{
-                  marginTop: '0.75rem',
-                  padding: '1rem',
-                  borderRadius: '12px',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  background: 'rgba(15, 23, 42, 0.35)',
-                }}
-              >
-                <p
-                  className="form-label"
-                  style={{
-                    margin: 0,
-                    fontSize: '0.8rem',
-                    marginBottom: '0.5rem',
-                    letterSpacing: '0.02em',
-                  }}
-                >
-                  Live cognitive load
-                </p>
-                {cognitiveLoadLoading ? (
-                  <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                    Analysing current video interactions...
-                  </p>
-                ) : cognitiveLoadResult?.prediction ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                    <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text)' }}>
-                      {cognitiveLoadResult.prediction.predicted_label} cognitive load
-                    </p>
-                    <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                      Score {cognitiveLoadResult.prediction.predicted_score} | Confidence{' '}
-                      {cognitiveLoadResult.prediction.confidence}
-                    </p>
-                    <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                      Based on the current session events for this selected video.
-                    </p>
-                  </div>
-                ) : cognitiveLoadError ? (
-                  <p style={{ margin: 0, fontSize: '0.85rem', color: '#fca5a5' }}>
-                    {cognitiveLoadError}
-                  </p>
-                ) : (
-                  <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                    Pause, seek, or change playback speed to generate a live prediction.
-                  </p>
-                )}
-              </div>
               <div
                 style={{
                   marginTop: '1rem',
