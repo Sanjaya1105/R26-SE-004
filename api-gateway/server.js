@@ -23,6 +23,8 @@ const SHAP_AI_SERVICE_URL =
   process.env.SHAP_AI_SERVICE_URL || "http://localhost:8011";
 const RECOMMENDATION_AI_URL = 
   process.env.RECOMMENDATION_AI_URL || "http://localhost:5002";
+const COGNITIVE_LOAD_SERVICE_URL =
+  process.env.COGNITIVE_LOAD_SERVICE_URL || "http://localhost:8000";
 const COGNITIVE_STYLE_SERVICE_URL = 
   process.env.COGNITIVE_STYLE_SERVICE_URL || "http://localhost:8003";
 
@@ -91,6 +93,15 @@ app.use(
     target: GPT_SERVICE_URL,
     changeOrigin: true,
     pathRewrite: (path) => `/api/gpt${path}`,
+  })
+);
+
+app.use(
+  "/api/cognitive-load",
+  createProxyMiddleware({
+    target: COGNITIVE_LOAD_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: (path) => path.replace(/^\/api\/cognitive-load/, ""),
   })
 );
 
