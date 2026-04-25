@@ -84,7 +84,7 @@
         const studentId = "S001";
         const lessonId = "L101";
         const sessionId = `sess_${Date.now()}`;
-        const apiBaseUrl = "http://127.0.0.1:8000";
+        const apiBaseUrl = "http://127.0.0.1:8021";
         const windowDurationMs = 120000;
         let currentMinuteIndex = 1;
         let currentWindowStart = new Date();
@@ -142,7 +142,7 @@
                 })
             }).catch(error => {
                 console.error("Raw event API error:", error);
-                showApiWarning("Cognitive load API is not reachable on http://127.0.0.1:8000");
+                showApiWarning("Cognitive load API is not reachable on http://127.0.0.1:8021");
             });
         }
 
@@ -368,7 +368,7 @@
             })
             .catch(error => {
                 console.error("API error:", error);
-                predictionResultEl.textContent = "API error - check that the cognitive load API is running on port 8000";
+                predictionResultEl.textContent = "API error - check that the cognitive load API is running on port 8021";
             });
 
             // Reset counters for next 2-minute window
