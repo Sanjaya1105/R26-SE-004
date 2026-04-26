@@ -7,6 +7,19 @@ export default function QuestionRunner() {
 
     const ANSWER_BACKEND_URL = "http://localhost:4000/cognitive-style/question-runner/answers";
 
+    const userPayload = useMemo(() => {
+        const token = localStorage.getItem("token");
+        if (!token) return null;
+
+        try {
+            console.log("Decoded user payload:", JSON.parse(atob(token.split(".")[1])));
+            return JSON.parse(atob(token.split(".")[1]));
+
+        } catch {
+            return null;
+        }
+    }, []);
+
     const cursorTrackerRef = useRef(null);
     // Keep questions blank for now. You can fill these later.
     const postAnswer = async (question) => {
@@ -14,7 +27,7 @@ export default function QuestionRunner() {
         if (!selectedAnswer) return;
 
         const payload = {
-            sessionId: "session-test1", // You can replace this with a dynamic session ID if needed
+            sessionId: userPayload?.id || "session-test1",
             questionId: question.id,
             selectedAnswer,
             correctAnswer: question.correctAnswer,

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useMemo, useEffect, useRef } from "react";
 import Webcam from "react-webcam";
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 
@@ -68,7 +68,22 @@ export default function GazeTracker() {
   const faceLandmarkerRef = useRef(null);
   const animationRef = useRef(null);
   const lastVideoTimeRef = useRef(-1);
-  const windowRef = useRef(createEmptyWindow(Date.now())) ;
+  const windowRef = useRef(createEmptyWindow(Date.now()));
+
+  const userPayload = useMemo(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return null;
+
+    try {
+      console.log("Decoded user payload:", JSON.parse(atob(token.split(".")[1])));
+      return JSON.parse(atob(token.split(".")[1]));
+
+    } catch {
+      return null;
+    }
+  }, []);
+
+
 
   useEffect(() => {
     let cancelled = false;
@@ -150,11 +165,11 @@ export default function GazeTracker() {
         w.leftFrames > w.rightFrames
           ? "LEFT"
           : w.rightFrames > w.leftFrames
-          ? "RIGHT"
-          : "CENTER";
+            ? "RIGHT"
+            : "CENTER";
 
       const payload = {
-        sessionId: "session-demo-1",
+        sessionId: userPayload?.id || "session-demo-1",
         windowStart: w.windowStart,
         windowEnd: now,
         frameCount: w.frameCount,
@@ -256,32 +271,32 @@ export default function GazeTracker() {
     };
   }, []);
   return (
-  <div
-    style={{
-      position: "absolute",
-      width: 1,
-      height: 1,
-      overflow: "hidden",
-      opacity: 0,
-      pointerEvents: "none",
-    }}
-  >
-    <Webcam
-      ref={webcamRef}
-      audio={false}
-      mirrored
-      screenshotFormat="image/jpeg"
-      videoConstraints={{
-        width: 320,
-        height: 240,
-        facingMode: "user",
-      }}
+    <div
       style={{
-        width: "1px",
-        height: "1px",
-        display: "block",
+        position: "absolute",
+        width: 1,
+        height: 1,
+        overflow: "hidden",
+        opacity: 0,
+        pointerEvents: "none",
       }}
-    />
-  </div>
-);
+    >
+      <Webcam
+        ref={webcamRef}
+        audio={false}
+        mirrored
+        screenshotFormat="image/jpeg"
+        videoConstraints={{
+          width: 320,
+          height: 240,
+          facingMode: "user",
+        }}
+        style={{
+          width: "1px",
+          height: "1px",
+          display: "block",
+        }}
+      />
+    </div>
+  );
 }

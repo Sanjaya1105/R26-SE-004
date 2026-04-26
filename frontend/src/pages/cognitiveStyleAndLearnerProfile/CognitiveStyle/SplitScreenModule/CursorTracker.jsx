@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useMemo,useEffect, useRef } from "react";
 
 const WINDOW_MS = 5000;
 const API_URL = "http://localhost:4000/cognitive-style/simple/cursor-summary";
@@ -7,6 +7,8 @@ const API_URL = "http://localhost:4000/cognitive-style/simple/cursor-summary";
 const MIN_HOVER_MS = 80;
 const MIN_ZONE_TIME_MS_FOR_HOVER = 120;
 const MAX_IDLE_GAP_MS = 250;
+
+
 
 function createEmptyWindow(startTime) {
   return {
@@ -45,6 +47,21 @@ export default function CursorTracker() {
   const lastHoverZoneRef = useRef("UNKNOWN");
 
   const bufferRef = useRef(createEmptyWindow(Date.now()));
+
+    const userPayload = useMemo(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return null;
+
+    try {
+      console.log("Decoded user payload:", JSON.parse(atob(token.split(".")[1])));
+      return JSON.parse(atob(token.split(".")[1]));
+
+    } catch {
+      return null;
+    }
+  }, []);
+
+
 
   useEffect(() => {
     async function sendSummary(payload) {
@@ -142,7 +159,7 @@ export default function CursorTracker() {
         w.textMoveCount > 0 ? w.textSpeedSum / w.textMoveCount : 0;
 
       const summary = {
-        sessionId: "session-demo-1",
+        sessionId: userPayload?.id || "session-demo-1",
         windowStart: w.windowStart,
         windowEnd: now,
 

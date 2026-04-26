@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useMemo,useEffect, useRef, useState } from "react";
 import Webcam from "react-webcam";
 import { FilesetResolver, FaceLandmarker } from "@mediapipe/tasks-vision";
 
@@ -14,6 +14,19 @@ export default function GazeTracker({
   const animationRef = useRef(null);
   const faceLandmarkerRef = useRef(null);
   const lastVideoTimeRef = useRef(-1);
+
+    const userPayload = useMemo(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return null;
+
+    try {
+      console.log("Decoded user payload:", JSON.parse(atob(token.split(".")[1])));
+      return JSON.parse(atob(token.split(".")[1]));
+
+    } catch {
+      return null;
+    }
+  }, []);
 
 
   useEffect(() => {
@@ -298,7 +311,7 @@ export default function GazeTracker({
     const blinkCount = frames.filter((f) => f.blinkStart === true).length;
 
     const windowPayload = {
-      sessionId: sessionIdRef.current,
+      sessionId: userPayload?.id ||sessionIdRef.current,
       questionId: questionIdRef.current,
       windowStartTs: frames[0].timestamp,
       windowEndTs: frames[frames.length - 1].timestamp,

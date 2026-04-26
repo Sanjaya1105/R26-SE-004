@@ -1,4 +1,5 @@
 import React, {
+  useMemo,
   useEffect,
   useImperativeHandle,
   useRef,
@@ -66,6 +67,22 @@ const CursorTrackerForQuestionTracker = forwardRef(function CursorTrackerForQues
       Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2)
     );
   }
+  const userPayload = useMemo(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return null;
+
+    try {
+      console.log("Decoded user payload:", JSON.parse(atob(token.split(".")[1])));
+      return JSON.parse(atob(token.split(".")[1]));
+
+    } catch {
+      return null;
+    }
+  }, []);
+
+
+
+
   const sessionIdRef = useRef(`session-test1`);
 
   function handleMouseMove(event) {
@@ -163,7 +180,7 @@ const CursorTrackerForQuestionTracker = forwardRef(function CursorTrackerForQues
       : responseTimeMs;
 
     return {
-        sessionId: sessionIdRef.current,
+        sessionId: userPayload?.id || sessionIdRef.current,
       questionId: state.questionId,
       responseTimeMs,
       totalDistance: Number(state.totalDistance.toFixed(4)),

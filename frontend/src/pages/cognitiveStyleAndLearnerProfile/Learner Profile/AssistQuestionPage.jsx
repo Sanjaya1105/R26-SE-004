@@ -23,7 +23,10 @@ export default function AssistQuestionPage() {
     () => Object.fromEntries(questions.map((_, index) => [index, ""])),
     []
   );
-const navigate = useNavigate();
+
+
+
+  const navigate = useNavigate();
   const [answers, setAnswers] = useState(initialAnswers);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -32,6 +35,19 @@ const navigate = useNavigate();
   const handleChange = (questionIndex, value) => {
     setAnswers((prev) => ({ ...prev, [questionIndex]: Number(value) }));
   };
+  const userPayload = useMemo(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return null;
+
+    try {
+      console.log("Decoded user payload:", JSON.parse(atob(token.split(".")[1])));
+      return JSON.parse(atob(token.split(".")[1]));
+
+    } catch {
+      return null;
+    }
+  }, []);
+
 
   const isComplete = questions.every((_, index) => answers[index] !== "");
 
@@ -46,7 +62,7 @@ const navigate = useNavigate();
     }
 
     const payload = {
-      user_id: "hardcoded-user-id-123",
+      user_id: userPayload?.id || "hardcoded-user-id-123",
       answers: questions.map((question, index) => ({
         questionNumber: index + 1,
         question,
@@ -104,11 +120,10 @@ const navigate = useNavigate();
                 {scaleOptions.map((option) => (
                   <label
                     key={option}
-                    className={`flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition ${
-                      answers[index] === option
-                        ? "border-blue-600 bg-blue-50 text-blue-700"
-                        : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
-                    }`}
+                    className={`flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition ${answers[index] === option
+                      ? "border-blue-600 bg-blue-50 text-blue-700"
+                      : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
+                      }`}
                   >
                     <input
                       type="radio"
