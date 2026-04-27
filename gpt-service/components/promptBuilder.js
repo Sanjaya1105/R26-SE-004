@@ -97,6 +97,7 @@ ${knowledgeChunk}
 
 Instructions:
 Assess Need: Analyze the knowledge chunk. If it is purely transitional or too simple, output it in its original form.
+Transformation Goal: If adaptation is needed, rewrite the knowledge chunk to reduce cognitive load and match the student's cognitive style while preserving the original meaning.
 `;
 }
 
