@@ -75,6 +75,10 @@
         let lastPlaybackRate = video.playbackRate;
         let suppressPauseCountUntil = 0;
         let pauseConfirmTimeoutId = null;
+        let seekDragActive = false;
+        let seekGestureStartTime = 0;
+        let pendingSeekTarget = null;
+        let commitSeekTimeoutId = null;
 
         // Required by the API schemas.
         const studentId = "S001";
@@ -151,12 +155,29 @@
             return isSeeking || video.seeking || recentlySought || recentlyRewatched || inSuppressionWindow;
         }
 
+        function beginSeekGesture() {
+            if (!seekDragActive) {
+                seekDragActive = true;
+                seekGestureStartTime = seekStartTime;
+            }
+        }
+
+        function resetSeekGesture() {
+            seekDragActive = false;
+            pendingSeekTarget = null;
+            if (commitSeekTimeoutId) {
+                clearTimeout(commitSeekTimeoutId);
+                commitSeekTimeoutId = null;
+            }
+        }
+
         // Detect seek start
         video.addEventListener("seeking", () => {
             isSeeking = true;
             seekStartTime = lastVideoTime;
             lastSeekEventTime = Date.now();
             suppressPauseCountUntil = Date.now() + 2000;
+            beginSeekGesture();
             markInteraction();
         });
 
@@ -210,35 +231,53 @@
                 pauseConfirmTimeoutId = null;
             }
 
-            // If user moved backward, count as rewatch
-            const isBackwardSeek = video.currentTime < seekStartTime - 0.25;
-
-            if (isBackwardSeek) {
-                rewatchCount++;
-                lastRewatchEventTime = Date.now();
-                suppressPauseCountUntil = Date.now() + 2500;
-                console.log("Rewatch count:", rewatchCount);
-                sendRawEvent({
-                    event_type: "seek_backward",
-                    from_position: Number(seekStartTime.toFixed(2)),
-                    to_position: Number(video.currentTime.toFixed(2))
-                });
-            } else {
-                seekCount++;
-                console.log("Seek count:", seekCount);
-                sendRawEvent({
-                    event_type: "seek_forward",
-                    from_position: Number(seekStartTime.toFixed(2)),
-                    to_position: Number(video.currentTime.toFixed(2))
-                });
+            pendingSeekTarget = Number(video.currentTime.toFixed(2));
+            markInteraction();
+            
+            if (commitSeekTimeoutId) {
+                clearTimeout(commitSeekTimeoutId);
             }
 
-            updateUI();
-            markInteraction();
+            commitSeekTimeoutId = setTimeout(() => {
+                const gestureStart = seekDragActive ? seekGestureStartTime : seekStartTime;
+                const finalTarget = Number(pendingSeekTarget ?? video.currentTime.toFixed(2));
+                const moveDistance = Math.abs(finalTarget - gestureStart);
+
+                if (moveDistance >= 0.5) {
+                    const isBackwardSeek = finalTarget < gestureStart - 0.25;
+
+                    if (isBackwardSeek) {
+                        rewatchCount++;
+                        lastRewatchEventTime = Date.now();
+                        suppressPauseCountUntil = Date.now() + 2500;
+                        console.log("Rewatch count:", rewatchCount);
+                        sendRawEvent({
+                            event_type: "seek_backward",
+                            from_position: Number(gestureStart.toFixed(2)),
+                            to_position: finalTarget
+                        });
+                    } else {
+                        seekCount++;
+                        console.log("Seek count:", seekCount);
+                        sendRawEvent({
+                            event_type: "seek_forward",
+                            from_position: Number(gestureStart.toFixed(2)),
+                            to_position: finalTarget
+                        });
+                    }
+
+                    updateUI();
+                }
+
+                isSeeking = false;
+                resetSeekGesture();
+            }, 250);
 
             // Reset seek flag after pause/play events settle.
             setTimeout(() => {
-                isSeeking = false;
+                if (!commitSeekTimeoutId) {
+                    isSeeking = false;
+                }
             }, 0);
         });
 

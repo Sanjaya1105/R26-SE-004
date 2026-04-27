@@ -14,6 +14,7 @@ from app.services.prediction_service import (
     predict_cognitive_load_from_raw,
 )
 
+
 router = APIRouter()
 
 
@@ -68,6 +69,7 @@ def create_feature_window(data: FeatureWindowInput):
         "saved_to_mysql": feature_window_id is not None,
         "id": feature_window_id,
     }
+
 
 @router.get("/xai/data")
 def get_xai_data(

@@ -47,6 +47,101 @@ function splitWords(text) {
     .filter(Boolean);
 }
 
+function formatIsoDateTime(value) {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value);
+  return parsed.toLocaleString();
+}
+
+function getLivePredictionSummary(result) {
+  if (!result || typeof result !== 'object') return null;
+
+  const prediction =
+    result.prediction && typeof result.prediction === 'object'
+      ? result.prediction
+      : null;
+  const featureWindow =
+    result.feature_window && typeof result.feature_window === 'object'
+      ? result.feature_window
+      : null;
+
+  return {
+    rawEventCount:
+      typeof result.raw_event_count === 'number' ? result.raw_event_count : null,
+    predictedLoad:
+      prediction?.predicted_cognitive_load ??
+      prediction?.predicted_label ??
+      result.predicted_cognitive_load ??
+      result.predicted_label ??
+      'Unknown',
+    confidence:
+      typeof prediction?.confidence === 'number'
+        ? prediction.confidence
+        : typeof result.confidence === 'number'
+          ? result.confidence
+          : null,
+    minuteIndex:
+      prediction?.minute_index ??
+      featureWindow?.minute_index ??
+      result.minute_index ??
+      null,
+    createdAt:
+      prediction?.created_at ?? result.created_at ?? featureWindow?.window_end ?? '',
+    pauseFrequency:
+      prediction?.pause_frequency ?? featureWindow?.pause_frequency ?? null,
+    rewatchSegments:
+      prediction?.rewatch_segments ?? featureWindow?.rewatch_segments ?? null,
+    navigationCountVideo:
+      prediction?.navigation_count_video ??
+      featureWindow?.navigation_count_video ??
+      null,
+    playbackRateChange:
+      prediction?.playback_rate_change ??
+      featureWindow?.playback_rate_change ??
+      null,
+  };
+}
+
+function getDisplayRawEventCount(summary, localRawEventCount) {
+  if (typeof localRawEventCount === 'number' && localRawEventCount > 0) {
+    return localRawEventCount;
+  }
+
+  if (typeof summary?.rawEventCount === 'number') {
+    return summary.rawEventCount;
+  }
+
+  return null;
+}
+
+function getCompletedWindowInfo(sessionStart, sessionId, now = new Date()) {
+  if (!(sessionStart instanceof Date) || !sessionId) {
+    return null;
+  }
+
+  const elapsedMs = Math.max(0, now.getTime() - sessionStart.getTime());
+  const completedWindowCount = Math.floor(elapsedMs / COGNITIVE_LOAD_WINDOW_MS);
+  if (completedWindowCount < 1) {
+    return null;
+  }
+
+  const minuteIndex = completedWindowCount;
+  const windowStart = new Date(
+    sessionStart.getTime() + (minuteIndex - 1) * COGNITIVE_LOAD_WINDOW_MS
+  );
+  const windowEnd = new Date(
+    sessionStart.getTime() + minuteIndex * COGNITIVE_LOAD_WINDOW_MS
+  );
+
+  return {
+    minuteIndex,
+    windowStart,
+    windowEnd,
+    windowKey: `${sessionId}:${minuteIndex}`,
+  };
+}
+
 const CourseDetail = () => {
   const { courseId } = useParams();
   const navigate = useNavigate();
@@ -87,12 +182,27 @@ const CourseDetail = () => {
   const [cognitiveLoadError, setCognitiveLoadError] = useState('');
   const [cognitiveLoadLoading, setCognitiveLoadLoading] = useState(false);
   const [videoSessionId, setVideoSessionId] = useState('');
+  const [localRawEventCount, setLocalRawEventCount] = useState(0);
   const videoRef = useRef(null);
   const sessionStartRef = useRef(null);
   const lastVideoTimeRef = useRef(0);
   const seekStartTimeRef = useRef(0);
   const lastPlaybackRateRef = useRef(1);
+  const idleStartRef = useRef(null);
+  const lastInteractionTimeRef = useRef(Date.now());
+  const isSeekingRef = useRef(false);
+  const lastSeekEventTimeRef = useRef(0);
+  const lastRewatchEventTimeRef = useRef(0);
+  const suppressPauseCountUntilRef = useRef(0);
+  const pauseConfirmTimeoutRef = useRef(null);
+  const seekGestureStartTimeRef = useRef(0);
+  const seekDragActiveRef = useRef(false);
+  const pendingSeekTargetRef = useRef(null);
+  const commitSeekTimeoutRef = useRef(null);
   const predictTimeoutRef = useRef(null);
+  const lastPredictedWindowKeyRef = useRef('');
+  const predictionInFlightWindowKeyRef = useRef('');
+  const rawEventQueueRef = useRef(Promise.resolve());
 
   const toggleSection = (sectionId) => {
     const k = String(sectionId);
@@ -103,6 +213,12 @@ const CourseDetail = () => {
     const k = String(subsectionId);
     setOpenSubsectionId((prev) => (prev === k ? null : k));
   };
+
+  const livePredictionSummary = getLivePredictionSummary(cognitiveLoadResult);
+  const displayRawEventCount = getDisplayRawEventCount(
+    livePredictionSummary,
+    localRawEventCount
+  );
 
   useEffect(() => {
     setOpenSubsectionId(null);
@@ -117,6 +233,9 @@ const CourseDetail = () => {
     setCognitiveLoadError('');
     setCognitiveLoadLoading(false);
     setVideoSessionId('');
+    setLocalRawEventCount(0);
+    lastPredictedWindowKeyRef.current = '';
+    predictionInFlightWindowKeyRef.current = '';
   }, [courseId]);
 
   useEffect(() => {
@@ -131,8 +250,28 @@ const CourseDetail = () => {
     if (!mainVideo?.url) {
       sessionStartRef.current = null;
       setVideoSessionId('');
+      setLocalRawEventCount(0);
       lastVideoTimeRef.current = 0;
       lastPlaybackRateRef.current = 1;
+      idleStartRef.current = null;
+      lastInteractionTimeRef.current = Date.now();
+      isSeekingRef.current = false;
+      lastSeekEventTimeRef.current = 0;
+      lastRewatchEventTimeRef.current = 0;
+      suppressPauseCountUntilRef.current = 0;
+      seekGestureStartTimeRef.current = 0;
+      seekDragActiveRef.current = false;
+      pendingSeekTargetRef.current = null;
+      lastPredictedWindowKeyRef.current = '';
+      predictionInFlightWindowKeyRef.current = '';
+      if (pauseConfirmTimeoutRef.current) {
+        window.clearTimeout(pauseConfirmTimeoutRef.current);
+        pauseConfirmTimeoutRef.current = null;
+      }
+      if (commitSeekTimeoutRef.current) {
+        window.clearTimeout(commitSeekTimeoutRef.current);
+        commitSeekTimeoutRef.current = null;
+      }
       if (predictTimeoutRef.current) {
         window.clearTimeout(predictTimeoutRef.current);
         predictTimeoutRef.current = null;
@@ -144,31 +283,38 @@ const CourseDetail = () => {
     const sessionId = `video-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     sessionStartRef.current = startedAt;
     setVideoSessionId(sessionId);
+    setLocalRawEventCount(0);
     lastVideoTimeRef.current = 0;
     lastPlaybackRateRef.current = 1;
+    idleStartRef.current = null;
+    lastInteractionTimeRef.current = Date.now();
+    isSeekingRef.current = false;
+    lastSeekEventTimeRef.current = 0;
+    lastRewatchEventTimeRef.current = 0;
+    suppressPauseCountUntilRef.current = 0;
+    seekGestureStartTimeRef.current = 0;
+    seekDragActiveRef.current = false;
+    pendingSeekTargetRef.current = null;
+    lastPredictedWindowKeyRef.current = '';
+    predictionInFlightWindowKeyRef.current = '';
 
-    const sendRawEvent = async (payload) => {
-      await axios.post(`${getGatewayBaseUrl()}/api/cognitive-load/events/raw`, {
-        student_id: getActiveStudentId(),
-        lesson_id: String(mainVideo.lessonId || mainVideo.subsectionId || courseId),
-        session_id: sessionId,
-        event_time: new Date().toISOString(),
-        video_time: payload.video_time ?? null,
-        from_position: payload.from_position ?? null,
-        to_position: payload.to_position ?? null,
-        event_value: payload.event_value ?? null,
-        question_id: payload.question_id ?? null,
-        is_correct: payload.is_correct ?? null,
-        event_type: payload.event_type,
-      });
-    };
-
-    sendRawEvent({
+    enqueueRawEvent({
+      sessionIdOverride: sessionId,
+      payload: {
       event_type: 'adaptation_navigation',
       event_value: mainVideo.url,
+      },
     }).catch(() => {});
 
     return () => {
+      if (pauseConfirmTimeoutRef.current) {
+        window.clearTimeout(pauseConfirmTimeoutRef.current);
+        pauseConfirmTimeoutRef.current = null;
+      }
+      if (commitSeekTimeoutRef.current) {
+        window.clearTimeout(commitSeekTimeoutRef.current);
+        commitSeekTimeoutRef.current = null;
+      }
       if (predictTimeoutRef.current) {
         window.clearTimeout(predictTimeoutRef.current);
         predictTimeoutRef.current = null;
@@ -176,73 +322,96 @@ const CourseDetail = () => {
     };
   }, [courseId, mainVideo?.lessonId, mainVideo?.subsectionId, mainVideo?.url]);
 
-  const scheduleCognitiveLoadPrediction = () => {
+  const runCognitiveLoadPredictionForCompletedWindow = async () => {
     if (!mainVideo?.url || !videoSessionId || !sessionStartRef.current) {
       return;
     }
 
-    if (predictTimeoutRef.current) {
-      window.clearTimeout(predictTimeoutRef.current);
+    const windowInfo = getCompletedWindowInfo(
+      sessionStartRef.current,
+      videoSessionId,
+      new Date()
+    );
+    if (!windowInfo) {
+      return;
     }
 
-    predictTimeoutRef.current = window.setTimeout(async () => {
-      const now = new Date();
-      const sessionStart = sessionStartRef.current;
-      const elapsedMs = Math.max(0, now.getTime() - sessionStart.getTime());
-      const minuteIndex = Math.floor(elapsedMs / COGNITIVE_LOAD_WINDOW_MS) + 1;
-      const windowStart = new Date(
-        sessionStart.getTime() + (minuteIndex - 1) * COGNITIVE_LOAD_WINDOW_MS
-      );
+    const { minuteIndex, windowStart, windowEnd, windowKey } = windowInfo;
 
-      try {
-        setCognitiveLoadLoading(true);
-        setCognitiveLoadError('');
-        const res = await axios.post(
-          `${getGatewayBaseUrl()}/api/cognitive-load/predict/from-raw`,
-          {
-            student_id: getActiveStudentId(),
-            lesson_id: String(
-              mainVideo.lessonId || mainVideo.subsectionId || courseId
-            ),
-            session_id: videoSessionId,
-            minute_index: minuteIndex,
-            window_start: windowStart.toISOString(),
-            window_end: now.toISOString(),
-          }
-        );
-        setCognitiveLoadResult(res.data);
-      } catch (error) {
-        setCognitiveLoadError(
-          error.response?.data?.detail?.[0]?.msg ||
-            error.response?.data?.message ||
-            error.message ||
-            'Could not predict cognitive load for this video session.'
-        );
-      } finally {
-        setCognitiveLoadLoading(false);
+    if (
+      lastPredictedWindowKeyRef.current === windowKey ||
+      predictionInFlightWindowKeyRef.current === windowKey
+    ) {
+      return;
+    }
+
+    try {
+      setCognitiveLoadLoading(true);
+      setCognitiveLoadError('');
+      predictionInFlightWindowKeyRef.current = windowKey;
+      const res = await axios.post(
+        `${getGatewayBaseUrl()}/api/cognitive-load/predict/from-raw`,
+        {
+          student_id: getActiveStudentId(),
+          lesson_id: String(
+            mainVideo.lessonId || mainVideo.subsectionId || courseId
+          ),
+          session_id: videoSessionId,
+          minute_index: minuteIndex,
+          window_start: windowStart.toISOString(),
+          window_end: windowEnd.toISOString(),
+        }
+      );
+      setCognitiveLoadResult(res.data);
+      lastPredictedWindowKeyRef.current = windowKey;
+    } catch (error) {
+      setCognitiveLoadError(
+        error.response?.data?.detail?.[0]?.msg ||
+          error.response?.data?.message ||
+          error.message ||
+          'Could not predict cognitive load for this video session.'
+      );
+    } finally {
+      if (predictionInFlightWindowKeyRef.current === windowKey) {
+        predictionInFlightWindowKeyRef.current = '';
       }
-    }, 700);
+      setCognitiveLoadLoading(false);
+    }
+  };
+
+  const enqueueRawEvent = ({ payload, sessionIdOverride }) => {
+    const activeSessionId = sessionIdOverride ?? videoSessionId;
+    if (!mainVideo?.url || !activeSessionId) {
+      return Promise.resolve();
+    }
+
+    rawEventQueueRef.current = rawEventQueueRef.current
+      .catch(() => {})
+      .then(async () => {
+        await axios.post(`${getGatewayBaseUrl()}/api/cognitive-load/events/raw`, {
+          student_id: getActiveStudentId(),
+          lesson_id: String(mainVideo.lessonId || mainVideo.subsectionId || courseId),
+          session_id: activeSessionId,
+          event_time: new Date().toISOString(),
+          video_time: payload.video_time ?? null,
+          from_position: payload.from_position ?? null,
+          to_position: payload.to_position ?? null,
+          event_value: payload.event_value ?? null,
+          question_id: payload.question_id ?? null,
+          is_correct: payload.is_correct ?? null,
+          event_type: payload.event_type,
+        });
+        setLocalRawEventCount((prev) => prev + 1);
+      });
+
+    return rawEventQueueRef.current;
   };
 
   const sendCognitiveLoadEvent = async (payload) => {
     if (!mainVideo?.url || !videoSessionId) return;
 
     try {
-      await axios.post(`${getGatewayBaseUrl()}/api/cognitive-load/events/raw`, {
-        student_id: getActiveStudentId(),
-        lesson_id: String(mainVideo.lessonId || mainVideo.subsectionId || courseId),
-        session_id: videoSessionId,
-        event_time: new Date().toISOString(),
-        video_time: payload.video_time ?? null,
-        from_position: payload.from_position ?? null,
-        to_position: payload.to_position ?? null,
-        event_value: payload.event_value ?? null,
-        question_id: payload.question_id ?? null,
-        is_correct: payload.is_correct ?? null,
-        event_type: payload.event_type,
-      });
-
-      scheduleCognitiveLoadPrediction();
+      await enqueueRawEvent({ payload });
     } catch (_) {
       setCognitiveLoadError(
         'Could not send video interaction data to the cognitive load API.'
@@ -250,29 +419,141 @@ const CourseDetail = () => {
     }
   };
 
+  const markInteraction = () => {
+    lastInteractionTimeRef.current = Date.now();
+
+    if (idleStartRef.current) {
+      sendCognitiveLoadEvent({
+        event_type: 'idle_end',
+        video_time: Number(videoRef.current?.currentTime?.toFixed(2) || 0),
+      });
+    }
+
+    idleStartRef.current = null;
+  };
+
+  const isPauseFromSeek = () => {
+    const now = Date.now();
+    const recentlySought = now - lastSeekEventTimeRef.current < 600;
+    const recentlyRewatched = now - lastRewatchEventTimeRef.current < 3000;
+    const inSuppressionWindow = now < suppressPauseCountUntilRef.current;
+
+    return (
+      isSeekingRef.current ||
+      Boolean(videoRef.current?.seeking) ||
+      recentlySought ||
+      recentlyRewatched ||
+      inSuppressionWindow
+    );
+  };
+
+  const beginSeekGesture = () => {
+    if (!seekDragActiveRef.current) {
+      seekDragActiveRef.current = true;
+      seekGestureStartTimeRef.current = seekStartTimeRef.current;
+    }
+  };
+
+  const resetSeekGesture = () => {
+    seekDragActiveRef.current = false;
+    pendingSeekTargetRef.current = null;
+    if (commitSeekTimeoutRef.current) {
+      window.clearTimeout(commitSeekTimeoutRef.current);
+      commitSeekTimeoutRef.current = null;
+    }
+  };
+
   const handleVideoPause = () => {
-    const currentTime = Number(videoRef.current?.currentTime?.toFixed(2) || 0);
-    sendCognitiveLoadEvent({
-      event_type: 'pause',
-      video_time: currentTime,
-    });
+    const pausePosition = Number(videoRef.current?.currentTime?.toFixed(2) || 0);
+
+    if (pauseConfirmTimeoutRef.current) {
+      window.clearTimeout(pauseConfirmTimeoutRef.current);
+    }
+
+    pauseConfirmTimeoutRef.current = window.setTimeout(() => {
+      const positionChanged =
+        Math.abs((videoRef.current?.currentTime || 0) - pausePosition) > 0.15;
+
+      if (videoRef.current?.paused && !isPauseFromSeek() && !positionChanged) {
+        sendCognitiveLoadEvent({
+          event_type: 'pause',
+          video_time: pausePosition,
+        });
+      }
+
+      pauseConfirmTimeoutRef.current = null;
+    }, 350);
+
+    markInteraction();
+  };
+
+  const handleVideoPlay = () => {
+    if (pauseConfirmTimeoutRef.current) {
+      window.clearTimeout(pauseConfirmTimeoutRef.current);
+      pauseConfirmTimeoutRef.current = null;
+    }
+    markInteraction();
   };
 
   const handleVideoSeeking = () => {
     seekStartTimeRef.current = lastVideoTimeRef.current;
+    isSeekingRef.current = true;
+    lastSeekEventTimeRef.current = Date.now();
+    suppressPauseCountUntilRef.current = Date.now() + 2000;
+    beginSeekGesture();
+    markInteraction();
   };
 
   const handleVideoSeeked = () => {
-    const nextTime = Number(videoRef.current?.currentTime?.toFixed(2) || 0);
-    const previousTime = Number(seekStartTimeRef.current?.toFixed?.(2) || seekStartTimeRef.current || 0);
-    const isBackwardSeek = nextTime < previousTime - 0.25;
+    lastSeekEventTimeRef.current = Date.now();
+    suppressPauseCountUntilRef.current = Date.now() + 2000;
 
-    sendCognitiveLoadEvent({
-      event_type: isBackwardSeek ? 'seek_backward' : 'seek_forward',
-      from_position: previousTime,
-      to_position: nextTime,
-      video_time: nextTime,
-    });
+    if (pauseConfirmTimeoutRef.current) {
+      window.clearTimeout(pauseConfirmTimeoutRef.current);
+      pauseConfirmTimeoutRef.current = null;
+    }
+
+    pendingSeekTargetRef.current = Number(videoRef.current?.currentTime?.toFixed(2) || 0);
+    markInteraction();
+
+    if (commitSeekTimeoutRef.current) {
+      window.clearTimeout(commitSeekTimeoutRef.current);
+    }
+
+    commitSeekTimeoutRef.current = window.setTimeout(() => {
+      const gestureStart = seekDragActiveRef.current
+        ? seekGestureStartTimeRef.current
+        : seekStartTimeRef.current;
+      const finalTarget = Number(
+        pendingSeekTargetRef.current ?? videoRef.current?.currentTime?.toFixed(2) ?? 0
+      );
+      const moveDistance = Math.abs(finalTarget - gestureStart);
+
+      if (moveDistance >= 0.5) {
+        const isBackwardSeek = finalTarget < gestureStart - 0.25;
+
+        if (isBackwardSeek) {
+          lastRewatchEventTimeRef.current = Date.now();
+          suppressPauseCountUntilRef.current = Date.now() + 2500;
+        }
+
+        sendCognitiveLoadEvent({
+          event_type: isBackwardSeek ? 'seek_backward' : 'seek_forward',
+          from_position: Number(gestureStart.toFixed(2)),
+          to_position: finalTarget,
+          video_time: finalTarget,
+        });
+      }
+
+      isSeekingRef.current = false;
+      resetSeekGesture();
+    }, 250);
+
+    window.setTimeout(() => {
+      if (!commitSeekTimeoutRef.current) {
+        isSeekingRef.current = false;
+      }
+    }, 0);
   };
 
   const handleVideoRateChange = () => {
@@ -284,11 +565,78 @@ const CourseDetail = () => {
       event_value: String(currentRate),
       video_time: Number(videoRef.current?.currentTime?.toFixed(2) || 0),
     });
+    markInteraction();
   };
 
   const handleVideoTimeUpdate = () => {
     lastVideoTimeRef.current = Number(videoRef.current?.currentTime || 0);
   };
+
+  useEffect(() => {
+    if (!mainVideo?.url || !videoSessionId) {
+      return undefined;
+    }
+
+    const interactionEvents = ['mousemove', 'keydown', 'click'];
+    const onInteraction = () => markInteraction();
+
+    interactionEvents.forEach((eventName) => {
+      document.addEventListener(eventName, onInteraction);
+    });
+
+    const idleCheckIntervalId = window.setInterval(() => {
+      const inactiveMs = Date.now() - lastInteractionTimeRef.current;
+
+      if (inactiveMs > 60000) {
+        if (!idleStartRef.current) {
+          idleStartRef.current = Date.now();
+          sendCognitiveLoadEvent({
+            event_type: 'idle_start',
+            video_time: Number(videoRef.current?.currentTime?.toFixed(2) || 0),
+          });
+        }
+      }
+    }, 1000);
+
+    return () => {
+      interactionEvents.forEach((eventName) => {
+        document.removeEventListener(eventName, onInteraction);
+      });
+      window.clearInterval(idleCheckIntervalId);
+    };
+  }, [mainVideo?.url, videoSessionId]);
+
+  useEffect(() => {
+    if (!mainVideo?.url || !videoSessionId || !sessionStartRef.current) {
+      return undefined;
+    }
+
+    const scheduleNextWindowPrediction = () => {
+      const sessionStart = sessionStartRef.current;
+      if (!sessionStart) return;
+
+      const now = Date.now();
+      const elapsedMs = Math.max(0, now - sessionStart.getTime());
+      const completedWindowCount = Math.floor(elapsedMs / COGNITIVE_LOAD_WINDOW_MS);
+      const nextBoundaryMs =
+        sessionStart.getTime() + (completedWindowCount + 1) * COGNITIVE_LOAD_WINDOW_MS;
+      const delayMs = Math.max(0, nextBoundaryMs - now + 100);
+
+      predictTimeoutRef.current = window.setTimeout(async () => {
+        await runCognitiveLoadPredictionForCompletedWindow();
+        scheduleNextWindowPrediction();
+      }, delayMs);
+    };
+
+    scheduleNextWindowPrediction();
+
+    return () => {
+      if (predictTimeoutRef.current) {
+        window.clearTimeout(predictTimeoutRef.current);
+        predictTimeoutRef.current = null;
+      }
+    };
+  }, [courseId, mainVideo?.url, mainVideo?.lessonId, mainVideo?.subsectionId, videoSessionId]);
 
   useEffect(() => {
     if (!mainVideo?.url) {
@@ -1156,10 +1504,12 @@ const CourseDetail = () => {
               >
                 <video
                   key={mainVideo.url}
+                  ref={videoRef}
                   controls
                   playsInline
                   preload="metadata"
                   src={mainVideo.url}
+                  onPlay={handleVideoPlay}
                   onPause={handleVideoPause}
                   onSeeking={handleVideoSeeking}
                   onSeeked={handleVideoSeeked}
@@ -1187,6 +1537,159 @@ const CourseDetail = () => {
                   Open video in new tab
                 </a>
               </p>
+              <div
+                style={{
+                  marginTop: '1rem',
+                  padding: '1rem',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(56, 189, 248, 0.28)',
+                  background: 'rgba(8, 47, 73, 0.3)',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    gap: '0.75rem',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <div>
+                    <p
+                      className="form-label"
+                      style={{
+                        margin: 0,
+                        fontSize: '0.8rem',
+                        marginBottom: '0.3rem',
+                        letterSpacing: '0.02em',
+                      }}
+                    >
+                      Live cognitive load
+                    </p>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: '0.78rem',
+                        color: 'var(--text-muted)',
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      Raw events are collected live. A prediction appears after each
+                      completed 2-minute video window.
+                    </p>
+                  </div>
+                  {cognitiveLoadLoading ? (
+                    <span
+                      style={{
+                        padding: '0.28rem 0.65rem',
+                        borderRadius: '999px',
+                        fontSize: '0.75rem',
+                        background: 'rgba(59, 130, 246, 0.16)',
+                        color: '#bfdbfe',
+                      }}
+                    >
+                      Predicting...
+                    </span>
+                  ) : null}
+                </div>
+
+                {cognitiveLoadError ? (
+                  <p
+                    style={{
+                      margin: '0.85rem 0 0 0',
+                      padding: '0.75rem 0.9rem',
+                      borderRadius: '10px',
+                      background: 'rgba(127, 29, 29, 0.26)',
+                      border: '1px solid rgba(248, 113, 113, 0.22)',
+                      color: '#fecaca',
+                      fontSize: '0.82rem',
+                      whiteSpace: 'pre-wrap',
+                    }}
+                  >
+                    {cognitiveLoadError}
+                  </p>
+                ) : null}
+
+                {livePredictionSummary ? (
+                  <>
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                        gap: '0.75rem',
+                        marginTop: '0.9rem',
+                      }}
+                    >
+                      <div style={{ padding: '0.85rem', borderRadius: '10px', background: 'rgba(15, 23, 42, 0.42)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginBottom: '0.28rem' }}>Predicted load</div>
+                        <div style={{ fontSize: '1rem', fontWeight: 700 }}>{livePredictionSummary.predictedLoad}</div>
+                      </div>
+                      <div style={{ padding: '0.85rem', borderRadius: '10px', background: 'rgba(15, 23, 42, 0.42)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginBottom: '0.28rem' }}>Confidence</div>
+                        <div style={{ fontSize: '1rem', fontWeight: 700 }}>
+                          {livePredictionSummary.confidence != null
+                            ? `${Math.round(livePredictionSummary.confidence * 100)}%`
+                            : 'N/A'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.85rem', borderRadius: '10px', background: 'rgba(15, 23, 42, 0.42)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginBottom: '0.28rem' }}>Window</div>
+                        <div style={{ fontSize: '1rem', fontWeight: 700 }}>
+                          {livePredictionSummary.minuteIndex != null
+                            ? `#${livePredictionSummary.minuteIndex}`
+                            : 'N/A'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.85rem', borderRadius: '10px', background: 'rgba(15, 23, 42, 0.42)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginBottom: '0.28rem' }}>Raw events</div>
+                        <div style={{ fontSize: '1rem', fontWeight: 700 }}>{displayRawEventCount ?? 'N/A'}</div>
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                        gap: '0.65rem',
+                        marginTop: '0.85rem',
+                        color: 'var(--text-muted)',
+                        fontSize: '0.82rem',
+                      }}
+                    >
+                      <div>Pause frequency: {livePredictionSummary.pauseFrequency ?? 'N/A'}</div>
+                      <div>Rewatch segments: {livePredictionSummary.rewatchSegments ?? 'N/A'}</div>
+                      <div>Video navigation: {livePredictionSummary.navigationCountVideo ?? 'N/A'}</div>
+                      <div>Rate changes: {livePredictionSummary.playbackRateChange ?? 'N/A'}</div>
+                    </div>
+
+                    {livePredictionSummary.createdAt ? (
+                      <p
+                        style={{
+                          margin: '0.85rem 0 0 0',
+                          fontSize: '0.76rem',
+                          color: 'var(--text-muted)',
+                        }}
+                      >
+                        Last updated: {formatIsoDateTime(livePredictionSummary.createdAt)}
+                      </p>
+                    ) : null}
+                  </>
+                ) : (
+                  <p
+                    style={{
+                      margin: '0.85rem 0 0 0',
+                      fontSize: '0.82rem',
+                      color: 'var(--text-muted)',
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    Start watching and interacting with the video. The first
+                    cognitive load prediction appears after the first completed
+                    2-minute window.
+                  </p>
+                )}
+              </div>
               <div
                 style={{
                   marginTop: '1rem',
