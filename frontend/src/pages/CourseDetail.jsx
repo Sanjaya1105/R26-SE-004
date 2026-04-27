@@ -1534,7 +1534,7 @@ const CourseDetail = () => {
               </div>
             </>
           ) : (
-            <p
+           <p
               style={{
                 color: 'var(--text-muted)',
                 fontSize: '0.95rem',
@@ -1543,11 +1543,11 @@ const CourseDetail = () => {
                 lineHeight: 1.55,
               }}
             >
-              Use the sidebar to browse sections and subsections. Toggle ▼ on a
+              {/* Use the sidebar to browse sections and subsections. Toggle ▼ on a
               subsection for links; click{' '}
               <strong style={{ color: 'var(--text)' }}>Video link</strong> to
-              watch here in this column.
-            </p>
+              watch here in this column. */}
+            </p> 
           )}
         </main>
       </div>
