@@ -70,6 +70,7 @@ def create_feature_window(data: FeatureWindowInput):
         "id": feature_window_id,
     }
 
+
 @router.get("/xai/data")
 def get_xai_data(
     student_id: str | None = None,

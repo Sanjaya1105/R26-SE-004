@@ -97,10 +97,10 @@ app.use(
 );
 
 app.use(
-  "/api/cognitive-load",
   createProxyMiddleware({
     target: COGNITIVE_LOAD_SERVICE_URL,
     changeOrigin: true,
+    pathFilter: (pathname) => pathname.startsWith("/api/cognitive-load"),
     pathRewrite: (path) => path.replace(/^\/api\/cognitive-load/, ""),
   })
 );

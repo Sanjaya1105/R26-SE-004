@@ -202,6 +202,7 @@ const CourseDetail = () => {
   const predictTimeoutRef = useRef(null);
   const lastPredictedWindowKeyRef = useRef('');
   const predictionInFlightWindowKeyRef = useRef('');
+  const rawEventQueueRef = useRef(Promise.resolve());
 
   const toggleSection = (sectionId) => {
     const k = String(sectionId);
@@ -297,26 +298,12 @@ const CourseDetail = () => {
     lastPredictedWindowKeyRef.current = '';
     predictionInFlightWindowKeyRef.current = '';
 
-    const sendRawEvent = async (payload) => {
-      await axios.post(`${getGatewayBaseUrl()}/api/cognitive-load/events/raw`, {
-        student_id: getActiveStudentId(),
-        lesson_id: String(mainVideo.lessonId || mainVideo.subsectionId || courseId),
-        session_id: sessionId,
-        event_time: new Date().toISOString(),
-        video_time: payload.video_time ?? null,
-        from_position: payload.from_position ?? null,
-        to_position: payload.to_position ?? null,
-        event_value: payload.event_value ?? null,
-        question_id: payload.question_id ?? null,
-        is_correct: payload.is_correct ?? null,
-        event_type: payload.event_type,
-      });
-      setLocalRawEventCount((prev) => prev + 1);
-    };
-
-    sendRawEvent({
+    enqueueRawEvent({
+      sessionIdOverride: sessionId,
+      payload: {
       event_type: 'adaptation_navigation',
       event_value: mainVideo.url,
+      },
     }).catch(() => {});
 
     return () => {
@@ -392,24 +379,39 @@ const CourseDetail = () => {
     }
   };
 
+  const enqueueRawEvent = ({ payload, sessionIdOverride }) => {
+    const activeSessionId = sessionIdOverride ?? videoSessionId;
+    if (!mainVideo?.url || !activeSessionId) {
+      return Promise.resolve();
+    }
+
+    rawEventQueueRef.current = rawEventQueueRef.current
+      .catch(() => {})
+      .then(async () => {
+        await axios.post(`${getGatewayBaseUrl()}/api/cognitive-load/events/raw`, {
+          student_id: getActiveStudentId(),
+          lesson_id: String(mainVideo.lessonId || mainVideo.subsectionId || courseId),
+          session_id: activeSessionId,
+          event_time: new Date().toISOString(),
+          video_time: payload.video_time ?? null,
+          from_position: payload.from_position ?? null,
+          to_position: payload.to_position ?? null,
+          event_value: payload.event_value ?? null,
+          question_id: payload.question_id ?? null,
+          is_correct: payload.is_correct ?? null,
+          event_type: payload.event_type,
+        });
+        setLocalRawEventCount((prev) => prev + 1);
+      });
+
+    return rawEventQueueRef.current;
+  };
+
   const sendCognitiveLoadEvent = async (payload) => {
     if (!mainVideo?.url || !videoSessionId) return;
 
     try {
-      await axios.post(`${getGatewayBaseUrl()}/api/cognitive-load/events/raw`, {
-        student_id: getActiveStudentId(),
-        lesson_id: String(mainVideo.lessonId || mainVideo.subsectionId || courseId),
-        session_id: videoSessionId,
-        event_time: new Date().toISOString(),
-        video_time: payload.video_time ?? null,
-        from_position: payload.from_position ?? null,
-        to_position: payload.to_position ?? null,
-        event_value: payload.event_value ?? null,
-        question_id: payload.question_id ?? null,
-        is_correct: payload.is_correct ?? null,
-        event_type: payload.event_type,
-      });
-      setLocalRawEventCount((prev) => prev + 1);
+      await enqueueRawEvent({ payload });
     } catch (_) {
       setCognitiveLoadError(
         'Could not send video interaction data to the cognitive load API.'
