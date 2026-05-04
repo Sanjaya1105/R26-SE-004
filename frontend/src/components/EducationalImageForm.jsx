@@ -1,18 +1,3 @@
-const VISUAL_TYPES = [
-  { value: 'auto', label: 'Auto (recommended)' },
-  { value: 'labeled diagram', label: 'Labeled diagram' },
-  { value: 'flowchart', label: 'Flowchart' },
-  { value: 'process diagram', label: 'Process diagram' },
-  { value: 'timeline', label: 'Timeline' },
-  { value: 'chart', label: 'Chart' },
-  { value: 'map', label: 'Map' },
-  { value: 'comparison table', label: 'Comparison table' },
-  { value: 'cause effect', label: 'Cause & effect' },
-  { value: 'hierarchy', label: 'Hierarchy / tree' },
-  { value: 'concept map', label: 'Concept map' },
-  { value: 'illustration', label: 'Illustration' },
-];
-
 const IMAGE_STYLES = [
   { value: 'textbook', label: 'Textbook' },
   { value: 'simple cartoon', label: 'Simple cartoon' },
@@ -65,32 +50,6 @@ export default function EducationalImageForm({
         }}
       >
         <div>
-          <label className="form-label" htmlFor="ei-subject">
-            Subject
-          </label>
-          <input
-            id="ei-subject"
-            className="form-input"
-            value={values.subject}
-            onChange={(e) => set('subject', e.target.value)}
-            placeholder="e.g. Biology"
-            disabled={disabled}
-          />
-        </div>
-        <div>
-          <label className="form-label" htmlFor="ei-grade">
-            Grade level
-          </label>
-          <input
-            id="ei-grade"
-            className="form-input"
-            value={values.gradeLevel}
-            onChange={(e) => set('gradeLevel', e.target.value)}
-            placeholder="e.g. 7th grade"
-            disabled={disabled}
-          />
-        </div>
-        <div>
           <label className="form-label" htmlFor="ei-age">
             Student age
           </label>
@@ -105,20 +64,6 @@ export default function EducationalImageForm({
         </div>
       </div>
 
-      <div style={{ marginTop: '1rem' }}>
-        <label className="form-label" htmlFor="ei-objective">
-          Learning objective
-        </label>
-        <input
-          id="ei-objective"
-          className="form-input"
-          value={values.learningObjective}
-          onChange={(e) => set('learningObjective', e.target.value)}
-          placeholder="What should learners understand or be able to do?"
-          disabled={disabled}
-        />
-      </div>
-
       <div
         style={{
           display: 'grid',
@@ -127,24 +72,6 @@ export default function EducationalImageForm({
           marginTop: '1rem',
         }}
       >
-        <div>
-          <label className="form-label" htmlFor="ei-visual">
-            Visual type
-          </label>
-          <select
-            id="ei-visual"
-            className="form-input"
-            value={values.visualType}
-            onChange={(e) => set('visualType', e.target.value)}
-            disabled={disabled}
-          >
-            {VISUAL_TYPES.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </div>
         <div>
           <label className="form-label" htmlFor="ei-style">
             Image style
@@ -167,14 +94,18 @@ export default function EducationalImageForm({
           <label className="form-label" htmlFor="ei-lang">
             Language
           </label>
-          <input
+          <select
             id="ei-lang"
             className="form-input"
             value={values.language}
             onChange={(e) => set('language', e.target.value)}
-            placeholder="e.g. English"
             disabled={disabled}
-          />
+          >
+            <option value="English">English</option>
+            <option value="Hindi">Hindi</option>
+            <option value="Spanish">Spanish</option>
+            <option value="French">French</option>
+          </select>
         </div>
       </div>
 
@@ -196,4 +127,4 @@ export default function EducationalImageForm({
   );
 }
 
-export { VISUAL_TYPES, IMAGE_STYLES };
+export { IMAGE_STYLES };

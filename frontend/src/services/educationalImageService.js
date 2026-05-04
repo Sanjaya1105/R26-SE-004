@@ -14,11 +14,7 @@ function buildGenerateUrls() {
 /**
  * @param {object} payload
  * @param {string} payload.lessonText
- * @param {string} [payload.subject]
- * @param {string} [payload.gradeLevel]
  * @param {string} [payload.studentAge]
- * @param {string} [payload.learningObjective]
- * @param {string} payload.visualType
  * @param {string} [payload.imageStyle]
  * @param {string} [payload.language]
  * @param {string} token JWT

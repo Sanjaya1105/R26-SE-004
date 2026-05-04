@@ -3,7 +3,6 @@ const { analyzeLesson } = require("./lessonAnalysisService");
 const { parseJsonFromLlm } = require("../lib/parseJsonFromLlm");
 const {
   extractLearningSignals,
-  resolveVisualSelection,
 } = require("../lib/visualDecision");
 const {
   generateImage,
@@ -199,7 +198,8 @@ The mermaid field must be valid Mermaid code only (no markdown fence). Use short
 Use flowchart LR or TD. Show ordered steps, pathways, or stages (e.g. digestive path, steps in a method).`,
 
     process_diagram: `${base}
-Use flowchart LR. Emphasize inputs and outputs, transformations, and where the process happens (e.g. photosynthesis: Sunlight, CO2, Water → Leaf → Photosynthesis → Glucose, O2).`,
+Use flowchart LR. Emphasize inputs and outputs, transformations, and where the process happens (e.g. photosynthesis: Sunlight, CO2, Water → Leaf → Photosynthesis → Glucose, O2).
+If the lesson describes a cycle/repeating stages, the mermaid MUST include a loop by connecting the final stage back to the starting stage.`,
 
     cause_effect_diagram: `${base}
 Use ONLY "flowchart TD" (top-down). Teach one clear teaching chain: Cause → Immediate effect → Secondary effects → Final outcome.
@@ -776,127 +776,376 @@ function diagramFormatFrom(result, primaryVisual) {
 const LABELED_HELPER_NOTE =
   "Labeled diagram: This visual shows the key parts of the system. Labels are provided separately for clarity and can be overlaid on the diagram or used as a study guide.";
 
+const VISUAL_PRIORITY = [
+  "chart",
+  "timeline",
+  "map",
+  "comparison_table",
+  "process_diagram",
+  "flowchart",
+  "hierarchy_tree",
+  "cause_effect_diagram",
+  "labeled_diagram",
+  "concept_map",
+  "illustration",
+];
+
+function inferLearnerLevelFromAge(studentAgeRaw) {
+  const n = Number(String(studentAgeRaw || "").match(/\d+/)?.[0]);
+  if (!Number.isFinite(n)) return "mixed / unspecified";
+  if (n >= 5 && n <= 7) return "early elementary";
+  if (n >= 8 && n <= 10) return "elementary";
+  if (n >= 11 && n <= 13) return "middle school";
+  if (n >= 14 && n <= 16) return "high school";
+  return "advanced / college-ready";
+}
+
+function inferSubjectFromText(lessonText = "") {
+  const t = String(lessonText).toLowerCase();
+  const checks = [
+    ["Biology", /\b(cells?|digestion|animals?|plants?|organs?|organ system|chloroplast|mitochondria)\b/],
+    ["Physics", /\b(force|energy|motion|electricity|current|voltage|magnet)\b/],
+    ["Chemistry", /\b(matter|atoms?|reactions?|acids?|bases?|molecules?|compound)\b/],
+    ["Earth Science", /\b(water cycle|weather|climate|rocks?|erosion|soil|atmosphere)\b/],
+    ["Geography", /\b(countries?|maps?|regions?|rivers?|mountains?|continents?|locations?|directions?)\b/],
+    ["History", /\b(dates?|wars?|empires?|revolutions?|centur(y|ies)|historical order)\b/],
+    ["Mathematics", /\b(numbers?|data|graph|percentage|percent|ratio|statistics)\b/],
+    ["English", /\b(reading|grammar|writing|vocabulary|literature|sentence)\b/],
+    ["Social Studies", /\b(democracy|teamwork|responsibility|culture|society|citizenship)\b/],
+  ];
+  for (const [subject, re] of checks) {
+    if (re.test(t)) return subject;
+  }
+  return "General Studies";
+}
+
+function summarizeLessonText(lessonText = "") {
+  const clean = String(lessonText).replace(/\s+/g, " ").trim();
+  if (!clean) return "";
+  const parts = clean.split(/(?<=[.!?])\s+/).filter(Boolean);
+  return parts.slice(0, 3).join(" ").slice(0, 420);
+}
+
+function chunkLessonText(lessonText = "", maxChars = 3500) {
+  const clean = String(lessonText || "").trim();
+  if (!clean) return [];
+  if (clean.length <= maxChars) return [clean];
+  const paras = clean.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  if (paras.length <= 1) {
+    const out = [];
+    let i = 0;
+    while (i < clean.length) {
+      out.push(clean.slice(i, i + maxChars));
+      i += maxChars;
+    }
+    return out;
+  }
+  const chunks = [];
+  let current = "";
+  for (const p of paras) {
+    if (!current) {
+      current = p;
+      continue;
+    }
+    if ((current + "\n\n" + p).length <= maxChars) {
+      current += `\n\n${p}`;
+    } else {
+      chunks.push(current);
+      current = p;
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+function detectVisualTypesFromSignals(signals) {
+  const detected = [];
+  const push = (type, evidence, confidence = "medium") => {
+    if (!detected.find((x) => x.type === type)) {
+      detected.push({ type, evidence, confidence, recommended_visual: type });
+    }
+  };
+  if (signals.quantitative || signals.strongNumericChart) {
+    push("chart", "numbers, measurements, percentages, or trends detected", "high");
+  }
+  if (signals.temporal || signals.timelinePreferred) {
+    push("timeline", "time references, dates, or historical order detected", "high");
+  }
+  if (signals.geographic) {
+    push("map", "locations/regions/rivers/mountains/directions detected", "high");
+  }
+  if (signals.compareContrast) {
+    push("comparison_table", "compare/contrast/similarity-difference language detected", "high");
+  }
+  const cycleLike = /\b(cycle|cyclical|repeating stages?|loop)\b/i.test(
+    String(signals.hay || "")
+  );
+  if (signals.ioProcess && cycleLike) {
+    push("process_diagram", "cycle with repeating process stages detected", "high");
+  } else if (signals.sequenceProcedure || signals.organPathway) {
+    push("flowchart", "steps/order/movement/procedure detected", "high");
+  }
+  if (signals.ioProcess && !signals.sequenceProcedure && !signals.organPathway) {
+    push("process_diagram", "input-output conversion/transformation detected", "high");
+  }
+  if (signals.partsAndSequence) {
+    push("process_diagram", "parts + sequence indicates process first", "high");
+    push("labeled_diagram", "secondary support for parts/components", "medium");
+  } else if (signals.partsStructure || signals.physicalPartsEmphasis) {
+    push("labeled_diagram", "parts/components/structure detected", "high");
+  }
+  if (signals.causeEffect && !cycleLike) {
+    push("cause_effect_diagram", "cause→effect language detected", "high");
+  }
+  if (signals.hierarchy || signals.hierarchyPreferred) {
+    push("hierarchy_tree", "classification/types/categories/groups detected", "high");
+  }
+  if (signals.is_network || signals.manyConnected) {
+    push("concept_map", "many connected non-hierarchical ideas detected", "medium");
+  }
+  if (signals.abstractSocial) {
+    push("illustration", "abstract/social/general concept detected", "medium");
+  }
+  if (!detected.length) {
+    push("illustration", "no strong structured relationship detected", "low");
+  }
+  return detected;
+}
+
+function sortTypesByPriority(types) {
+  return [...types].sort((a, b) => {
+    const ia = VISUAL_PRIORITY.indexOf(a);
+    const ib = VISUAL_PRIORITY.indexOf(b);
+    return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib);
+  });
+}
+
+function dedupeRelationships(rows) {
+  const map = new Map();
+  for (const r of rows) {
+    const key = `${r.type}::${String(r.topic || "").toLowerCase()}`;
+    if (!map.has(key)) {
+      map.set(key, { ...r, evidence: [r.evidence], confidence: [r.confidence || "medium"] });
+    } else {
+      const curr = map.get(key);
+      if (r.evidence && !curr.evidence.includes(r.evidence)) {
+        curr.evidence.push(r.evidence);
+      }
+      if (r.confidence && !curr.confidence.includes(r.confidence)) {
+        curr.confidence.push(r.confidence);
+      }
+    }
+  }
+  return [...map.values()].map((x) => ({
+    type: x.type,
+    evidence: x.evidence.join("; "),
+    confidence: x.confidence.includes("high")
+      ? "high"
+      : x.confidence.includes("medium")
+        ? "medium"
+        : "low",
+    recommended_visual: x.recommended_visual || x.type,
+    topic: x.topic,
+  }));
+}
+
+function generateLearningObjectives({ topic, learnerLevel, relationships, keyConcepts }) {
+  const relTypes = new Set(relationships.map((r) => r.type));
+  const out = [];
+  const add = (v) => {
+    if (v && !out.includes(v)) out.push(v);
+  };
+  add(`Identify the main ideas in ${topic || "the lesson topic"} at a ${learnerLevel} level.`);
+  if (relTypes.has("timeline")) add(`Sequence important events related to ${topic || "the topic"} in chronological order.`);
+  if (relTypes.has("comparison_table")) add(`Compare key similarities and differences using evidence from the lesson.`);
+  if (relTypes.has("flowchart") || relTypes.has("process_diagram")) add(`Explain how the process works step by step.`);
+  if (relTypes.has("chart")) add(`Interpret trends and measurements shown in the lesson data.`);
+  if (relTypes.has("map")) add(`Describe where key places are located and why location matters.`);
+  if (relTypes.has("labeled_diagram")) add(`Describe the main parts and their roles in the system.`);
+  if (relTypes.has("cause_effect_diagram")) add(`Evaluate how causes lead to short- and long-term effects.`);
+  if (!out.length && keyConcepts[0]) add(`Explain ${keyConcepts[0]} in your own words.`);
+  return out.slice(0, 5);
+}
+
+function buildVisualCard(result, visualType, idx, reason) {
+  const img = result.generated_image?.base64
+    ? {
+        mime: result.generated_image.mime_type || "image/png",
+        base64: result.generated_image.base64,
+      }
+    : null;
+  const image_url = img ? `data:${img.mime};base64,${img.base64}` : "";
+  return {
+    id: `visual_${idx + 1}`,
+    title: `${String(visualType || "visual").replace(/_/g, " ")} visual`,
+    visual_reason: reason || "",
+    visual_type: visualType,
+    diagram_format: diagramFormatFrom(result, visualType),
+    diagram_data: result.diagram_data || {},
+    mermaid: result.diagram_data?.mermaid || result.mermaid || "",
+    image_prompt: result.image_prompt || "",
+    image_url,
+    labels: Array.isArray(result.labels) ? result.labels : [],
+    alt_text: result.alt_text || "",
+    student_caption: result.student_caption || "",
+    verification_notes: result.verification_notes || [],
+    generated_image: result.generated_image || undefined,
+    illustration_image_status: result.illustration_image_status || null,
+    illustration_image_error: result.illustration_image_error || null,
+  };
+}
+
 /**
  * End-to-end: analyze lesson, resolve primary/secondary visuals, merge structured outputs.
  */
 async function buildEducationalVisual(payload) {
   const analysis = await analyzeLesson(payload);
-  const ctx = buildContextBlock(payload, analysis);
-  const signals = extractLearningSignals(
-    payload.lessonText,
-    payload.learningObjective,
-    analysis
+  const lessonText = String(payload.lessonText || "");
+  const chunks = chunkLessonText(lessonText);
+  const relationshipRows = [];
+  let mergedSignals = { detected_features: {} };
+
+  for (const chunk of chunks.length ? chunks : [lessonText]) {
+    const chunkSignals = extractLearningSignals(chunk, "", analysis);
+    mergedSignals = chunkSignals;
+    const found = detectVisualTypesFromSignals(chunkSignals);
+    for (const f of found) {
+      relationshipRows.push({
+        ...f,
+        topic: analysis.main_topic || "",
+      });
+    }
+  }
+
+  const deduped = dedupeRelationships(relationshipRows);
+  let orderedTypes = sortTypesByPriority(deduped.map((d) => d.type));
+  if (!orderedTypes.length) {
+    orderedTypes = ["illustration"];
+  }
+  const relationshipByType = new Map(
+    deduped.map((d) => [d.type, d])
   );
 
-  const resolved = resolveVisualSelection(
-    payload.visualType,
-    signals,
-    analysis
-  );
-  const primary_visual = resolved.primary_visual;
-  const secondary_visual = resolved.secondary_visual || "";
-  const visual_reason = resolved.visual_reason;
-  const contentMismatch = Boolean(resolved.contentMismatch);
-
-  const payloadWithFlags = {
-    ...payload,
-    __validPrimaryLabeled:
-      primary_visual === "labeled_diagram" && !contentMismatch,
-  };
-
-  let result = await generateForPrimary(
-    primary_visual,
-    ctx,
-    analysis,
-    payloadWithFlags
-  );
-
-  if (
-    secondary_visual === "labeled_diagram" &&
-    primary_visual !== "labeled_diagram"
-  ) {
-    const ld = await generateLabeledDiagram(ctx, analysis, payloadWithFlags, {
-      secondaryOnly: true,
-      validPrimaryLabeled: false,
+  const visuals = [];
+  for (const vt of orderedTypes) {
+    const ctx = buildContextBlock(
+      {
+        ...payload,
+        subject: payload.subject || inferSubjectFromText(lessonText),
+        learningObjective: payload.learningObjective || "",
+        gradeLevel: payload.gradeLevel || inferLearnerLevelFromAge(payload.studentAge),
+      },
+      analysis
+    );
+    const generated = await generateForPrimary(vt, ctx, analysis, {
+      ...payload,
+      __validPrimaryLabeled: vt === "labeled_diagram",
     });
-    result.labels = [
-      ...(Array.isArray(result.labels) ? result.labels : []),
-      ...(Array.isArray(ld.labels) ? ld.labels : []),
-    ];
-    result.image_prompt = [result.image_prompt, ld.image_prompt]
-      .filter(Boolean)
-      .join("\n\n--- Secondary labeled diagram (optional base image) ---\n\n");
-    result.verification_notes = [
-      ...(result.verification_notes || []),
-      ...(ld.verification_notes || []),
-      "Secondary: part labels for anatomy/structure; primary diagram shows sequence or process.",
-    ];
-  }
-
-  const mermaidStr =
-    result.diagram_data?.mermaid || result.mermaid || "";
-
-  const out = {
-    topic: result.topic || analysis.main_topic || "",
-    primary_visual,
-    secondary_visual: secondary_visual || "",
-    visual_reason,
-    contentMismatch,
-    detected_features: signals.detected_features || {},
-    helper_note:
-      primary_visual === "labeled_diagram" && !contentMismatch
-        ? LABELED_HELPER_NOTE
-        : "",
-    diagram_format: diagramFormatFrom(result, primary_visual),
-    diagram_data: result.diagram_data || {},
-    mermaid: mermaidStr,
-    image_prompt: result.image_prompt || "",
-    illustration_image_status:
-      primary_visual === "illustration"
-        ? result.illustration_image_status || null
-        : null,
-    illustration_image_error:
-      primary_visual === "illustration"
-        ? result.illustration_image_error ?? null
-        : null,
-    labels:
-      primary_visual === "labeled_diagram" ||
-      secondary_visual === "labeled_diagram" ||
-      primary_visual === "map"
-        ? result.labels || []
-        : [],
-    alt_text: result.alt_text || analysis.alt_text || "",
-    student_caption: result.student_caption || "",
-    verification_notes: result.verification_notes || [],
-    image_url: "",
-  };
-
-  if (primary_visual === "illustration" && !String(out.image_prompt || "").trim()) {
-    out.image_prompt = buildFallbackIllustrationPrompt(analysis, payload);
-  }
-
-  if (primary_visual === "labeled_diagram" && !contentMismatch) {
-    out.verification_notes = [
-      "Labeled diagram is appropriate because the content is about parts and structure.",
-      "Labels are stored separately and are not drawn inside the image.",
-      ...(out.verification_notes || []).filter(
-        (n) =>
-          typeof n === "string" &&
-          !n.includes("flowchart or process diagram as the main visual")
-      ),
-    ];
-    out.verification_notes.push(
-      "No process warning is shown because there is no strong sequence or pathway in the lesson focus."
+    visuals.push(
+      buildVisualCard(
+        generated,
+        vt,
+        visuals.length,
+        relationshipByType.get(vt)?.evidence || ""
+      )
     );
   }
 
-  if (result.generated_image?.base64) {
-    const mime = result.generated_image.mime_type || "image/png";
-    out.generated_image = {
-      mime_type: mime,
-      base64: result.generated_image.base64,
-    };
-    out.image_url = `data:${mime};base64,${result.generated_image.base64}`;
+  const first = visuals[0] || null;
+  const second = visuals[1] || null;
+  const learner_level = inferLearnerLevelFromAge(payload.studentAge);
+  const subject = String(payload.subject || "").trim() || inferSubjectFromText(lessonText);
+  const topic = analysis.main_topic || "Lesson topic";
+  const summary = summarizeLessonText(lessonText);
+  const key_concepts = Array.isArray(analysis.key_concepts)
+    ? analysis.key_concepts.slice(0, 12)
+    : [];
+  const learning_objectives = generateLearningObjectives({
+    topic,
+    learnerLevel: learner_level,
+    relationships: deduped,
+    keyConcepts: key_concepts,
+  });
+
+  const fallback_used =
+    orderedTypes.length === 1 && orderedTypes[0] === "illustration";
+
+  // New schema (multi-visual automatic generator)
+  const out = {
+    topic,
+    subject,
+    learner_level,
+    student_age: String(payload.studentAge || "").trim(),
+    summary,
+    learning_objectives,
+    key_concepts,
+    detected_relationships: deduped.map((r) => ({
+      type: r.type,
+      evidence: r.evidence,
+      recommended_visual: r.recommended_visual,
+      confidence: r.confidence || "medium",
+    })),
+    visuals,
+    fallback_used,
+  };
+
+  if (!Array.isArray(out.visuals) || out.visuals.length === 0) {
+    const ctx = buildContextBlock(
+      {
+        ...payload,
+        subject,
+        learningObjective: "",
+        gradeLevel: learner_level,
+      },
+      analysis
+    );
+    const generated = await generateForPrimary("illustration", ctx, analysis, {
+      ...payload,
+      __validPrimaryLabeled: false,
+    });
+    out.visuals = [
+      buildVisualCard(
+        generated,
+        "illustration",
+        0,
+        "Fallback: no strong structured relationship detected."
+      ),
+    ];
+    out.fallback_used = true;
+  }
+
+  out.visuals = out.visuals.map((v, i) => ({
+    ...v,
+    id: `visual_${i + 1}`,
+    image_prompt:
+      v.visual_type === "illustration" && !String(v.image_prompt || "").trim()
+        ? buildFallbackIllustrationPrompt(analysis, payload)
+        : v.image_prompt,
+  }));
+
+  // Backward compatibility fields (existing frontend dependencies)
+  if (first) {
+    out.primary_visual = first.visual_type;
+    out.secondary_visual = second?.visual_type || "";
+    out.visual_reason = first.visual_reason || `Auto: selected from learning relationships.`;
+    out.contentMismatch = false;
+    out.detected_features = mergedSignals.detected_features || {};
+    out.helper_note =
+      first.visual_type === "labeled_diagram" ? LABELED_HELPER_NOTE : "";
+    out.diagram_format = first.diagram_format || "";
+    out.diagram_data = first.diagram_data || {};
+    out.mermaid = first.mermaid || "";
+    out.image_prompt = first.image_prompt || "";
+    out.illustration_image_status = first.illustration_image_status || null;
+    out.illustration_image_error = first.illustration_image_error || null;
+    out.labels = Array.isArray(first.labels) ? first.labels : [];
+    out.alt_text = first.alt_text || analysis.alt_text || "";
+    out.student_caption = first.student_caption || "";
+    out.verification_notes = first.verification_notes || [];
+    out.image_url = first.image_url || "";
+    if (first.generated_image?.base64) {
+      out.generated_image = first.generated_image;
+    }
   }
 
   return out;

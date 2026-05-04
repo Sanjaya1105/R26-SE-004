@@ -74,11 +74,7 @@ router.post("/images/generate", verifyToken, async (req, res) => {
     const body = req.body || {};
     const data = await buildEducationalVisual({
       lessonText: body.lessonText,
-      subject: body.subject,
-      gradeLevel: body.gradeLevel,
       studentAge: body.studentAge,
-      learningObjective: body.learningObjective,
-      visualType: body.visualType,
       imageStyle: body.imageStyle,
       language: body.language,
     });

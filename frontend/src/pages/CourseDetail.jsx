@@ -172,10 +172,9 @@ const CourseDetail = () => {
   const [pedagogicalPrompt, setPedagogicalPrompt] = useState('');
   const [promptLoading, setPromptLoading] = useState(false);
   const [promptError, setPromptError] = useState('');
-  const [studentMajor, setStudentMajor] = useState('');
-  const [studentYear, setStudentYear] = useState('');
-  const [studentInterests, setStudentInterests] = useState('');
-  const [cognitiveStyle, setCognitiveStyle] = useState('Visual');
+  const [studentAge, setStudentAge] = useState('');
+  const [cognitivePreference, setCognitivePreference] = useState('visual');
+  const [cognitiveProcessing, setCognitiveProcessing] = useState('analytic');
   const [loadLevel, setLoadLevel] = useState('Medium');
   const [frustration, setFrustration] = useState('Low');
   const [cognitiveLoadResult, setCognitiveLoadResult] = useState(null);
@@ -203,6 +202,7 @@ const CourseDetail = () => {
   const lastPredictedWindowKeyRef = useRef('');
   const predictionInFlightWindowKeyRef = useRef('');
   const rawEventQueueRef = useRef(Promise.resolve());
+  const cognitiveStyle = `${cognitivePreference} ${cognitiveProcessing}`;
 
   const toggleSection = (sectionId) => {
     const k = String(sectionId);
@@ -657,9 +657,8 @@ const CourseDetail = () => {
         pptText: mainVideo.pptText || '',
         pdfText: mainVideo.pdfText || '',
         studentProfile: {
-          major: studentMajor,
-          year: studentYear,
-          interests: studentInterests,
+          age: studentAge,
+          year: studentAge,
         },
         cognitiveStyle,
         cognitiveLoad: { level: loadLevel, frustration },
@@ -710,9 +709,9 @@ const CourseDetail = () => {
     mainVideo?.pptText,
     mainVideo?.pdfText,
     course?.courseName,
-    studentMajor,
-    studentYear,
-    studentInterests,
+    studentAge,
+    cognitivePreference,
+    cognitiveProcessing,
     cognitiveStyle,
     loadLevel,
     frustration,
@@ -1848,37 +1847,28 @@ const CourseDetail = () => {
                   <input
                     type="text"
                     className="form-input"
-                    placeholder="Major"
-                    value={studentMajor}
-                    onChange={(e) => setStudentMajor(e.target.value)}
+                    placeholder="Student age"
+                    value={studentAge}
+                    onChange={(e) => setStudentAge(e.target.value)}
                     style={{ fontSize: '0.82rem' }}
-                  />
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Year"
-                    value={studentYear}
-                    onChange={(e) => setStudentYear(e.target.value)}
-                    style={{ fontSize: '0.82rem' }}
-                  />
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Interests"
-                    value={studentInterests}
-                    onChange={(e) => setStudentInterests(e.target.value)}
-                    style={{ gridColumn: '1 / -1', fontSize: '0.82rem' }}
                   />
                   <select
                     className="form-input"
-                    value={cognitiveStyle}
-                    onChange={(e) => setCognitiveStyle(e.target.value)}
+                    value={cognitivePreference}
+                    onChange={(e) => setCognitivePreference(e.target.value)}
                     style={{ fontSize: '0.82rem' }}
                   >
-                    <option value="Visual">Visual</option>
-                    <option value="Auditory">Auditory</option>
-                    <option value="Read/Write">Read/Write</option>
-                    <option value="Kinesthetic">Kinesthetic</option>
+                    <option value="visual">Visual</option>
+                    <option value="textual">Textual</option>
+                  </select>
+                  <select
+                    className="form-input"
+                    value={cognitiveProcessing}
+                    onChange={(e) => setCognitiveProcessing(e.target.value)}
+                    style={{ fontSize: '0.82rem' }}
+                  >
+                    <option value="analytic">Analytic</option>
+                    <option value="holistic">Holistic</option>
                   </select>
                   <select
                     className="form-input"
@@ -1903,6 +1893,15 @@ const CourseDetail = () => {
                     <option value="High">Frustration: High</option>
                   </select>
                 </div>
+                <p
+                  style={{
+                    margin: '0 0 0.5rem 0',
+                    fontSize: '0.78rem',
+                    color: 'var(--text-muted)',
+                  }}
+                >
+                  Cognitive style: <strong style={{ color: 'var(--text)' }}>{cognitiveStyle}</strong>
+                </p>
                 {promptLoading ? (
                   <p
                     style={{
