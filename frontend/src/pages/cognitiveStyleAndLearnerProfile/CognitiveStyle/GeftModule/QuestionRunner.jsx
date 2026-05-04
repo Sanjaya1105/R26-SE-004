@@ -172,9 +172,11 @@ export default function QuestionRunner() {
             return;
         }
 
-        setSessionEnded(true);
-        setSessionStarted(false);
-        setSessionEndTime(Date.now());
+        queueMicrotask(() => {
+            setSessionEnded(true);
+            setSessionStarted(false);
+            setSessionEndTime(Date.now());
+        });
     };
 
     const handlePreviousQuestion = () => {
@@ -191,9 +193,11 @@ export default function QuestionRunner() {
         if (currentQuestion) {
             await postAnswer(currentQuestion);
         }
-        setSessionEnded(true);
-        setSessionStarted(false);
-        setSessionEndTime(Date.now());
+        queueMicrotask(() => {
+            setSessionEnded(true);
+            setSessionStarted(false);
+            setSessionEndTime(Date.now());
+        });
     };
 
     const finalSessionData = {

@@ -27,6 +27,10 @@ const COGNITIVE_LOAD_SERVICE_URL =
   process.env.COGNITIVE_LOAD_SERVICE_URL || "http://localhost:8000";
 const COGNITIVE_STYLE_SERVICE_URL = 
   process.env.COGNITIVE_STYLE_SERVICE_URL || "http://localhost:8003";
+/** LLM + HF image gen can exceed 2–3 min; default Node/proxy is often too short and returns 504 */
+const GPT_PROXY_TIMEOUT_MS = Number(
+  process.env.GATEWAY_GPT_PROXY_TIMEOUT_MS || 600000
+);
 
 const allowedOrigins = [
   FRONTEND_URL,
@@ -93,6 +97,8 @@ app.use(
     target: GPT_SERVICE_URL,
     changeOrigin: true,
     pathRewrite: (path) => `/api/gpt${path}`,
+    timeout: GPT_PROXY_TIMEOUT_MS,
+    proxyTimeout: GPT_PROXY_TIMEOUT_MS,
   })
 );
 
@@ -216,4 +222,7 @@ app.use(
 
 app.listen(PORT, () => {
   console.log(`API Gateway running on http://localhost:${PORT}`);
+  console.log(
+    `[proxy /api/gpt] timeout & proxyTimeout = ${GPT_PROXY_TIMEOUT_MS} ms (set GATEWAY_GPT_PROXY_TIMEOUT_MS to override)`
+  );
 });

@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
 const gptRoutes = require("./routes/gpt");
+const { isImageApiConfigured } = require("./lib/hfTextToImage");
 
 const app = express();
 const port = process.env.PORT || 5002;
@@ -33,6 +34,11 @@ mongoose
     console.log(`Connected to MongoDB database: ${dbName}`);
     app.listen(port, () => {
       console.log(`gpt-service listening on http://localhost:${port}`);
+      console.log(
+        isImageApiConfigured()
+          ? "[hfTextToImage] Illustration image API: configured (HF_IMAGE_API_URL + token)."
+          : "[hfTextToImage] Illustration image API: NOT configured — set HF_IMAGE_API_URL and HF_API_TOKEN (or HF_API_KEY)."
+      );
     });
   })
   .catch((error) => {

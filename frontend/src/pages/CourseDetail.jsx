@@ -412,7 +412,7 @@ const CourseDetail = () => {
 
     try {
       await enqueueRawEvent({ payload });
-    } catch (_) {
+    } catch {
       setCognitiveLoadError(
         'Could not send video interaction data to the cognitive load API.'
       );

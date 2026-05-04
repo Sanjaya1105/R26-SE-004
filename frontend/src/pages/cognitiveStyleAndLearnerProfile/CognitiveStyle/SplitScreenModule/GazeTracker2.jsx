@@ -68,6 +68,7 @@ export default function GazeTracker() {
   const faceLandmarkerRef = useRef(null);
   const animationRef = useRef(null);
   const lastVideoTimeRef = useRef(-1);
+  // eslint-disable-next-line react-hooks/purity -- window start time is ref state, not render output
   const windowRef = useRef(createEmptyWindow(Date.now()));
 
   const userPayload = useMemo(() => {

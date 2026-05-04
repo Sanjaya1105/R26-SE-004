@@ -41,11 +41,14 @@ function createEmptyWindow(startTime) {
 export default function CursorTracker() {
   const lastPointRef = useRef(null);
   const lastZoneRef = useRef("UNKNOWN");
+  /* Initial timestamps belong after mount; refs need concrete windows for the tracking interval. */
+  // eslint-disable-next-line react-hooks/purity -- Date.now only initializes refs, not render output
   const lastMoveTimeRef = useRef(Date.now());
 
   const hoverStartRef = useRef(null);
   const lastHoverZoneRef = useRef("UNKNOWN");
 
+  // eslint-disable-next-line react-hooks/purity
   const bufferRef = useRef(createEmptyWindow(Date.now()));
 
     const userPayload = useMemo(() => {

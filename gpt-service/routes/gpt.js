@@ -8,6 +8,7 @@ const {
   LOAD_LEVELS,
   FRUSTRATION_LEVELS,
 } = require("../components/promptBuilder");
+const { buildEducationalVisual } = require("../services/educationalVisualService");
 
 const router = express.Router();
 
@@ -61,6 +62,44 @@ router.post("/build-prompt", (req, res) => {
   } catch (error) {
     return res.status(400).json({
       message: error?.message || "Failed to build prompt.",
+    });
+  }
+});
+
+/**
+ * Analyze lesson text and produce structured visuals (diagram spec and/or optional raster image).
+ */
+router.post("/images/generate", verifyToken, async (req, res) => {
+  try {
+    const body = req.body || {};
+    const data = await buildEducationalVisual({
+      lessonText: body.lessonText,
+      subject: body.subject,
+      gradeLevel: body.gradeLevel,
+      studentAge: body.studentAge,
+      learningObjective: body.learningObjective,
+      visualType: body.visualType,
+      imageStyle: body.imageStyle,
+      language: body.language,
+    });
+    return res.status(200).json({ success: true, data });
+  } catch (error) {
+    console.error("[gpt images/generate]", error?.message || error);
+    const msg = error?.message || "Failed to generate educational visual.";
+    if (
+      error?.code === "HF_INSUFFICIENT_CREDITS" ||
+      /depleted your monthly|included credits|pre-?paid credits|subscribe to PRO/i.test(msg)
+    ) {
+      return res.status(503).json({
+        code: "HF_INSUFFICIENT_CREDITS",
+        message:
+          "Hugging Face inference credits for this token are used up. Add credits or upgrade at https://huggingface.co/settings/billing — or use another HF_API_TOKEN in gpt-service/.env.",
+      });
+    }
+    const status = /required|Invalid|Empty/i.test(msg) ? 400 : 500;
+    return res.status(status).json({
+      message: msg,
+      detail: error?.response?.data ? String(JSON.stringify(error.response.data)) : undefined,
     });
   }
 });

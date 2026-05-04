@@ -102,6 +102,14 @@ const Dashboard = () => {
           >
             Lesson Summary
           </button>
+          <button
+            type="button"
+            onClick={() => navigate('/images')}
+            className="btn"
+            style={{ backgroundColor: 'rgba(56, 189, 248, 0.14)', color: '#7dd3fc', border: '1px solid rgba(56, 189, 248, 0.35)' }}
+          >
+            Lesson visuals
+          </button>
           <button onClick={handleLogout} className="btn" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
             Logout
           </button>

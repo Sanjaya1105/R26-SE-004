@@ -191,3 +191,27 @@ body {
   font-weight: 700;
   color: var(--text);
 }
+
+/* Comparison tables from lesson visuals API */
+.diagram-preview-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+.diagram-preview-table th,
+.diagram-preview-table td {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+.diagram-preview-table th {
+  background: rgba(15, 23, 42, 0.6);
+  font-weight: 600;
+}
+
+.diagram-mermaid-host svg {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
