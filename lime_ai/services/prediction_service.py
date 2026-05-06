@@ -42,6 +42,29 @@ INT_FEATURE_FIELDS = {
 }
 
 
+AGGREGATE_SYSTEM_PROMPT = (
+    "You are an educational analytics assistant. Create concise, practical, student-friendly "
+    "explanations from combined LIME and SHAP signals."
+)
+
+AGGREGATE_USER_PROMPT_TEMPLATE = (
+    "Write one short, natural paragraph addressed to the student using combined LIME and SHAP evidence.\n"
+    "Student ID: {student_id}\n"
+    "Lesson ID: {lesson_id}\n"
+    "Predicted cognitive load: {predicted_label}\n"
+    "Top combined classroom signals (LIME+SHAP):\n"
+    "{signals_text}\n\n"
+    "Rules:\n"
+    "1) Explain the likely reason for high cognitive load in a natural sentence.\n"
+    "2) Mention the strongest signals and what they mean for the student.\n"
+    "3) Include practical advice the student should follow directly.\n"
+    "4) If cognitive load is High or Very High, give clear support steps the student can follow now.\n"
+    "5) Do not include numbers, percentages, formulas, or feature names.\n"
+    "6) Avoid bullet points and keep under 120 words.\n"
+    "7) Use wording like: 'You may be feeling high cognitive load because you paused the video often, spent a long time on the lesson, and revisited parts repeatedly. Try focusing on one section at a time and taking short breaks before moving forward.'"
+)
+
+
 def _has_gpt_api_key() -> bool:
     return bool(settings.GPT_API_KEY and settings.GPT_API_KEY.strip())
 
@@ -86,33 +109,45 @@ def _signal_to_teacher_phrase(signal: str) -> str:
     return "the signal points to higher cognitive load"
 
 
-def _build_human_prompt(
-    *,
-    student_id: str,
-    lesson_id: str,
-    predicted_label: str,
-    predicted_score: int,
-    confidence: float,
-    factors: list[dict[str, Any]],
-) -> str:
-    factors_text = "\n".join(
-        f"- rule: {factor['rule']}, weight: {factor['weight']:.6f}, impact: {factor['impact']}"
-        for factor in factors
+def _is_high_load(predicted_label: str) -> bool:
+     return predicted_label.strip().lower() in {"high", "very high"}
+
+
+def _teacher_recommendation(predicted_label: str) -> str:
+    if _is_high_load(predicted_label):
+        return (
+            "Student advice: slow your pace, study in smaller steps, and ask for short feedback after each step."
+        )
+    return (
+        "Student advice: keep your pace, but use short checkpoints and clarify difficult points early."
     )
 
+
+def _top_human_reasons_from_factors(factors: list[dict[str, Any]], limit: int = 3) -> list[str]:
+    positive_factors = [factor for factor in factors if factor.get("impact") == "positive"]
+    ranked = sorted(
+        positive_factors or factors,
+        key=lambda item: abs(float(item.get("weight", 0.0))),
+        reverse=True,
+    )
+
+    reasons: list[str] = []
+    for factor in ranked:
+        phrase = _signal_to_teacher_phrase(str(factor.get("rule", "")))
+        if phrase not in reasons:
+            reasons.append(phrase)
+        if len(reasons) >= max(1, limit):
+            break
+
+    return reasons
+
+
+def _why_cognitive_load_high_text(predicted_label: str, reasons: list[str]) -> str:
+    if reasons:
+        return f"This student likely has {predicted_label.lower()} cognitive load because {', '.join(reasons)}."
     return (
-        "Write a short human-readable classroom explanation for a teacher.\n"
-        f"Student ID: {student_id}\n"
-        f"Lesson ID: {lesson_id}\n"
-        f"Predicted cognitive load: {predicted_label} (score {predicted_score})\n"
-        f"Confidence: {confidence:.2f}\n"
-        "LIME factors:\n"
-        f"{factors_text}\n\n"
-        "Rules:\n"
-        "1) Use plain language.\n"
-        "2) Mention top contributing factors.\n"
-        "3) Give one practical teacher action.\n"
-        "4) Keep it under 120 words."
+        f"This student is showing {predicted_label.lower()} cognitive load, but no strong behavior reason was detected "
+        "from the current explanation signals."
     )
 
 
@@ -206,62 +241,19 @@ def _generate_llm_text(system_prompt: str, user_prompt: str) -> tuple[str, str]:
 def _fallback_human_explanation(
     *,
     predicted_label: str,
-    confidence: float,
     factors: list[dict[str, Any]],
 ) -> str:
-    positive = [factor for factor in factors if factor["impact"] == "positive"]
-    strongest_positive = sorted(positive, key=lambda item: abs(item["weight"]), reverse=True)[:3]
+    reasons = _top_human_reasons_from_factors(factors, limit=3)
+    recommendation = _teacher_recommendation(predicted_label)
 
-    if strongest_positive:
-        joined = ", ".join(f"{item['rule']}" for item in strongest_positive)
-        return (
-            f"This learner is predicted as {predicted_label} (confidence {confidence:.2f}). "
-            f"The strongest factors increasing cognitive load are: {joined}. "
-            "Consider slowing the pace and adding short guidance checkpoints for this student."
-        )
+    if reasons:
+        joined = ", ".join(reasons)
+        return f"This student likely has {predicted_label.lower()} cognitive load because {joined}. {recommendation}"
 
-    strongest = sorted(factors, key=lambda item: abs(item["weight"]), reverse=True)[:3]
-    joined = ", ".join(f"{item['rule']}" for item in strongest) if strongest else "no strong factors detected"
     return (
-        f"This learner is predicted as {predicted_label} (confidence {confidence:.2f}). "
-        f"Top LIME signals are: {joined}. "
-        "Use this as a quick indicator and combine with teacher observation before intervention."
+        f"This student is showing {predicted_label.lower()} cognitive load, but no clear behavior reason was detected. "
+        f"{recommendation}"
     )
-
-
-def _generate_human_explanation(
-    *,
-    student_id: str,
-    lesson_id: str,
-    predicted_label: str,
-    predicted_score: int,
-    confidence: float,
-    factors: list[dict[str, Any]],
-) -> tuple[str, str]:
-    fallback = _fallback_human_explanation(
-        predicted_label=predicted_label,
-        confidence=confidence,
-        factors=factors,
-    )
-
-    system_prompt = (
-        "You are an educational analytics assistant. Provide concise, practical,"
-        " teacher-friendly explanations from model factors."
-    )
-    user_prompt = _build_human_prompt(
-        student_id=student_id,
-        lesson_id=lesson_id,
-        predicted_label=predicted_label,
-        predicted_score=predicted_score,
-        confidence=confidence,
-        factors=factors,
-    )
-
-    generated, source = _generate_llm_text(system_prompt, user_prompt)
-    if generated:
-        return generated, source
-
-    return fallback, "fallback"
 
 
 def _build_aggregate_prompt(
@@ -269,32 +261,18 @@ def _build_aggregate_prompt(
     student_id: str,
     lesson_id: str,
     predicted_label: str,
-    predicted_score: int,
-    confidence: float,
     top_signals: list[dict[str, Any]],
 ) -> str:
     signals_text = "\n".join(
-        (
-            f"- source: {item['source']}, signal: {item['signal']}, strength: {item['strength']:.6f}, "
-            f"impact: {item['impact']}, teacher meaning: {_signal_to_teacher_phrase(item['signal'])}"
-        )
+        f"- {_signal_to_teacher_phrase(item['signal'])}"
         for item in top_signals
-    )
+    ) if top_signals else "- no strong combined signal detected"
 
-    return (
-        "Write one short, natural teacher-friendly paragraph using combined LIME and SHAP evidence.\n"
-        f"Student ID: {student_id}\n"
-        f"Lesson ID: {lesson_id}\n"
-        f"Predicted cognitive load: {predicted_label} (score {predicted_score})\n"
-        f"Confidence: {confidence:.2f}\n"
-        "Top combined signals (LIME+SHAP):\n"
-        f"{signals_text}\n\n"
-        "Rules:\n"
-        "1) Explain the likely reason for high cognitive load in a natural sentence.\n"
-        "2) Mention the strongest signals and what they mean for the student.\n"
-        "3) Give one practical teacher action.\n"
-        "4) Avoid bullet points and keep under 120 words.\n"
-        "5) Use wording like: 'The student likely has high cognitive load because they paused the video often, spent a long time on the lesson, and revisited parts repeatedly.'"
+    return AGGREGATE_USER_PROMPT_TEMPLATE.format(
+        student_id=student_id,
+        lesson_id=lesson_id,
+        predicted_label=predicted_label,
+        signals_text=signals_text,
     )
 
 
@@ -330,30 +308,29 @@ def _top_aggregate_signals(
             }
         )
 
-    combined.sort(key=lambda entry: entry["strength"], reverse=True)
-    return combined[: max(1, limit)]
+    positive_only = [entry for entry in combined if entry["impact"] == "positive"]
+    ranked = positive_only or combined
+    ranked.sort(key=lambda entry: entry["strength"], reverse=True)
+    return ranked[: max(1, limit)]
 
 
 def _fallback_aggregate_explanation(
     *,
     predicted_label: str,
-    confidence: float,
     top_signals: list[dict[str, Any]],
 ) -> str:
+    recommendation = _teacher_recommendation(predicted_label)
+
     if not top_signals:
         return (
-            f"This learner is predicted as {predicted_label} (confidence {confidence:.2f}). "
-            "No strong combined LIME/SHAP signals were detected, so use teacher observation for final decisions."
+            f"This student is showing {predicted_label.lower()} cognitive load, but no strong combined behavior reason was detected. "
+            f"{recommendation}"
         )
 
-    highlights = ", ".join(
-        f"{item['source'].upper()}: {_signal_to_teacher_phrase(item['signal'])}"
-        for item in top_signals[:3]
-    )
+    highlights = ", ".join(_signal_to_teacher_phrase(item["signal"]) for item in top_signals[:3])
     return (
-        f"This learner is predicted as {predicted_label} (confidence {confidence:.2f}). "
-        f"Top combined signals are {highlights}. "
-        "This suggests the student may be struggling with the pace or structure of the lesson, so slow down, add checkpoints, and give brief support."
+        f"This student likely has {predicted_label.lower()} cognitive load because {highlights}. "
+        f"{recommendation}"
     )
 
 
@@ -368,20 +345,14 @@ def generate_aggregate_explanation(payload: AggregateExplanationRequest) -> dict
 
     fallback = _fallback_aggregate_explanation(
         predicted_label=payload.predicted_cognitive_load,
-        confidence=payload.confidence,
         top_signals=top_signals,
     )
 
-    system_prompt = (
-        "You are an educational analytics assistant. Create concise, practical, teacher-friendly"
-        " explanations from combined LIME and SHAP signals."
-    )
+    system_prompt = AGGREGATE_SYSTEM_PROMPT
     user_prompt = _build_aggregate_prompt(
         student_id=payload.student_id,
         lesson_id=payload.lesson_id,
         predicted_label=payload.predicted_cognitive_load,
-        predicted_score=payload.predicted_score,
-        confidence=payload.confidence,
         top_signals=top_signals,
     )
 
@@ -389,6 +360,12 @@ def generate_aggregate_explanation(payload: AggregateExplanationRequest) -> dict
     if not explanation_text:
         explanation_text = fallback
         source = "fallback"
+
+    aggregate_reasons = [_signal_to_teacher_phrase(item["signal"]) for item in top_signals[:3]]
+    why_cognitive_load_high = _why_cognitive_load_high_text(
+        payload.predicted_cognitive_load,
+        aggregate_reasons,
+    )
 
     return {
         "success": True,
@@ -401,6 +378,7 @@ def generate_aggregate_explanation(payload: AggregateExplanationRequest) -> dict
             "predicted_score": payload.predicted_score,
             "confidence": payload.confidence,
             "top_signals": top_signals,
+            "why_cognitive_load_high": why_cognitive_load_high,
             "human_explanation": explanation_text,
             "explanation_source": source,
         },
@@ -795,13 +773,16 @@ def get_lime_explanation_for_prediction(
         for rule, weight in explanation.as_list()
     ]
 
-    human_explanation, explanation_source = _generate_human_explanation(
-        student_id=target_row.student_id,
-        lesson_id=target_row.lesson_id,
+    human_explanation = _fallback_human_explanation(
         predicted_label=target_row.predicted_cognitive_load,
-        predicted_score=target_row.predicted_score,
-        confidence=target_row.confidence,
         factors=factors,
+    )
+    explanation_source = "fallback"
+
+    lime_reasons = _top_human_reasons_from_factors(factors, limit=3)
+    why_cognitive_load_high = _why_cognitive_load_high_text(
+        target_row.predicted_cognitive_load,
+        lime_reasons,
     )
 
     return {
@@ -816,6 +797,7 @@ def get_lime_explanation_for_prediction(
             "confidence": target_row.confidence,
             "intercept": float(explanation.intercept[0]) if explanation.intercept else 0.0,
             "factors": factors,
+            "why_cognitive_load_high": why_cognitive_load_high,
             "human_explanation": human_explanation,
             "explanation_source": explanation_source,
         },
