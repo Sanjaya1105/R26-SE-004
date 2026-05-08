@@ -349,13 +349,19 @@ export default function StudentAnalyse() {
               <div className="explanation-split-block">
                 <p className="split-block-title">Recommendation Part</p>
                 {recommendationItems.length ? (
-                  <div className="recommendation-list">
-                    {recommendationItems.map((item, index) => (
-                      <div key={`${index}-${item}`} className="recommendation-item">
-                        <span className="recommendation-item-number">{index + 1}</span>
-                        <p className="recommendation-item-text">{item}</p>
-                      </div>
-                    ))}
+                  <div>
+                    <div className="recommendation-header">
+                      <span className="rec-meta">Student: {aggregateExplanation?.student_id || limeExplanation?.student_id || 'N/A'}</span>
+                      <span className="rec-meta">Cognitive Load: {aggregateExplanation?.predicted_cognitive_load || limeExplanation?.predicted_cognitive_load || 'N/A'}</span>
+                    </div>
+                    <div className="recommendation-list">
+                      {recommendationItems.map((item, index) => (
+                        <div key={`${index}-${item}`} className="recommendation-item">
+                          <span className="recommendation-item-number">{index + 1}</span>
+                          <p className="recommendation-item-text">{item}</p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ) : (
                   <p className="human-explanation-text">No recommendation text returned.</p>

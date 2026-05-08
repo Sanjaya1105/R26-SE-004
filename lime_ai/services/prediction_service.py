@@ -4,6 +4,7 @@ from typing import Any
 from fastapi import HTTPException
 import httpx
 import numpy as np
+import re
 from lime.lime_tabular import LimeTabularExplainer
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -76,6 +77,7 @@ LECTURE_SUPPORT_USER_PROMPT_TEMPLATE = (
     "Cognitive Load Level: {predicted_label}\n"
     "Behavioral Signals: {signals_text}\n\n"
     "Rules:\n"
+    "0) Do NOT include greetings or salutations (for example 'Hello', 'Good afternoon'). Start directly with the numbered strategies.\n"
     "1) Create 3-5 specific, actionable strategies tailored to their cognitive load level.\n"
     "2) Start with the most urgent/important strategy first.\n"
     "3) Each strategy should be something the student can do immediately or in the next study session.\n"
@@ -547,6 +549,10 @@ def _generate_lecture_support(
         # Keep only the actual strategies
         if start_index > 0:
             support_text = '\n'.join(lines[start_index:]).strip()
+        # Strip common greetings/salutations at the start (e.g., "Good afternoon, student!")
+        support_text = re.sub(r'^(?:\s*(?:hello|hi|dear student|dear learner|greetings|good (?:morning|afternoon|evening)|dear)[^\n]*\n)+', '', support_text, flags=re.I).strip()
+        # Also remove a short leading sentence that is just a salutation followed by punctuation
+        support_text = re.sub(r'^(?:\s*(?:hello|hi|dear student|dear learner|greetings|good (?:morning|afternoon|evening))[\.!,-:;]*\s*)+', '', support_text, flags=re.I).strip()
     
     return {
         "strategies": support_text if support_text else "Unable to generate strategies at this time.",
