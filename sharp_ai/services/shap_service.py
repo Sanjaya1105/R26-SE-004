@@ -250,7 +250,7 @@ def get_shap_explanation_for_prediction(
         db.query(CognitiveLoadPrediction)
         .filter(CognitiveLoadPrediction.lesson_id == lesson_id)
         .order_by(CognitiveLoadPrediction.created_at.desc(), CognitiveLoadPrediction.id.desc())
-        .limit(120)
+        .limit(50)
         .all()
     )
 
@@ -278,7 +278,7 @@ def get_shap_explanation_for_prediction(
     try:
         shap_values = explainer.shap_values(
             target_vector,
-            nsamples=max(30, num_samples),
+            nsamples=max(25, num_samples),
         )
     except ModelClientError as exc:
         raise HTTPException(

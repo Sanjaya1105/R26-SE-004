@@ -64,6 +64,44 @@ AGGREGATE_USER_PROMPT_TEMPLATE = (
     "7) Use wording like: 'You may be feeling high cognitive load because you paused the video often, spent a long time on the lesson, and revisited parts repeatedly. Try focusing on one section at a time and taking short breaks before moving forward.'"
 )
 
+LECTURE_SUPPORT_SYSTEM_PROMPT = (
+    "You are an experienced educational support advisor. Provide personalized, actionable lecture support "
+    "strategies for students based on their cognitive load level and behavioral patterns."
+)
+
+LECTURE_SUPPORT_USER_PROMPT_TEMPLATE = (
+    "Generate specific lecture support strategies for this student:\n"
+    "Student ID: {student_id}\n"
+    "Lesson ID: {lesson_id}\n"
+    "Cognitive Load Level: {predicted_label}\n"
+    "Behavioral Signals: {signals_text}\n\n"
+    "Rules:\n"
+    "1) Create 3-5 specific, actionable strategies tailored to their cognitive load level.\n"
+    "2) Start with the most urgent/important strategy first.\n"
+    "3) Each strategy should be something the student can do immediately or in the next study session.\n"
+    "4) Use simple, direct language (no jargon).\n"
+    "5) Format as a numbered list.\n"
+    "6) Keep total length under 150 words.\n"
+    "7) If cognitive load is Very High, emphasize immediate relief strategies.\n"
+    "8) If cognitive load is Low/Medium, emphasize mastery and deeper engagement.\n"
+    "Example format:\n"
+    "1) [Specific action] - This will help you [benefit]\n"
+    "2) [Specific action] - This will help you [benefit]\n"
+    "Do not include generic advice. Make it specific to their signals."
+)
+
+STUDY_TECHNIQUE_SYSTEM_PROMPT = (
+    "You are a learning advisor. Recommend 1-2 study techniques for students."
+)
+
+STUDY_TECHNIQUE_USER_PROMPT_TEMPLATE = (
+    "Student cognitive load: {predicted_label}\n"
+    "Behavioral signals: {signals_text}\n\n"
+    "Recommend 1-2 techniques from: Mind Map, Short Notes, Concept Map, Flowchart, Cornell Notes\n"
+    "Return ONLY technique names, one per line. No explanation needed.\n"
+    "Example:\nMind Map\nShort Notes"
+)
+
 
 def _has_gpt_api_key() -> bool:
     return bool(settings.GPT_API_KEY and settings.GPT_API_KEY.strip())
@@ -334,6 +372,173 @@ def _fallback_aggregate_explanation(
     )
 
 
+def _get_all_study_technique_links() -> dict[str, dict[str, Any]]:
+    """Return available study techniques with minimal info."""
+    return {
+        "mind map": {
+            "title": "Mind Map",
+            "emoji": "🧠",
+            "link": "https://mindmeister.com/app/map/new",
+            "link_text": "Create Mind Map",
+        },
+        "short notes": {
+            "title": "Short Notes",
+            "emoji": "📝",
+            "link": "https://www.notion.so/",
+            "link_text": "Start Taking Notes",
+        },
+        "concept map": {
+            "title": "Concept Map",
+            "emoji": "🔗",
+            "link": "https://app.creately.com/",
+            "link_text": "Create Concept Map",
+        },
+        "flowchart": {
+            "title": "Flowchart",
+            "emoji": "📊",
+            "link": "https://www.lucidchart.com/",
+            "link_text": "Create Flowchart",
+        },
+        "cornell notes": {
+            "title": "Cornell Notes",
+            "emoji": "📄",
+            "link": "https://www.evernote.com/",
+            "link_text": "Start Cornell Notes",
+        }
+    }
+
+
+def _parse_ollama_technique_response(response_text: str) -> list[str]:
+    """Parse Ollama's response to extract technique names."""
+    technique_names = []
+    all_techniques = set(_get_all_study_technique_links().keys())
+    
+    lines = response_text.strip().split("\n")
+    
+    for line in lines:
+        line_lower = line.lower().strip()
+        for technique in all_techniques:
+            if technique in line_lower:
+                if technique not in technique_names:
+                    technique_names.append(technique)
+                break
+    
+    return technique_names
+
+
+def _build_study_technique_prompt(
+    student_id: str,
+    lesson_id: str,
+    predicted_label: str,
+    top_signals: list[dict[str, Any]],
+) -> str:
+    """Build the study technique recommendation prompt for Ollama."""
+    signals_text = "\n".join(
+        f"- {_signal_to_teacher_phrase(item['signal'])}"
+        for item in top_signals
+    ) if top_signals else "- no strong signals detected"
+    
+    return STUDY_TECHNIQUE_USER_PROMPT_TEMPLATE.format(
+        student_id=student_id,
+        lesson_id=lesson_id,
+        predicted_label=predicted_label,
+        signals_text=signals_text,
+    )
+
+
+def _get_study_technique_recommendation(
+    student_id: str,
+    lesson_id: str,
+    predicted_label: str,
+    top_signals: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Generate study technique recommendations using Ollama."""
+    user_prompt = _build_study_technique_prompt(
+        student_id=student_id,
+        lesson_id=lesson_id,
+        predicted_label=predicted_label,
+        top_signals=top_signals,
+    )
+    
+    recommendation_text, source = _generate_llm_text(STUDY_TECHNIQUE_SYSTEM_PROMPT, user_prompt)
+    
+    # Parse recommended techniques from response
+    recommended_techniques = _parse_ollama_technique_response(recommendation_text)
+    
+    # Build techniques array with links
+    techniques_with_links = []
+    all_links = _get_all_study_technique_links()
+    
+    for technique_name in recommended_techniques:
+        if technique_name in all_links:
+            technique_data = all_links[technique_name]
+            techniques_with_links.append({
+                "technique": technique_name,
+                "title": technique_data["title"],
+                "emoji": technique_data["emoji"],
+                "link": technique_data["link"],
+                "link_text": technique_data["link_text"],
+            })
+    
+    # Fallback to Mind Map if nothing recommended
+    if not techniques_with_links:
+        mind_map = all_links["mind map"]
+        techniques_with_links.append({
+            "technique": "mind map",
+            "title": mind_map["title"],
+            "emoji": mind_map["emoji"],
+            "link": mind_map["link"],
+            "link_text": mind_map["link_text"],
+        })
+    
+    return {
+        "techniques": techniques_with_links,
+        "source": source,
+    }
+
+
+def _build_lecture_support_prompt(
+    student_id: str,
+    lesson_id: str,
+    predicted_label: str,
+    top_signals: list[dict[str, Any]],
+) -> str:
+    """Build the lecture support prompt for Ollama."""
+    signals_text = "\n".join(
+        f"- {_signal_to_teacher_phrase(item['signal'])}"
+        for item in top_signals
+    ) if top_signals else "- no strong signals detected"
+    
+    return LECTURE_SUPPORT_USER_PROMPT_TEMPLATE.format(
+        student_id=student_id,
+        lesson_id=lesson_id,
+        predicted_label=predicted_label,
+        signals_text=signals_text,
+    )
+
+
+def _generate_lecture_support(
+    student_id: str,
+    lesson_id: str,
+    predicted_label: str,
+    top_signals: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Generate lecture support recommendations using Ollama."""
+    user_prompt = _build_lecture_support_prompt(
+        student_id=student_id,
+        lesson_id=lesson_id,
+        predicted_label=predicted_label,
+        top_signals=top_signals,
+    )
+    
+    support_text, source = _generate_llm_text(LECTURE_SUPPORT_SYSTEM_PROMPT, user_prompt)
+    
+    return {
+        "strategies": support_text if support_text else "Unable to generate strategies at this time.",
+        "source": source,
+    }
+
+
 def generate_aggregate_explanation(payload: AggregateExplanationRequest) -> dict[str, Any]:
     lime_factors = [factor.model_dump(mode="json") for factor in payload.lime_factors]
     shap_values = [item.model_dump(mode="json") for item in payload.shap_values]
@@ -367,6 +572,22 @@ def generate_aggregate_explanation(payload: AggregateExplanationRequest) -> dict
         aggregate_reasons,
     )
 
+    # Generate study technique recommendations via Ollama
+    study_technique = _get_study_technique_recommendation(
+        student_id=payload.student_id,
+        lesson_id=payload.lesson_id,
+        predicted_label=payload.predicted_cognitive_load,
+        top_signals=top_signals,
+    )
+
+    # Generate lecture support via Ollama
+    lecture_support = _generate_lecture_support(
+        student_id=payload.student_id,
+        lesson_id=payload.lesson_id,
+        predicted_label=payload.predicted_cognitive_load,
+        top_signals=top_signals,
+    )
+
     return {
         "success": True,
         "message": "Aggregate explanation generated successfully.",
@@ -381,6 +602,8 @@ def generate_aggregate_explanation(payload: AggregateExplanationRequest) -> dict
             "why_cognitive_load_high": why_cognitive_load_high,
             "human_explanation": explanation_text,
             "explanation_source": source,
+            "study_technique": study_technique,
+            "lecture_support": lecture_support,
         },
         "errors": [],
     }
@@ -596,6 +819,7 @@ def list_predictions_filtered(
     lesson_id: str,
     student_id: str | None = None,
     high_only: bool = False,
+    include_medium: bool = False,
     limit: int = 200,
 ) -> dict[str, Any]:
     query = db.query(CognitiveLoadPrediction).filter(CognitiveLoadPrediction.lesson_id == lesson_id)
@@ -604,7 +828,10 @@ def list_predictions_filtered(
         query = query.filter(CognitiveLoadPrediction.student_id == student_id)
 
     if high_only:
-        query = query.filter(CognitiveLoadPrediction.predicted_cognitive_load.in_(["High", "Very High"]))
+        if include_medium:
+            query = query.filter(CognitiveLoadPrediction.predicted_cognitive_load.in_(["Medium", "High", "Very High"]))
+        else:
+            query = query.filter(CognitiveLoadPrediction.predicted_cognitive_load.in_(["High", "Very High"]))
 
     rows = (
         query
@@ -718,7 +945,7 @@ def get_lime_explanation_for_prediction(
         db.query(CognitiveLoadPrediction)
         .filter(CognitiveLoadPrediction.lesson_id == lesson_id)
         .order_by(CognitiveLoadPrediction.created_at.desc(), CognitiveLoadPrediction.id.desc())
-        .limit(150)
+        .limit(50)
         .all()
     )
 
@@ -751,7 +978,7 @@ def get_lime_explanation_for_prediction(
             data_row=target_vector,
             predict_fn=lambda matrix: _predict_scores_for_matrix(matrix, target_row),
             num_features=max(1, min(num_features, len(RAW_FEATURE_FIELDS))),
-            num_samples=max(60, num_samples),
+            num_samples=max(50, num_samples),
         )
     except ModelClientError as exc:
         raise HTTPException(

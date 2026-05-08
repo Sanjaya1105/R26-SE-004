@@ -89,6 +89,7 @@ export default function StudentAnalyse() {
       const rows = await fetchLimePredictions(selectedLessonId, {
         studentId: selectedStudentId,
         highOnly: true,
+        includeMedium: true,
         limit: 500,
       });
       setPredictions(rows ?? []);
@@ -100,9 +101,9 @@ export default function StudentAnalyse() {
       setSelectedAnalysisRowId(null);
 
       if (!rows?.length) {
-        setStatusMessage('No High/Very High cognitive load records found for this selection.');
+        setStatusMessage('No Medium, High, or Very High cognitive load records found for this selection.');
       } else {
-        setStatusMessage(`Loaded ${rows.length} high-load records.`);
+        setStatusMessage(`Loaded ${rows.length} medium, high, and very high-load records.`);
       }
     } catch (err) {
       setError(err.message);
@@ -121,14 +122,18 @@ export default function StudentAnalyse() {
       setAggregateError('');
       setShapError('');
 
+      // Fixed sample sizes for all cognitive load levels
+      const limeSamples = 50;   // LIME: 50 samples
+      const shapSamples = 25;   // SHAP: 25 samples
+
       const [limeResult, shapResult] = await Promise.allSettled([
         fetchLimeExplanation(selectedLessonId, row.id, {
           numFeatures: 8,
-          numSamples: 200,
+          numSamples: limeSamples,
         }),
         fetchShapExplanation(selectedLessonId, row.id, {
           numFeatures: 8,
-          numSamples: 50,
+          numSamples: shapSamples,
         }),
       ]);
 
@@ -231,7 +236,7 @@ export default function StudentAnalyse() {
         </label>
 
         <button onClick={handleShowHighLoad} disabled={!selectedLessonId || loading}>
-          {loading ? 'Loading...' : 'Show High Cognitive Load'}
+          {loading ? 'Loading...' : 'Show Medium, High & Very High Cognitive Load'}
         </button>
       </section>
 
@@ -239,7 +244,7 @@ export default function StudentAnalyse() {
       {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
 
       <section className="student-analyse-results glass-panel">
-        <h2>High and Very High Results</h2>
+        <h2>Medium, High and Very High Results</h2>
 
         {!predictions.length ? (
           <p className="empty-state">No results loaded yet.</p>
@@ -267,7 +272,7 @@ export default function StudentAnalyse() {
                     <td>{row.student_id}</td>
                     <td>{row.minute_index}</td>
                     <td>
-                      <span className={`load-badge ${row.predicted_cognitive_load === 'Very High' ? 'very-high' : 'high'}`}>
+                      <span className={`load-badge ${row.predicted_cognitive_load === 'Very High' ? 'very-high' : row.predicted_cognitive_load === 'High' ? 'high' : 'medium'}`}>
                         {row.predicted_cognitive_load}
                       </span>
                     </td>
@@ -310,9 +315,26 @@ export default function StudentAnalyse() {
               <p className="human-explanation-source">
                 Source: {(aggregateExplanation?.explanation_source || limeExplanation.explanation_source || 'fallback').toUpperCase()}
               </p>
-              <p className="human-explanation-text">
-                {aggregateExplanation?.human_explanation || limeExplanation.human_explanation || 'No explanation text returned.'}
-              </p>
+
+              <div className="explanation-split-block">
+                <p className="split-block-title">Explanation Output</p>
+                <p className="human-explanation-text">
+                  {aggregateExplanation?.why_cognitive_load_high ||
+                    limeExplanation.why_cognitive_load_high ||
+                    shapExplanation?.summary ||
+                    'No explanation text returned.'}
+                </p>
+              </div>
+
+              <div className="explanation-split-block">
+                <p className="split-block-title">Recommendation Part</p>
+                <p className="human-explanation-text">
+                  {aggregateExplanation?.human_explanation ||
+                    limeExplanation.human_explanation ||
+                    'No recommendation text returned.'}
+                </p>
+              </div>
+
               {aggregateError ? <p className="aggregate-error-text">{aggregateError}</p> : null}
               {aggregateExplanation?.top_signals?.length ? (
                 <div className="aggregate-top-signals">
@@ -327,6 +349,49 @@ export default function StudentAnalyse() {
                 </div>
               ) : null}
             </div>
+
+            {aggregateExplanation?.study_technique ? (
+              <div className="student-support-card study-technique-card">
+                <div className="support-card-header">
+                  <p className="support-card-title">📚 Recommended Techniques</p>
+                  <p className="support-source">AI (Source: {aggregateExplanation.study_technique.source?.toUpperCase() || 'AI'})</p>
+                </div>
+
+                {aggregateExplanation.study_technique.techniques?.length ? (
+                  <div className="techniques-list">
+                    {aggregateExplanation.study_technique.techniques.map((tech, index) => (
+                      <div key={`${tech.technique}-${index}`} className="technique-item">
+                        <span className="technique-emoji-title">
+                          {tech.emoji} {tech.title}
+                        </span>
+                        <a
+                          href={tech.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="technique-link-btn"
+                        >
+                          {tech.link_text}
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {aggregateExplanation?.lecture_support ? (
+              <div className="student-support-card lecture-support-card">
+                <div className="support-card-header">
+                  <p className="support-card-title">📚 Personalized Lecture Support</p>
+                  <p className="support-source">Source: {aggregateExplanation.lecture_support.source?.toUpperCase() || 'AI'}</p>
+                </div>
+                <div className="support-strategies">
+                  <p className="strategies-text">
+                    {aggregateExplanation.lecture_support.strategies || 'No strategies available.'}
+                  </p>
+                </div>
+              </div>
+            ) : null}
 
             <div className="results-table-wrapper">
               <table>

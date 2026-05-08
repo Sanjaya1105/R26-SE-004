@@ -52,6 +52,7 @@ def get_lesson_predictions(
     lesson_id: str,
     student_id: str | None = None,
     high_only: bool = False,
+    include_medium: bool = False,
     limit: int = 200,
     db: Session = Depends(get_db),
 ):
@@ -60,6 +61,7 @@ def get_lesson_predictions(
         lesson_id=lesson_id,
         student_id=student_id,
         high_only=high_only,
+        include_medium=include_medium,
         limit=limit,
     )
 

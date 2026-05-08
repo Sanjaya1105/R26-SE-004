@@ -203,6 +203,19 @@
   line-height: 1.55;
 }
 
+.explanation-split-block {
+  margin-top: 0.7rem;
+  padding-top: 0.6rem;
+  border-top: 1px dashed rgba(255, 255, 255, 0.14);
+}
+
+.split-block-title {
+  font-weight: 700;
+  font-size: 0.86rem;
+  margin-bottom: 0.25rem;
+  color: #e2e8f0;
+}
+
 .aggregate-error-text {
   margin-top: 0.55rem;
   color: #fecaca;
@@ -260,6 +273,181 @@
   background: rgba(148, 163, 184, 0.2);
   color: #cbd5e1;
   border: 1px solid rgba(148, 163, 184, 0.42);
+}
+
+/* Student Support Cards */
+.student-support-card {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.support-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.support-card-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #e2e8f0;
+  margin: 0;
+}
+
+.support-source {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin: 0;
+}
+
+.support-card-description {
+  font-size: 0.9rem;
+  color: #cbd5e1;
+  line-height: 1.5;
+  margin-bottom: 0.75rem;
+}
+
+.support-button {
+  display: inline-block;
+  padding: 0.65rem 1.2rem;
+  border: 1px solid rgba(59, 130, 246, 0.5);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(37, 99, 235, 0.2));
+  color: #bfdbfe;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 0.75rem;
+}
+
+.support-button:hover {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.35), rgba(37, 99, 235, 0.35));
+  border-color: rgba(59, 130, 246, 0.8);
+}
+
+.mindmap-card {
+  border-left: 4px solid #3b82f6;
+}
+
+.study-technique-card {
+  border-left: 4px solid #8b5cf6;
+}
+
+.lecture-support-card {
+  border-left: 4px solid #10b981;
+}
+
+.techniques-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.technique-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 6px;
+  background: rgba(139, 92, 246, 0.08);
+  gap: 1rem;
+}
+
+.technique-emoji-title {
+  font-weight: 500;
+  color: #e9d5ff;
+  font-size: 0.9rem;
+  flex: 1;
+}
+
+.technique-link-btn {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid rgba(139, 92, 246, 0.5);
+  background: rgba(139, 92, 246, 0.15);
+  color: #e9d5ff;
+  border-radius: 4px;
+  text-decoration: none;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.technique-link-btn:hover {
+  background: rgba(139, 92, 246, 0.3);
+  border-color: rgba(139, 92, 246, 0.8);
+  color: #f3e8ff;
+}
+
+.recommendation-text {
+  font-size: 0.9rem;
+  color: #cbd5e1;
+  line-height: 1.5;
+  margin: 0.75rem 0;
+  padding: 0.5rem;
+  background: rgba(139, 92, 246, 0.1);
+  border-left: 2px solid rgba(139, 92, 246, 0.5);
+  border-radius: 4px;
+}
+
+.study-technique-button {
+  border-color: rgba(139, 92, 246, 0.5);
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(168, 85, 247, 0.2));
+  color: #e9d5ff;
+}
+
+.study-technique-button:hover {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.35), rgba(168, 85, 247, 0.35));
+  border-color: rgba(139, 92, 246, 0.8);
+}
+
+.support-tips {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed rgba(255, 255, 255, 0.12);
+}
+
+.tips-title {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #cbd5e1;
+  margin-bottom: 0.5rem;
+}
+
+.tips-list {
+  margin: 0;
+  padding-left: 1.5rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.tips-list li {
+  font-size: 0.85rem;
+  color: #a0aec0;
+  line-height: 1.4;
+}
+
+.support-strategies {
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.strategies-text {
+  font-size: 0.9rem;
+  color: #cbd5e1;
+  line-height: 1.6;
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
 @media (max-width: 768px) {
