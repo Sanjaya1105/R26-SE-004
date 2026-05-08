@@ -533,6 +533,21 @@ def _generate_lecture_support(
     
     support_text, source = _generate_llm_text(LECTURE_SUPPORT_SYSTEM_PROMPT, user_prompt)
     
+    # Remove prompt details if Ollama echoed them back
+    if support_text:
+        # Find where the actual strategies start (after the input section)
+        lines = support_text.split('\n')
+        start_index = 0
+        for i, line in enumerate(lines):
+            # Look for numbered strategies (1), 2), 3), etc.)
+            if line.strip() and line.strip()[0].isdigit() and ')' in line.strip()[:3]:
+                start_index = i
+                break
+        
+        # Keep only the actual strategies
+        if start_index > 0:
+            support_text = '\n'.join(lines[start_index:]).strip()
+    
     return {
         "strategies": support_text if support_text else "Unable to generate strategies at this time.",
         "source": source,

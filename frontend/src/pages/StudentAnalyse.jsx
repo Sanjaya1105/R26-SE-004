@@ -11,6 +11,30 @@ import {
 import { fetchShapExplanation } from '../shap/apiClient';
 import '../styles/studentAnalyse.css';
 
+function formatRecommendationItems(text) {
+  if (!text) return [];
+
+  const normalized = String(text).replace(/\r/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!normalized) return [];
+
+  const numberedText = normalized.replace(/\s+(?=\d+[).]\s+)/g, '\n');
+  const numberedItems = numberedText
+    .split('\n')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => item.replace(/^\s*(?:-|\d+[).:-])\s*/, '').trim())
+    .filter(Boolean);
+
+  if (numberedItems.length > 1) {
+    return numberedItems;
+  }
+
+  return normalized
+    .split(/(?<=[.!?])\s+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 export default function StudentAnalyse() {
   const [lessons, setLessons] = useState([]);
   const [students, setStudents] = useState([]);
@@ -27,6 +51,10 @@ export default function StudentAnalyse() {
   const [shapError, setShapError] = useState('');
   const [error, setError] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
+
+  const recommendationItems = formatRecommendationItems(
+    aggregateExplanation?.human_explanation || limeExplanation?.human_explanation || '',
+  );
 
   const navigate = useNavigate();
 
@@ -328,11 +356,18 @@ export default function StudentAnalyse() {
 
               <div className="explanation-split-block">
                 <p className="split-block-title">Recommendation Part</p>
-                <p className="human-explanation-text">
-                  {aggregateExplanation?.human_explanation ||
-                    limeExplanation.human_explanation ||
-                    'No recommendation text returned.'}
-                </p>
+                {recommendationItems.length ? (
+                  <div className="recommendation-list">
+                    {recommendationItems.map((item, index) => (
+                      <div key={`${index}-${item}`} className="recommendation-item">
+                        <span className="recommendation-item-number">{index + 1}</span>
+                        <p className="recommendation-item-text">{item}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="human-explanation-text">No recommendation text returned.</p>
+                )}
               </div>
 
               {aggregateError ? <p className="aggregate-error-text">{aggregateError}</p> : null}
@@ -376,20 +411,6 @@ export default function StudentAnalyse() {
                     ))}
                   </div>
                 ) : null}
-              </div>
-            ) : null}
-
-            {aggregateExplanation?.lecture_support ? (
-              <div className="student-support-card lecture-support-card">
-                <div className="support-card-header">
-                  <p className="support-card-title">📚 Personalized Lecture Support</p>
-                  <p className="support-source">Source: {aggregateExplanation.lecture_support.source?.toUpperCase() || 'AI'}</p>
-                </div>
-                <div className="support-strategies">
-                  <p className="strategies-text">
-                    {aggregateExplanation.lecture_support.strategies || 'No strategies available.'}
-                  </p>
-                </div>
               </div>
             ) : null}
 
