@@ -227,9 +227,9 @@ export default function StudentAnalyse() {
         </button>
         <div>
           <p className="eyebrow">Student Analyse</p>
-          <h1>High Cognitive Load Monitor</h1>
+          <h1>Student Cognitive Load Monitor</h1>
           <p className="hero-copy">
-            Select lesson and student from LIME AI records, then display High and Very High cognitive-load results.
+            Select lesson and student from Database, then display High , Very High and medium cognitive-load results.
           </p>
         </div>
       </header>
