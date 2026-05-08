@@ -241,7 +241,7 @@ export default function StudentAnalyse() {
             <option value="">Select a lesson</option>
             {lessons.map((lesson) => (
               <option key={lesson.lesson_id} value={lesson.lesson_id}>
-                Lesson {lesson.lesson_id} ({lesson.prediction_count} records)
+                Lesson {lesson.lesson_id}
               </option>
             ))}
           </select>
@@ -257,7 +257,7 @@ export default function StudentAnalyse() {
             <option value="">All students in lesson</option>
             {students.map((student) => (
               <option key={student.student_id} value={student.student_id}>
-                Student {student.student_id} ({student.prediction_count} records)
+                Student {student.student_id}
               </option>
             ))}
           </select>
@@ -281,21 +281,16 @@ export default function StudentAnalyse() {
             <table>
               <thead>
                 <tr>
-                  <th>ID</th>
                   <th>Lesson</th>
                   <th>Student</th>
                   <th>Minute</th>
                   <th>Cognitive Load</th>
-                  <th>Score</th>
-                  <th>Confidence</th>
-                  <th>Created At</th>
                   <th>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {predictions.map((row) => (
                   <tr key={row.id}>
-                    <td>{row.id}</td>
                     <td>{row.lesson_id}</td>
                     <td>{row.student_id}</td>
                     <td>{row.minute_index}</td>
@@ -304,9 +299,6 @@ export default function StudentAnalyse() {
                         {row.predicted_cognitive_load}
                       </span>
                     </td>
-                    <td>{row.predicted_score}</td>
-                    <td>{Number(row.confidence).toFixed(2)}</td>
-                    <td>{row.created_at ? new Date(row.created_at).toLocaleString() : '-'}</td>
                     <td>
                       <button
                         className={`raw-analyse-btn ${selectedAnalysisRowId === row.id ? 'active' : ''}`}
