@@ -529,7 +529,6 @@ export default function GazeTracker({
 
   return (
     <div style={{ padding: 20, fontFamily: "sans-serif" }}>
-      <h2>GEFT Gaze Tracker</h2>
 
       <Webcam
         ref={webcamRef}
@@ -542,65 +541,13 @@ export default function GazeTracker({
           facingMode: "user",
         }}
         style={{
-          width: 420,
-          borderRadius: 12,
-          border: "1px solid #ccc",
+          position: "absolute",
+    opacity: 0,
+    pointerEvents: "none",
+    width: 1,
+    height: 1,
         }}
       />
-
-      <div style={{ marginTop: 16 }}>
-        <p>
-          <strong>Model Ready:</strong> {isModelReady ? "Yes" : "No"}
-        </p>
-        <p>
-          <strong>Session Active:</strong> {sessionActive ? "Yes" : "No"}
-        </p>
-        <p>
-          <strong>Current Question ID:</strong>{" "}
-          {currentQuestionId ?? "None"}
-        </p>
-        <p>
-          <strong>Face Present:</strong> {liveMetrics.facePresent ? "Yes" : "No"}
-        </p>
-        <p>
-          <strong>Gaze Direction:</strong> {liveMetrics.gazeDirection}
-        </p>
-        <p>
-          <strong>Yaw:</strong> {liveMetrics.yaw}
-        </p>
-        <p>
-          <strong>Pitch:</strong> {liveMetrics.pitch}
-        </p>
-        <p>
-          <strong>Eye Offset X:</strong> {liveMetrics.eyeOffsetX}
-        </p>
-        <p>
-          <strong>Eye Offset Y:</strong> {liveMetrics.eyeOffsetY}
-        </p>
-        <p>
-          <strong>Avg Eye Openness:</strong> {liveMetrics.avgEyeOpenness}
-        </p>
-        <p>
-          <strong>Blink Detected:</strong>{" "}
-          {liveMetrics.blinkDetected ? "Yes" : "No"}
-        </p>
-        <p>
-          <strong>Gaze Confidence:</strong> {liveMetrics.gazeConfidence}
-        </p>
-        <p>
-          <strong>Eye Movement Magnitude:</strong>{" "}
-          {liveMetrics.eyeMovementMagnitude}
-        </p>
-      </div>
-
-      <div style={{ marginTop: 24, padding: 12, border: "1px solid #ddd" }}>
-        <h3>Last 5s Aggregated Window</h3>
-        <pre style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>
-          {lastPostedWindow
-            ? JSON.stringify(lastPostedWindow, null, 2)
-            : "No 5-second window posted yet."}
-        </pre>
-      </div>
     </div>
   );
 }

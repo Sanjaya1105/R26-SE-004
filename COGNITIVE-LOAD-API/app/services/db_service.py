@@ -88,6 +88,21 @@ def save_feature_window(feature_data: dict):
             quiz_response_time,
             error_rate
         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            id = LAST_INSERT_ID(id),
+            window_start = VALUES(window_start),
+            window_end = VALUES(window_end),
+            pause_frequency = VALUES(pause_frequency),
+            navigation_count_video = VALUES(navigation_count_video),
+            rewatch_segments = VALUES(rewatch_segments),
+            playback_rate_change = VALUES(playback_rate_change),
+            idle_duration_video = VALUES(idle_duration_video),
+            time_on_content = VALUES(time_on_content),
+            navigation_count_adaptation = VALUES(navigation_count_adaptation),
+            revisit_frequency = VALUES(revisit_frequency),
+            idle_duration_adaptation = VALUES(idle_duration_adaptation),
+            quiz_response_time = VALUES(quiz_response_time),
+            error_rate = VALUES(error_rate)
     """
     values = (
         feature_data["student_id"],

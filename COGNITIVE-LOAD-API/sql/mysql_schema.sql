@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS feature_windows (
     error_rate FLOAT NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
+    UNIQUE KEY uq_feature_session_minute (student_id, lesson_id, session_id, minute_index),
     INDEX idx_feature_student_lesson_minute (student_id, lesson_id, minute_index),
     INDEX idx_feature_session_window (session_id, window_start, window_end)
 );

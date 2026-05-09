@@ -93,80 +93,190 @@ export default function AssistQuestionPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 px-4 py-10">
-      <div className="mx-auto max-w-4xl rounded-2xl bg-white p-6 shadow-lg md:p-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900">
-            Learner Profile Assessment
-          </h1>
-          <p className="mt-2 text-sm text-slate-600">
-            Answer each question from 1 to 5. These responses can later be used
-            to predict the learner profile: Organized Deep, Unorganized Deep,
-            Unreflective, or Dissonant.
-          </p>
-        </div>
+  <div
+    style={{
+      width: "100%",
+      minHeight: "100vh",
+      padding: "2rem",
+      background: "radial-gradient(circle at top right, #1e1b4b, var(--background))",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "flex-start",
+      boxSizing: "border-box",
+    }}
+  >
+    <div
+      className="glass-panel"
+      style={{
+        width: "100%",
+        maxWidth: "900px",
+        padding: "2.5rem",
+      }}
+    >
+      <div style={{ marginBottom: "2rem" }}>
+        <h1
+          className="gradient-text"
+          style={{
+            fontSize: "2rem",
+            fontWeight: 700,
+            marginBottom: "0.75rem",
+          }}
+        >
+          Learner Profile Assessment
+        </h1>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {questions.map((question, index) => (
-            <div
-              key={index}
-              className="rounded-xl border border-slate-200 p-4 transition hover:border-slate-300"
+        <p
+          style={{
+            color: "var(--text-muted)",
+            fontSize: "0.95rem",
+            lineHeight: 1.6,
+          }}
+        >
+          Answer each question from 1 to 5. These responses can later be used
+          to predict the learner profile: Organized Deep, Unorganized Deep,
+          Unreflective, or Dissonant.
+        </p>
+      </div>
+
+      <form
+        onSubmit={handleSubmit}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "1.5rem",
+        }}
+      >
+        {questions.map((question, index) => (
+          <div
+            key={index}
+            style={{
+              padding: "1.25rem",
+              borderRadius: "12px",
+              backgroundColor: "rgba(15, 23, 42, 0.45)",
+              border: "1px solid var(--surface-light)",
+              transition: "all 0.3s ease",
+            }}
+          >
+            <p
+              style={{
+                color: "var(--text)",
+                fontSize: "1rem",
+                fontWeight: 500,
+                lineHeight: 1.6,
+                marginBottom: "1rem",
+              }}
             >
-              <p className="mb-4 text-base font-medium text-slate-800">
-                {index + 1}. {question}
-              </p>
+              {index + 1}. {question}
+            </p>
 
-              <div className="flex flex-wrap gap-3">
-                {scaleOptions.map((option) => (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "0.75rem",
+              }}
+            >
+              {scaleOptions.map((option) => {
+                const selected = answers[index] === option;
+
+                return (
                   <label
                     key={option}
-                    className={`flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition ${answers[index] === option
-                      ? "border-blue-600 bg-blue-50 text-blue-700"
-                      : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
-                      }`}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "0.5rem",
+                      minWidth: "54px",
+                      padding: "0.65rem 1rem",
+                      borderRadius: "8px",
+                      border: selected
+                        ? "1px solid var(--primary)"
+                        : "1px solid var(--surface-light)",
+                      background: selected
+                        ? "rgba(79, 70, 229, 0.18)"
+                        : "rgba(15, 23, 42, 0.5)",
+                      color: selected ? "var(--text)" : "var(--text-muted)",
+                      fontSize: "0.95rem",
+                      fontWeight: 500,
+                      cursor: "pointer",
+                      transition: "all 0.3s ease",
+                    }}
                   >
                     <input
                       type="radio"
                       name={`question-${index}`}
                       value={option}
-                      checked={answers[index] === option}
+                      checked={selected}
                       onChange={(e) => handleChange(index, e.target.value)}
-                      className="h-4 w-4"
+                      style={{
+                        width: "16px",
+                        height: "16px",
+                        accentColor: "var(--primary)",
+                      }}
                     />
                     {option}
                   </label>
-                ))}
-              </div>
+                );
+              })}
             </div>
-          ))}
-
-          {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error}
-            </div>
-          )}
-
-          {success && (
-            <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-              {success}
-            </div>
-          )}
-
-          <div className="flex items-center justify-between gap-4 pt-2">
-            <p className="text-sm text-slate-500">
-              Scale: 1 = strongly disagree, 5 = strongly agree
-            </p>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {loading ? "Submitting..." : "Submit Answers"}
-            </button>
           </div>
-        </form>
-      </div>
+        ))}
+
+        {error && (
+          <div className="error-message" style={{ marginBottom: 0 }}>
+            {error}
+          </div>
+        )}
+
+        {success && (
+          <div
+            style={{
+              backgroundColor: "rgba(16, 185, 129, 0.1)",
+              color: "var(--success)",
+              padding: "0.75rem 1rem",
+              borderRadius: "8px",
+              fontSize: "0.875rem",
+              border: "1px solid rgba(16, 185, 129, 0.2)",
+            }}
+          >
+            {success}
+          </div>
+        )}
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "1rem",
+            paddingTop: "0.5rem",
+            flexWrap: "wrap",
+          }}
+        >
+          <p
+            style={{
+              color: "var(--text-muted)",
+              fontSize: "0.875rem",
+            }}
+          >
+            Scale: 1 = strongly disagree, 5 = strongly agree
+          </p>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="btn btn-primary"
+            style={{
+              opacity: loading ? 0.6 : 1,
+              cursor: loading ? "not-allowed" : "pointer",
+            }}
+          >
+            {loading ? "Submitting..." : "Submit Answers"}
+          </button>
+        </div>
+      </form>
     </div>
-  );
+  </div>
+);
 }

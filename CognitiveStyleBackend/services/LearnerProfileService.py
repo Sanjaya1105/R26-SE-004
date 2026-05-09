@@ -34,3 +34,14 @@ async def generate_learner_profile(user_id: str):
         "factor_scores": factors,
         "learner_profile": profile
     }
+
+#Sanjaya Request to return only Leaner profile
+async def generate_learner_profile_return_profile_only(user_id: str):
+    result = await generate_learner_profile(user_id)
+
+    if not result:
+        return None
+
+    return {
+        "learner_profile": result["learner_profile"]
+    }

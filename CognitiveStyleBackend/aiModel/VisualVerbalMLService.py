@@ -69,3 +69,25 @@ async def predict_visual_verbal_ml(session_id: str):
         "probabilities": probabilities,
         "features": feature_row,
     }
+
+#Sanjaya requested Function to return only the prediction
+async def predict_visual_verbal_ml_Return_Only_Prediction(session_id: str):
+    model, feature_columns = load_model_once()
+
+    feature_row = await build_visual_verbal_feature_row(session_id)
+    if not feature_row:
+        return {"error": "Missing simple cursor or gaze data"}
+
+    df = pd.DataFrame([feature_row])
+
+    for col in feature_columns:
+        if col not in df.columns:
+            df[col] = 0
+
+    df = df[feature_columns]
+
+    prediction = model.predict(df)[0]
+
+    return {
+        "prediction": prediction
+    }

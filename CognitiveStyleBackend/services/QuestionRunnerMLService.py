@@ -138,3 +138,27 @@ async def predict_question_runner_cognitive_style(session_id: str):
         "correctnessRatio": feature_row["correctnessRatio"],
         "features": feature_row,
     }
+
+#Sanjaya requested Function to return only the prediction
+async def predict_question_runner_cognitive_style_prediction_only(session_id: str):
+    model, feature_columns = load_model_once()
+
+    built = await build_feature_row(session_id)
+    if not built:
+        return {"error": "No gaze or cursor data found for this session"}
+
+    feature_row = built["features"]
+
+    df = pd.DataFrame([feature_row])
+
+    for col in feature_columns:
+        if col not in df.columns:
+            df[col] = 0
+
+    df = df[feature_columns]
+
+    prediction = model.predict(df)[0]
+
+    return {
+        "cognitiveStyle": prediction
+    }

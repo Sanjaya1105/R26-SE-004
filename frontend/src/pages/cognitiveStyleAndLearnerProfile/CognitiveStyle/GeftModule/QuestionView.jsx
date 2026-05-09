@@ -28,12 +28,14 @@ export default function QuestionView({
             key={opt.id}
             onClick={() => onSelect(opt.id)}
             style={{
-              ...styles.optionCard,
-              border:
-                selectedAnswer === opt.id
-                  ? "3px solid #2563eb"
-                  : "1px solid #ccc",
-            }}
+  ...styles.optionCard,
+  border:
+    selectedAnswer === opt.id
+      ? "2px solid #2563eb"
+      : "1px solid #e2e8f0",
+  background:
+    selectedAnswer === opt.id ? "#eff6ff" : "#ffffff",
+}}
           >
             <p style={styles.optionLabel}>{opt.id}</p>
 
@@ -53,48 +55,62 @@ const styles = {
   container: {
     display: "flex",
     flexDirection: "column",
-    gap: "20px",
+    alignItems: "center",
+    gap: "30px",
   },
 
   section: {
+    width: "100%",
+    maxWidth: "600px",
     textAlign: "center",
   },
 
   complexImage: {
-    maxWidth: "100%",
-    height: "auto",
-    border: "1px solid #ccc",
-    borderRadius: "8px",
+    width: "100%",
+    maxHeight: "300px",
+    objectFit: "contain",
+    border: "1px solid #e2e8f0",
+    borderRadius: "12px",
+    padding: "10px",
+    background: "#f9fafb",
   },
 
   prompt: {
-    marginTop: "10px",
+    marginTop: "14px",
     fontSize: "18px",
     fontWeight: "600",
+    color: "#1e293b",
   },
 
   optionsContainer: {
     display: "flex",
-    justifyContent: "space-around",
-    gap: "20px",
+    justifyContent: "center",
+    flexWrap: "wrap",
+    gap: "24px",
+    width: "100%",
   },
 
   optionCard: {
+    width: "140px",
     cursor: "pointer",
-    padding: "10px",
-    borderRadius: "10px",
-    background: "#fff",
+    padding: "14px",
+    borderRadius: "14px",
+    background: "#ffffff",
     textAlign: "center",
-    transition: "0.2s",
+    transition: "all 0.2s ease",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
   },
 
   optionLabel: {
-    fontWeight: "bold",
-    marginBottom: "6px",
+    fontWeight: "600",
+    fontSize: "16px",
+    marginBottom: "8px",
+    color: "#0f172a",
   },
 
   optionImage: {
-    width: "120px",
-    height: "auto",
+    width: "100%",
+    height: "90px",
+    objectFit: "contain",
   },
 };

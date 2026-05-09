@@ -1,4 +1,4 @@
-import React, { useMemo,useEffect, useRef } from "react";
+import React, { useMemo, useEffect, useRef } from "react";
 
 const WINDOW_MS = 5000;
 const API_URL = "http://localhost:4000/cognitive-style/simple/cursor-summary";
@@ -39,6 +39,7 @@ function createEmptyWindow(startTime) {
 }
 
 export default function CursorTracker() {
+  const hasScrolledRef = useRef(false);
   const lastPointRef = useRef(null);
   const lastZoneRef = useRef("UNKNOWN");
   const lastMoveTimeRef = useRef(Date.now());
@@ -48,7 +49,7 @@ export default function CursorTracker() {
 
   const bufferRef = useRef(createEmptyWindow(Date.now()));
 
-    const userPayload = useMemo(() => {
+  const userPayload = useMemo(() => {
     const token = localStorage.getItem("token");
     if (!token) return null;
 
@@ -181,7 +182,11 @@ export default function CursorTracker() {
         zoneSwitchCount: w.zoneSwitchCount,
       };
 
-      sendSummary(summary);
+      if (hasScrolledRef.current) {
+        sendSummary(summary);
+      } else {
+        console.log("Cursor summary skipped because user has not scrolled yet:", summary);
+      }
 
       bufferRef.current = createEmptyWindow(now);
 
@@ -264,8 +269,10 @@ export default function CursorTracker() {
 
       if (zone === "VISUAL") {
         bufferRef.current.scrollCountVisual += 1;
+        hasScrolledRef.current = true;
       } else if (zone === "TEXT") {
         bufferRef.current.scrollCountText += 1;
+        hasScrolledRef.current = true;
       }
     }
 
