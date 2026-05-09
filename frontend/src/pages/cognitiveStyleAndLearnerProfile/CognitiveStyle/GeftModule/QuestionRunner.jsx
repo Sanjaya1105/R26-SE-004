@@ -225,13 +225,13 @@ export default function QuestionRunner() {
 
             {sessionStarted && (
                 <div style={styles.layout}>
-                    <div style={styles.leftPanel}>
+                    
                         <GazeTracker
                             sessionActive={sessionStarted}
                             currentQuestionId={currentQuestion?.id ?? null}
                             onWindowReady={handleGazeWindow}
                         />
-                    </div>
+               
 
                     <div style={styles.rightPanel}>
                         <CursorTracker
@@ -338,22 +338,15 @@ const styles = {
         lineHeight: 1.6,
         marginBottom: "12px",
     },
-    layout: {
-        display: "grid",
-        gridTemplateColumns: "420px 1fr",
-        gap: "20px",
-        alignItems: "start",
-    },
-    leftPanel: {
-        display: "flex",
-        flexDirection: "column",
-        gap: "16px",
-    },
-    rightPanel: {
-        display: "flex",
-        flexDirection: "column",
-        gap: "16px",
-    },
+layout: {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "flex-start",
+},
+rightPanel: {
+    width: "100%",
+    maxWidth: "1100px",
+},
     card: {
         background: "#ffffff",
         border: "1px solid #e2e8f0",
