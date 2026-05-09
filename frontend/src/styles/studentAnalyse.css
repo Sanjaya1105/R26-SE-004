@@ -6,11 +6,17 @@
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+  background: linear-gradient(180deg, #eff6ff 0%, #f8fbff 35%, #f8fafc 100%);
+  border-radius: 18px;
 }
 
 .student-analyse-header {
   display: grid;
   gap: 0.85rem;
+  padding: 1.3rem;
+  border: 1px solid #dbeafe;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #ffffff, #eff6ff);
 }
 
 .student-analyse-header .eyebrow {
@@ -31,12 +37,16 @@
 
 .back-button {
   width: fit-content;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
   color: var(--text);
   padding: 0.55rem 0.9rem;
   border-radius: 10px;
   cursor: pointer;
+}
+
+.back-button:hover {
+  background: #f8fafc;
 }
 
 .student-analyse-toolbar {
@@ -44,6 +54,8 @@
   gap: 1rem;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   padding: 1.25rem;
+  border: 1px solid #dbeafe;
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
 }
 
 .student-analyse-toolbar label {
@@ -57,17 +69,17 @@
   width: 100%;
   padding: 0.68rem 0.75rem;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
   color: var(--text);
 }
 
 .student-analyse-toolbar button {
   align-self: end;
   padding: 0.72rem 1rem;
-  border: 1px solid rgba(217, 70, 239, 0.5);
-  background: linear-gradient(135deg, rgba(217, 70, 239, 0.28), rgba(236, 72, 153, 0.28));
-  color: #fdf4ff;
+  border: 1px solid #60a5fa;
+  background: linear-gradient(135deg, #2563eb, #3b82f6);
+  color: #ffffff;
   border-radius: 10px;
   cursor: pointer;
   font-weight: 600;
@@ -80,6 +92,8 @@
 
 .student-analyse-results {
   padding: 1.2rem;
+  border: 1px solid #dbeafe;
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
 }
 
 .student-analyse-results h2 {
@@ -101,7 +115,7 @@
 .summary-table td {
   text-align: left;
   padding: 0.85rem 0.7rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid #e2e8f0;
   font-size: 0.95rem;
   vertical-align: middle;
 }
@@ -136,7 +150,7 @@
 .results-table-wrapper td {
   text-align: left;
   padding: 0.7rem 0.55rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid #e2e8f0;
   font-size: 0.92rem;
 }
 
@@ -156,21 +170,21 @@
 }
 
 .load-badge.high {
-  background: rgba(245, 158, 11, 0.22);
-  color: #fcd34d;
-  border: 1px solid rgba(245, 158, 11, 0.45);
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fcd34d;
 }
 
 .load-badge.very-high {
-  background: rgba(239, 68, 68, 0.2);
-  color: #fca5a5;
-  border: 1px solid rgba(239, 68, 68, 0.42);
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
 }
 
 .raw-analyse-btn {
-  border: 1px solid rgba(59, 130, 246, 0.45);
-  background: rgba(59, 130, 246, 0.18);
-  color: #bfdbfe;
+  border: 1px solid #60a5fa;
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  color: #1e3a8a;
   border-radius: 8px;
   padding: 0.35rem 0.55rem;
   cursor: pointer;
@@ -179,9 +193,9 @@
 }
 
 .raw-analyse-btn.active {
-  border-color: rgba(16, 185, 129, 0.5);
-  background: rgba(16, 185, 129, 0.18);
-  color: #a7f3d0;
+  border-color: #1d4ed8;
+  background: linear-gradient(135deg, #2563eb, #3b82f6);
+  color: #ffffff;
 }
 
 .raw-analyse-btn:disabled {
@@ -205,16 +219,16 @@
 
 .shap-summary {
   padding: 0.8rem 0.9rem;
-  border-left: 3px solid rgba(59, 130, 246, 0.7);
-  background: rgba(59, 130, 246, 0.08);
+  border-left: 3px solid #60a5fa;
+  background: #eff6ff;
   border-radius: 10px;
-  color: #dbeafe;
+  color: #1e3a8a;
   line-height: 1.5;
 }
 
 .human-explanation-card {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
   border-radius: 12px;
   padding: 0.85rem 0.95rem;
 }
@@ -244,9 +258,9 @@
   gap: 0.7rem;
   align-items: flex-start;
   padding: 0.7rem 0.8rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid #e2e8f0;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
+  background: #f8fafc;
 }
 
 .recommendation-item-number {
@@ -256,9 +270,9 @@
   min-width: 1.55rem;
   height: 1.55rem;
   border-radius: 999px;
-  background: rgba(16, 185, 129, 0.18);
-  border: 1px solid rgba(16, 185, 129, 0.35);
-  color: #a7f3d0;
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
+  color: #1e3a8a;
   font-size: 0.78rem;
   font-weight: 700;
   line-height: 1;
@@ -267,7 +281,7 @@
 
 .recommendation-item-text {
   margin: 0;
-  color: #cbd5e1;
+  color: #334155;
   font-size: 0.9rem;
   line-height: 1.6;
   flex: 1;
@@ -282,35 +296,35 @@
 
 .rec-meta {
   font-size: 0.85rem;
-  color: #94a3b8;
-  background: rgba(255,255,255,0.02);
+  color: #64748b;
+  background: #f8fafc;
   padding: 0.35rem 0.6rem;
   border-radius: 6px;
-  border: 1px solid rgba(255,255,255,0.04);
+  border: 1px solid #e2e8f0;
 }
 
 .explanation-split-block {
   margin-top: 0.7rem;
   padding-top: 0.6rem;
-  border-top: 1px dashed rgba(255, 255, 255, 0.14);
+  border-top: 1px dashed #cbd5e1;
 }
 
 .split-block-title {
   font-weight: 700;
   font-size: 0.86rem;
   margin-bottom: 0.25rem;
-  color: #e2e8f0;
+  color: #334155;
 }
 
 .aggregate-error-text {
   margin-top: 0.55rem;
-  color: #fecaca;
+  color: #b91c1c;
   font-size: 0.82rem;
 }
 
 .aggregate-top-signals {
   margin-top: 0.7rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 1px solid #e2e8f0;
   padding-top: 0.6rem;
 }
 
@@ -329,7 +343,7 @@
 
 .aggregate-top-signals li {
   font-size: 0.82rem;
-  color: #cbd5e1;
+  color: #334155;
 }
 
 .impact-badge {
@@ -344,30 +358,30 @@
 }
 
 .impact-badge.positive {
-  background: rgba(16, 185, 129, 0.2);
-  color: #a7f3d0;
-  border: 1px solid rgba(16, 185, 129, 0.45);
+  background: #dbeafe;
+  color: #1e3a8a;
+  border: 1px solid #93c5fd;
 }
 
 .impact-badge.negative {
-  background: rgba(239, 68, 68, 0.2);
-  color: #fca5a5;
-  border: 1px solid rgba(239, 68, 68, 0.42);
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
 }
 
 .impact-badge.neutral {
-  background: rgba(148, 163, 184, 0.2);
-  color: #cbd5e1;
-  border: 1px solid rgba(148, 163, 184, 0.42);
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
 }
 
 /* Student Support Cards */
 .student-support-card {
   margin-top: 1rem;
   padding: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
-  background: rgba(15, 23, 42, 0.5);
+  background: #ffffff;
 }
 
 .support-card-header {
@@ -380,7 +394,7 @@
 .support-card-title {
   font-weight: 700;
   font-size: 0.95rem;
-  color: #e2e8f0;
+  color: #334155;
   margin: 0;
 }
 
@@ -392,7 +406,7 @@
 
 .support-card-description {
   font-size: 0.9rem;
-  color: #cbd5e1;
+  color: #334155;
   line-height: 1.5;
   margin-bottom: 0.75rem;
 }
@@ -400,9 +414,9 @@
 .support-button {
   display: inline-block;
   padding: 0.65rem 1.2rem;
-  border: 1px solid rgba(59, 130, 246, 0.5);
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(37, 99, 235, 0.2));
-  color: #bfdbfe;
+  border: 1px solid #60a5fa;
+  background: linear-gradient(135deg, #2563eb, #3b82f6);
+  color: #ffffff;
   border-radius: 8px;
   text-decoration: none;
   font-size: 0.9rem;
@@ -413,8 +427,8 @@
 }
 
 .support-button:hover {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.35), rgba(37, 99, 235, 0.35));
-  border-color: rgba(59, 130, 246, 0.8);
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  border-color: #1d4ed8;
 }
 
 .mindmap-card {
@@ -441,24 +455,24 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem;
-  border: 1px solid rgba(139, 92, 246, 0.3);
+  border: 1px solid #d8b4fe;
   border-radius: 6px;
-  background: rgba(139, 92, 246, 0.08);
+  background: #faf5ff;
   gap: 1rem;
 }
 
 .technique-emoji-title {
   font-weight: 500;
-  color: #e9d5ff;
+  color: #6b21a8;
   font-size: 0.9rem;
   flex: 1;
 }
 
 .technique-link-btn {
   padding: 0.5rem 0.75rem;
-  border: 1px solid rgba(139, 92, 246, 0.5);
-  background: rgba(139, 92, 246, 0.15);
-  color: #e9d5ff;
+  border: 1px solid #d8b4fe;
+  background: #f3e8ff;
+  color: #6b21a8;
   border-radius: 4px;
   text-decoration: none;
   font-size: 0.8rem;
@@ -467,43 +481,43 @@
 }
 
 .technique-link-btn:hover {
-  background: rgba(139, 92, 246, 0.3);
-  border-color: rgba(139, 92, 246, 0.8);
-  color: #f3e8ff;
+  background: #e9d5ff;
+  border-color: #c084fc;
+  color: #581c87;
 }
 
 .recommendation-text {
   font-size: 0.9rem;
-  color: #cbd5e1;
+  color: #334155;
   line-height: 1.5;
   margin: 0.75rem 0;
   padding: 0.5rem;
-  background: rgba(139, 92, 246, 0.1);
-  border-left: 2px solid rgba(139, 92, 246, 0.5);
+  background: #faf5ff;
+  border-left: 2px solid #c084fc;
   border-radius: 4px;
 }
 
 .study-technique-button {
-  border-color: rgba(139, 92, 246, 0.5);
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(168, 85, 247, 0.2));
-  color: #e9d5ff;
+  border-color: #d8b4fe;
+  background: linear-gradient(135deg, #f5f3ff, #ede9fe);
+  color: #6b21a8;
 }
 
 .study-technique-button:hover {
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.35), rgba(168, 85, 247, 0.35));
-  border-color: rgba(139, 92, 246, 0.8);
+  background: linear-gradient(135deg, #ede9fe, #ddd6fe);
+  border-color: #c084fc;
 }
 
 .support-tips {
   margin-top: 0.75rem;
   padding-top: 0.75rem;
-  border-top: 1px dashed rgba(255, 255, 255, 0.12);
+  border-top: 1px dashed #cbd5e1;
 }
 
 .tips-title {
   font-weight: 600;
   font-size: 0.85rem;
-  color: #cbd5e1;
+  color: #334155;
   margin-bottom: 0.5rem;
 }
 
@@ -516,24 +530,42 @@
 
 .tips-list li {
   font-size: 0.85rem;
-  color: #a0aec0;
+  color: #64748b;
   line-height: 1.4;
 }
 
 .support-strategies {
   padding: 0.75rem;
-  background: rgba(255, 255, 255, 0.03);
+  background: #f8fafc;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid #e2e8f0;
 }
 
 .strategies-text {
   font-size: 0.9rem;
-  color: #cbd5e1;
+  color: #334155;
   line-height: 1.6;
   margin: 0;
   white-space: pre-wrap;
   word-wrap: break-word;
+}
+
+.alert {
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  border: 1px solid transparent;
+}
+
+.alert.error {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.alert.success {
+  background: #ecfdf3;
+  color: #166534;
+  border-color: #86efac;
 }
 
 @media (max-width: 768px) {

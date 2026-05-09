@@ -109,8 +109,18 @@ const LessonSummary = () => {
   };
 
   return (
-    <div style={{ width: '100%' }}>
-      <nav className="navbar glass-panel" style={{ borderRadius: 0, borderTop: 'none', borderLeft: 'none', borderRight: 'none' }}>
+    <div style={{ width: '100%', background: 'linear-gradient(180deg, #eff6ff 0%, #f8fbff 28%, #f8fafc 100%)' }}>
+      <nav
+        className="navbar glass-panel"
+        style={{
+          borderRadius: 0,
+          borderTop: 'none',
+          borderLeft: 'none',
+          borderRight: 'none',
+          background: 'rgba(255, 255, 255, 0.95)',
+          boxShadow: '0 10px 22px -18px rgba(37, 99, 235, 0.7)'
+        }}
+      >
         <div>
           <h1 className="gradient-text" style={{ fontSize: '1.5rem', fontWeight: 700, cursor: 'pointer' }} onClick={() => navigate('/dashboard')}>EduPortal</h1>
         </div>
@@ -119,25 +129,25 @@ const LessonSummary = () => {
           <button
             onClick={() => navigate('/dashboard')}
             className="btn"
-            style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', border: '1px solid rgba(255, 255, 255, 0.2)' }}
+            style={{ background: 'linear-gradient(135deg, #eff6ff, #dbeafe)', color: '#1e3a8a', border: '1px solid #93c5fd' }}
           >
             Dashboard
           </button>
-          <button onClick={handleLogout} className="btn" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+          <button onClick={handleLogout} className="btn" style={{ backgroundColor: '#fef2f2', color: 'var(--danger)', border: '1px solid #fecaca' }}>
             Logout
           </button>
         </div>
       </nav>
 
       <main className="container">
-        <div style={{ marginBottom: '2rem' }}>
+        <div className="glass-panel" style={{ marginBottom: '2rem', padding: '1.8rem', border: '1px solid #dbeafe', background: 'linear-gradient(135deg, #ffffff, #eff6ff)' }}>
           <h2 style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>Lesson Summary (Recommendation AI)</h2>
-          <p style={{ color: 'var(--text-muted)' }}>Select a lesson to analyze student cognitive loads and generate a box plot.</p>
+          <p style={{ color: '#334155' }}>Select a lesson to analyze student cognitive loads and generate a box plot.</p>
         </div>
 
         {error && <div className="error-message">{error}</div>}
 
-        <div className="glass-panel" style={{ padding: '2rem', marginBottom: '2rem' }}>
+        <div className="glass-panel" style={{ padding: '2rem', marginBottom: '2rem', border: '1px solid #dbeafe', background: 'linear-gradient(180deg, #ffffff, #f8fbff)' }}>
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
             <div style={{ flex: 1 }}>
               <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-muted)' }}>Select Lesson</label>
@@ -145,7 +155,7 @@ const LessonSummary = () => {
                 value={selectedLesson} 
                 onChange={(e) => setSelectedLesson(e.target.value)} 
                 className="input-field" 
-                style={{ width: '100%' }}
+                style={{ width: '100%', backgroundColor: '#ffffff', color: 'var(--text)', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0.7rem 0.8rem' }}
               >
                 <option value="">-- Dropdown List --</option>
                 {lessons.map((lesson, idx) => (
@@ -158,7 +168,7 @@ const LessonSummary = () => {
                 onClick={handleAnalyze} 
                 disabled={loading} 
                 className="btn" 
-                style={{ backgroundColor: 'var(--primary)', color: '#fff' }}
+                style={{ background: 'linear-gradient(135deg, #2563eb, #3b82f6)', color: '#fff', border: '1px solid #1d4ed8' }}
               >
                 {loading ? 'Analyzing...' : 'Analyze & Show Boxplot'}
               </button>
@@ -167,12 +177,12 @@ const LessonSummary = () => {
         </div>
 
         {chartData.length > 0 && chartData[0].data.length > 0 && (
-          <div className="glass-panel" style={{ padding: '2rem', minHeight: '400px', marginBottom: '2rem' }}>
+          <div className="glass-panel" style={{ padding: '2rem', minHeight: '400px', marginBottom: '2rem', border: '1px solid #dbeafe', background: 'linear-gradient(180deg, #ffffff, #f8fbff)' }}>
             <h3 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Box Plot: Avg Pause Frequency by Cognitive Load Level</h3>
             <ReactApexChart 
               options={{
                 chart: { type: 'boxPlot', height: 350, toolbar: { show: false } },
-                colors: ['#008FFB', '#FEB019'],
+                colors: ['#2563eb', '#60a5fa'],
                 title: { text: 'Distribution within Load Categories', align: 'left', style: { color: 'var(--text-muted)' } },
                 xaxis: { 
                   type: 'category',
@@ -184,9 +194,9 @@ const LessonSummary = () => {
                   labels: { style: { colors: 'var(--text-muted)' } }
                 },
                 plotOptions: {
-                  boxPlot: { colors: { upper: '#5C4742', lower: '#A5978B' } }
+                  boxPlot: { colors: { upper: '#3b82f6', lower: '#93c5fd' } }
                 },
-                grid: { borderColor: 'rgba(255,255,255,0.1)' }
+                grid: { borderColor: '#e2e8f0' }
               }} 
               series={chartData} 
               type="boxPlot" 
@@ -196,27 +206,27 @@ const LessonSummary = () => {
         )}
 
         {recommendationData && (
-          <div className="glass-panel" style={{ padding: '2rem', marginBottom: '2rem', backgroundColor: 'rgba(34, 197, 94, 0.05)', border: '1px solid rgba(34, 197, 94, 0.2)' }}>
-            <h3 style={{ marginBottom: '1rem', color: '#86efac', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div className="glass-panel" style={{ padding: '2rem', marginBottom: '2rem', background: 'linear-gradient(180deg, #ffffff, #eff6ff)', border: '1px solid #bfdbfe' }}>
+            <h3 style={{ marginBottom: '1rem', color: '#1e3a8a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <span style={{ fontSize: '1.5rem' }}>💡</span> Next Lesson Recommendation
             </h3>
             
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-              <div className="stat-card" style={{ background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '8px' }}>
+              <div className="stat-card" style={{ background: '#ffffff', padding: '1rem', borderRadius: '8px', border: '1px solid #dbeafe', boxShadow: 'none' }}>
                 <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Majority Cognitive Load</div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{recommendationData.majorityLoad}</div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#1d4ed8' }}>{recommendationData.majorityLoad}</div>
               </div>
-              <div className="stat-card" style={{ background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '8px' }}>
+              <div className="stat-card" style={{ background: '#ffffff', padding: '1rem', borderRadius: '8px', border: '1px solid #dbeafe', boxShadow: 'none' }}>
                 <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Avg Pause Frequency</div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{recommendationData.stats.pause}</div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#2563eb' }}>{recommendationData.stats.pause}</div>
               </div>
-              <div className="stat-card" style={{ background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '8px' }}>
+              <div className="stat-card" style={{ background: '#ffffff', padding: '1rem', borderRadius: '8px', border: '1px solid #dbeafe', boxShadow: 'none' }}>
                 <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Avg Error Rate</div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{recommendationData.stats.error}</div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#1e40af' }}>{recommendationData.stats.error}</div>
               </div>
             </div>
 
-            <div style={{ backgroundColor: 'rgba(0,0,0,0.2)', padding: '1.5rem', borderRadius: '8px', borderLeft: '4px solid #86efac' }}>
+            <div style={{ backgroundColor: '#ffffff', padding: '1.5rem', borderRadius: '8px', border: '1px solid #bfdbfe', borderLeft: '4px solid #3b82f6' }}>
               <p style={{ lineHeight: '1.6', fontSize: '1.1rem' }}>
                 {recommendationData.recommendation}
               </p>

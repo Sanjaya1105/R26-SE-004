@@ -50,6 +50,14 @@ const Dashboard = () => {
     navigate('/login');
   };
 
+  const quickActions = [
+    { label: 'Upload Lesson', path: '/upload-lesson' },
+    { label: 'Teacher Analyze', path: '/teacher-analysis' },
+    { label: 'Student Analyse', path: '/student-analyse' },
+    { label: 'Chat Assistant', path: '/gpt' },
+    { label: 'Lesson Summary', path: '/lesson-summary' }
+  ];
+
   if (loading) {
     return (
       <div className="auth-container">
@@ -59,84 +67,100 @@ const Dashboard = () => {
   }
 
   return (
-    <div style={{ width: '100%' }}>
-      <nav className="navbar glass-panel" style={{ borderRadius: 0, borderTop: 'none', borderLeft: 'none', borderRight: 'none' }}>
+    <div style={{ width: '100%', background: 'linear-gradient(180deg, #f0f7ff 0%, #f8fbff 30%, #f8fafc 100%)' }}>
+      <nav
+        className="navbar glass-panel"
+        style={{
+          borderRadius: 0,
+          borderTop: 'none',
+          borderLeft: 'none',
+          borderRight: 'none',
+          background: 'rgba(255, 255, 255, 0.95)',
+          boxShadow: '0 10px 20px -18px rgba(37, 99, 235, 0.65)'
+        }}
+      >
         <div>
           <h1 className="gradient-text" style={{ fontSize: '1.5rem', fontWeight: 700 }}>EduPortal</h1>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <span style={{ color: 'var(--text-muted)' }}>Hello, {user.name}</span>
+          {quickActions.map((action) => (
+            <button
+              key={action.path}
+              type="button"
+              onClick={() => navigate(action.path)}
+              className="btn"
+              style={{
+                background: 'linear-gradient(135deg, #eff6ff, #dbeafe)',
+                color: '#1e3a8a',
+                border: '1px solid #93c5fd'
+              }}
+            >
+              {action.label}
+            </button>
+          ))}
           <button
-            type="button"
-            onClick={() => navigate('/upload-lesson')}
+            onClick={handleLogout}
             className="btn"
-            style={{ backgroundColor: 'rgba(34, 197, 94, 0.12)', color: '#86efac', border: '1px solid rgba(34, 197, 94, 0.35)' }}
+            style={{ backgroundColor: '#fff1f2', color: '#be123c', border: '1px solid #fecdd3' }}
           >
-            Upload Lesson
-          </button>
-          <button
-            onClick={() => navigate('/teacher-analysis')}
-            className="btn"
-            style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)', color: '#93c5fd', border: '1px solid rgba(59, 130, 246, 0.35)' }}
-          >
-            Teacher Analyze
-          </button>
-          <button
-            onClick={() => navigate('/student-analyse')}
-            className="btn"
-            style={{ backgroundColor: 'rgba(217, 70, 239, 0.16)', color: '#f5d0fe', border: '1px solid rgba(217, 70, 239, 0.4)' }}
-          >
-            Student Analyse
-          </button>
-          <button
-            onClick={() => navigate('/gpt')}
-            className="btn"
-            style={{ backgroundColor: 'rgba(168, 85, 247, 0.15)', color: '#d8b4fe', border: '1px solid rgba(168, 85, 247, 0.35)' }}
-          >
-            Chat Assistant
-          </button>
-          <button
-            onClick={() => navigate('/lesson-summary')}
-            className="btn"
-            style={{ backgroundColor: 'rgba(168, 85, 247, 0.15)', color: '#d8b4fe', border: '1px solid rgba(168, 85, 247, 0.35)' }}
-          >
-            Lesson Summary
-          </button>
-          <button onClick={handleLogout} className="btn" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
             Logout
           </button>
         </div>
       </nav>
 
       <main className="container">
-        <div style={{ marginBottom: '2rem' }}>
-          <h2 style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>Overview</h2>
-          <p style={{ color: 'var(--text-muted)' }}>Welcome to your personalized teacher dashboard.</p>
+        <div
+          className="glass-panel"
+          style={{
+            marginBottom: '2rem',
+            padding: '2rem',
+            background: 'linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%)',
+            border: '1px solid #dbeafe'
+          }}
+        >
+          <h2 style={{ fontSize: '2rem', marginBottom: '0.5rem', color: '#0f172a' }}>Overview</h2>
+          <p style={{ color: '#334155' }}>Welcome to your personalized teacher dashboard.</p>
         </div>
 
         {error && <div className="error-message">{error}</div>}
 
         {data && (
           <div className="stats-grid">
-            <div className="stat-card glass-panel">
+            <div className="stat-card glass-panel" style={{ border: '1px solid #dbeafe' }}>
               <span className="stat-title">Active Courses</span>
-              <span className="stat-value">{data.dashboardData.activeCourses}</span>
+              <span className="stat-value" style={{ color: '#1d4ed8' }}>{data.dashboardData.activeCourses}</span>
             </div>
 
-            <div className="stat-card glass-panel">
+            <div className="stat-card glass-panel" style={{ border: '1px solid #dbeafe' }}>
               <span className="stat-title">Total Students</span>
-              <span className="stat-value">{data.dashboardData.totalStudents}</span>
+              <span className="stat-value" style={{ color: '#2563eb' }}>{data.dashboardData.totalStudents}</span>
             </div>
 
-            <div className="stat-card glass-panel" style={{ borderTop: '4px solid var(--secondary)' }}>
+            <div
+              className="stat-card glass-panel"
+              style={{
+                border: '1px solid #bfdbfe',
+                borderTop: '4px solid #3b82f6',
+                background: 'linear-gradient(180deg, #ffffff 0%, #f8fbff 100%)'
+              }}
+            >
               <span className="stat-title">Upcoming Classes</span>
-              <span className="stat-value">{data.dashboardData.upcomingClasses}</span>
+              <span className="stat-value" style={{ color: '#1e40af' }}>{data.dashboardData.upcomingClasses}</span>
             </div>
           </div>
         )}
 
-        <div className="glass-panel" style={{ marginTop: '2rem', padding: '2rem' }}>
-          <h3 style={{ marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
+        <div
+          className="glass-panel"
+          style={{
+            marginTop: '2rem',
+            padding: '2rem',
+            border: '1px solid #dbeafe',
+            background: 'linear-gradient(180deg, #ffffff 0%, #f8fbff 100%)'
+          }}
+        >
+          <h3 style={{ marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid #e2e8f0' }}>
             Recent Activity
           </h3>
           <p style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>

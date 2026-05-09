@@ -62,3 +62,9 @@ export async function fetchAggregateExplanation(payload) {
     body: JSON.stringify(payload),
   });
 }
+
+export async function createStudentLessonSummary(lessonId, studentId) {
+  return request(`/lessons/${lessonId}/students/${studentId}/summary`, {
+    method: 'POST',
+  });
+}
