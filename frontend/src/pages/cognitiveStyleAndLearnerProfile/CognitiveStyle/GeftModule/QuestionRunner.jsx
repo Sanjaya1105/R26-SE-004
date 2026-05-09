@@ -209,19 +209,61 @@ export default function QuestionRunner() {
         <div style={styles.page}>
             <h1 style={styles.title}>GEFT Question Runner</h1>
 
-            {!sessionStarted && !sessionEnded && (
-                <div style={styles.card}>
-                    <p style={styles.text}>
-                        This is the common parent component for your GEFT flow.
-                    </p>
-                    <p style={styles.text}>
-                        Questions are intentionally left blank for now.
-                    </p>
-                    <button style={styles.primaryButton} onClick={handleStartSession}>
-                        Start Session
-                    </button>
-                </div>
-            )}
+           {!sessionStarted && !sessionEnded && (
+    <div style={styles.card}>
+        <h2 style={styles.subtitle}>Before You Begin</h2>
+
+        <p style={styles.text}>
+            You are about to start the <strong>Group Embedded Figures Test</strong>,
+            commonly known as <strong>GEFT</strong>.
+        </p>
+
+        <p style={styles.text}>
+            GEFT is a cognitive-style activity used to understand how a person
+            identifies simple shapes hidden inside more complex figures. It helps
+            analyze whether a learner tends to process information more independently
+            from surrounding details or more dependently within the overall context.
+        </p>
+
+        <div style={styles.infoBox}>
+            <p style={styles.infoTitle}>What you need to do:</p>
+
+            <ul style={styles.guidelineList}>
+                <li>
+                    For each question, carefully observe the complex image shown on
+                    the screen.
+                </li>
+                <li>
+                    Identify which answer option matches the target simple figure
+                    hidden inside the complex image.
+                </li>
+                <li>
+                    Select the answer that you think is correct before moving to the
+                    next question.
+                </li>
+                <li>
+                    Try to answer naturally and avoid random guessing.
+                </li>
+                <li>
+                    Keep your face visible to the camera during the session.
+                </li>
+                <li>
+                    Your gaze behavior, cursor movement, answer selection, and
+                    interaction patterns may be collected for learning-behavior
+                    analysis.
+                </li>
+            </ul>
+        </div>
+
+        <p style={styles.noteText}>
+            The session will begin only after you click the button below.
+        </p>
+
+        <button style={styles.primaryButton} onClick={handleStartSession}>
+            I Understand — Start GEFT Session
+        </button>
+    </div>
+)}
 
             {sessionStarted && (
                 <div style={styles.layout}>
@@ -412,4 +454,35 @@ rightPanel: {
         fontSize: "12px",
         marginBottom: "16px",
     },
+    infoBox: {
+    background: "#f1f5f9",
+    border: "1px solid #e2e8f0",
+    borderRadius: "12px",
+    padding: "16px",
+    marginTop: "16px",
+    marginBottom: "16px",
+},
+
+infoTitle: {
+    fontSize: "15px",
+    fontWeight: "700",
+    marginTop: 0,
+    marginBottom: "10px",
+    color: "#0f172a",
+},
+
+guidelineList: {
+    margin: 0,
+    paddingLeft: "22px",
+    fontSize: "15px",
+    lineHeight: 1.8,
+    color: "#334155",
+},
+
+noteText: {
+    fontSize: "14px",
+    lineHeight: 1.6,
+    color: "#64748b",
+    marginBottom: "16px",
+},
 };
