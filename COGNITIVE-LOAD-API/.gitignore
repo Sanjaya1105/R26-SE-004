@@ -12,5 +12,6 @@ coverage.xml
 htmlcov/
 .env
 .env.*
+*.csv
 .DS_Store
 Thumbs.db
