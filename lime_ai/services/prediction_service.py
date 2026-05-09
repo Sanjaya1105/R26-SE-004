@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from config.settings import settings
 from models.prediction import CognitiveLoadPrediction
+from models.student_lesson_summary import StudentLessonSummary
 from schemas.prediction import AggregateExplanationRequest, CognitiveLoadInput
 from services.model_client import ModelClientError, request_prediction
 
@@ -931,6 +932,165 @@ def list_predictions_filtered(
     }
 
 
+def _get_majority_cognitive_load(labels: list[str]) -> str:
+    """Get the most frequent cognitive load level."""
+    from collections import Counter
+    if not labels:
+        return "Medium"
+    counts = Counter(labels)
+    return counts.most_common(1)[0][0]
+
+
+def aggregate_and_save_student_lesson_summary(
+    db: Session,
+    lesson_id: str,
+    student_id: str,
+) -> dict[str, Any]:
+    """Aggregate all predictions for a student-lesson and save to summary table."""
+    rows = (
+        db.query(CognitiveLoadPrediction)
+        .filter(
+            CognitiveLoadPrediction.lesson_id == lesson_id,
+            CognitiveLoadPrediction.student_id == student_id,
+        )
+        .all()
+    )
+
+    if not rows:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "success": False,
+                "message": f"No predictions found for student {student_id} in lesson {lesson_id}.",
+                "data": None,
+                "errors": [],
+            },
+        )
+
+    # Calculate averages
+    numeric_fields = [
+        "pause_frequency",
+        "navigation_count_video",
+        "rewatch_segments",
+        "playback_rate_change",
+        "idle_duration_video",
+        "time_on_content",
+        "navigation_count_adaptation",
+        "revisit_frequency",
+        "idle_duration_adaptation",
+        "quiz_response_time",
+        "error_rate",
+    ]
+    
+    aggregated_features = {}
+    for field in numeric_fields:
+        values = [float(getattr(row, field)) for row in rows]
+        aggregated_features[field] = sum(values) / len(values) if values else 0.0
+
+    # Get majority cognitive load
+    cognitive_loads = [row.predicted_cognitive_load for row in rows]
+    majority_load = _get_majority_cognitive_load(cognitive_loads)
+
+    # Calculate average confidence and score
+    confidences = [row.confidence for row in rows]
+    avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+    
+    scores = [row.predicted_score for row in rows]
+    avg_score = int(sum(scores) / len(scores)) if scores else 0
+
+    # Create or update summary
+    summary = (
+        db.query(StudentLessonSummary)
+        .filter(
+            StudentLessonSummary.student_id == student_id,
+            StudentLessonSummary.lesson_id == lesson_id,
+        )
+        .first()
+    )
+
+    if summary:
+        # Update existing
+        summary.pause_frequency = aggregated_features["pause_frequency"]
+        summary.navigation_count_video = aggregated_features["navigation_count_video"]
+        summary.rewatch_segments = aggregated_features["rewatch_segments"]
+        summary.playback_rate_change = aggregated_features["playback_rate_change"]
+        summary.idle_duration_video = aggregated_features["idle_duration_video"]
+        summary.time_on_content = aggregated_features["time_on_content"]
+        summary.navigation_count_adaptation = aggregated_features["navigation_count_adaptation"]
+        summary.revisit_frequency = aggregated_features["revisit_frequency"]
+        summary.idle_duration_adaptation = aggregated_features["idle_duration_adaptation"]
+        summary.quiz_response_time = aggregated_features["quiz_response_time"]
+        summary.error_rate = aggregated_features["error_rate"]
+        summary.predicted_cognitive_load = majority_load
+        summary.predicted_score = avg_score
+        summary.confidence = avg_confidence
+        summary.record_count = len(rows)
+        summary.updated_at = datetime.now(timezone.utc)
+    else:
+        # Create new
+        summary = StudentLessonSummary(
+            student_id=student_id,
+            lesson_id=lesson_id,
+            session_id=rows[0].session_id if rows else None,
+            minute_index=0,
+            window_start=rows[0].window_start if rows else None,
+            window_end=rows[-1].window_end if rows else None,
+            pause_frequency=aggregated_features["pause_frequency"],
+            navigation_count_video=aggregated_features["navigation_count_video"],
+            rewatch_segments=aggregated_features["rewatch_segments"],
+            playback_rate_change=aggregated_features["playback_rate_change"],
+            idle_duration_video=aggregated_features["idle_duration_video"],
+            time_on_content=aggregated_features["time_on_content"],
+            navigation_count_adaptation=aggregated_features["navigation_count_adaptation"],
+            revisit_frequency=aggregated_features["revisit_frequency"],
+            idle_duration_adaptation=aggregated_features["idle_duration_adaptation"],
+            quiz_response_time=aggregated_features["quiz_response_time"],
+            error_rate=aggregated_features["error_rate"],
+            predicted_cognitive_load=majority_load,
+            predicted_score=avg_score,
+            confidence=avg_confidence,
+            record_count=len(rows),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+
+    db.add(summary)
+    db.commit()
+    db.refresh(summary)
+
+    return {
+        "success": True,
+        "message": "Student-lesson summary aggregated and saved successfully.",
+        "data": {
+            "id": summary.id,
+            "student_id": summary.student_id,
+            "lesson_id": summary.lesson_id,
+            "session_id": summary.session_id,
+            "minute_index": summary.minute_index,
+            "window_start": summary.window_start.isoformat() if summary.window_start else None,
+            "window_end": summary.window_end.isoformat() if summary.window_end else None,
+            "pause_frequency": summary.pause_frequency,
+            "navigation_count_video": summary.navigation_count_video,
+            "rewatch_segments": summary.rewatch_segments,
+            "playback_rate_change": summary.playback_rate_change,
+            "idle_duration_video": summary.idle_duration_video,
+            "time_on_content": summary.time_on_content,
+            "navigation_count_adaptation": summary.navigation_count_adaptation,
+            "revisit_frequency": summary.revisit_frequency,
+            "idle_duration_adaptation": summary.idle_duration_adaptation,
+            "quiz_response_time": summary.quiz_response_time,
+            "error_rate": summary.error_rate,
+            "predicted_cognitive_load": summary.predicted_cognitive_load,
+            "predicted_score": summary.predicted_score,
+            "confidence": summary.confidence,
+            "record_count": summary.record_count,
+            "created_at": summary.created_at.isoformat() if summary.created_at else None,
+            "updated_at": summary.updated_at.isoformat() if summary.updated_at else None,
+        },
+        "errors": [],
+    }
+
+
 def _row_to_model_payload(row: CognitiveLoadPrediction, feature_values: dict[str, float] | None = None) -> dict[str, Any]:
     values = feature_values or {
         name: float(getattr(row, name))
@@ -978,11 +1138,12 @@ def get_lime_explanation_for_prediction(
     num_features: int = 6,
     num_samples: int = 200,
 ) -> dict[str, Any]:
+    # Only look in StudentLessonSummary
     target_row = (
-        db.query(CognitiveLoadPrediction)
+        db.query(StudentLessonSummary)
         .filter(
-            CognitiveLoadPrediction.id == prediction_id,
-            CognitiveLoadPrediction.lesson_id == lesson_id,
+            StudentLessonSummary.id == prediction_id,
+            StudentLessonSummary.lesson_id == lesson_id,
         )
         .first()
     )
@@ -998,6 +1159,7 @@ def get_lime_explanation_for_prediction(
             },
         )
 
+    # Get training data from CognitiveLoadPrediction for context
     lesson_rows = (
         db.query(CognitiveLoadPrediction)
         .filter(CognitiveLoadPrediction.lesson_id == lesson_id)

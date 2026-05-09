@@ -8,6 +8,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from models.prediction import CognitiveLoadPrediction
+from models.student_lesson_summary import StudentLessonSummary
 from services.model_client import ModelClientError, request_prediction
 
 
@@ -226,11 +227,12 @@ def get_shap_explanation_for_prediction(
     num_features: int = 6,
     num_samples: int = 50,
 ) -> dict[str, Any]:
+    # Only look in StudentLessonSummary
     target_row = (
-        db.query(CognitiveLoadPrediction)
+        db.query(StudentLessonSummary)
         .filter(
-            CognitiveLoadPrediction.id == prediction_id,
-            CognitiveLoadPrediction.lesson_id == lesson_id,
+            StudentLessonSummary.id == prediction_id,
+            StudentLessonSummary.lesson_id == lesson_id,
         )
         .first()
     )
@@ -246,6 +248,7 @@ def get_shap_explanation_for_prediction(
             },
         )
 
+    # Get training data from CognitiveLoadPrediction for context
     lesson_rows = (
         db.query(CognitiveLoadPrediction)
         .filter(CognitiveLoadPrediction.lesson_id == lesson_id)

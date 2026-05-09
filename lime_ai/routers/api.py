@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from config.database import get_db
 from schemas.prediction import AggregateExplanationRequest, CognitiveLoadInput
 from services.prediction_service import (
+    aggregate_and_save_student_lesson_summary,
     generate_aggregate_explanation,
     get_lime_explanation_for_prediction,
     list_lessons,
@@ -64,6 +65,15 @@ def get_lesson_predictions(
         include_medium=include_medium,
         limit=limit,
     )
+
+
+@router.post("/lessons/{lesson_id}/students/{student_id}/summary")
+def create_student_lesson_summary(
+    lesson_id: str,
+    student_id: str,
+    db: Session = Depends(get_db),
+):
+    return aggregate_and_save_student_lesson_summary(db, lesson_id, student_id)
 
 
 @router.get("/lessons/{lesson_id}/predictions/{prediction_id}/lime")

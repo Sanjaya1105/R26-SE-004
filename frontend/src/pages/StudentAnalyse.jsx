@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import {
+  createStudentLessonSummary,
   fetchAggregateExplanation,
   fetchLimeExplanation,
   fetchLimeLessons,
@@ -33,6 +34,11 @@ function formatRecommendationItems(text) {
     .split(/(?<=[.!?])\s+/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function isNoRecommendationLoad(level) {
+  const normalized = String(level || '').trim().toLowerCase();
+  return normalized === 'very low' || normalized === 'low';
 }
 
 export default function StudentAnalyse() {
@@ -109,18 +115,16 @@ export default function StudentAnalyse() {
   }
 
   async function handleShowHighLoad() {
-    if (!selectedLessonId) return;
+    if (!selectedLessonId || !selectedStudentId) {
+      setError('Please select both a lesson and a student.');
+      return;
+    }
 
     try {
       setLoading(true);
       setError('');
-      const rows = await fetchLimePredictions(selectedLessonId, {
-        studentId: selectedStudentId,
-        highOnly: true,
-        includeMedium: true,
-        limit: 500,
-      });
-      setPredictions(rows ?? []);
+      const summary = await createStudentLessonSummary(selectedLessonId, selectedStudentId);
+      setPredictions([summary] ?? []);
       setLimeExplanation(null);
       setShapExplanation(null);
       setAggregateExplanation(null);
@@ -128,10 +132,14 @@ export default function StudentAnalyse() {
       setShapError('');
       setSelectedAnalysisRowId(null);
 
-      if (!rows?.length) {
-        setStatusMessage('No Medium, High, or Very High cognitive load records found for this selection.');
+      if (!summary) {
+        setStatusMessage('Failed to create student-lesson summary.');
+      } else if (isNoRecommendationLoad(summary.predicted_cognitive_load)) {
+        setStatusMessage(
+          `Student ${selectedStudentId} cognitive load is ${summary.predicted_cognitive_load}. No recommendation needed, so Raw Analyse is hidden.`,
+        );
       } else {
-        setStatusMessage(`Loaded ${rows.length} medium, high, and very high-load records.`);
+        setStatusMessage(`Aggregated summary created for student ${selectedStudentId}. Click "Raw Analyse" to generate LIME and SHAP explanations.`);
       }
     } catch (err) {
       setError(err.message);
@@ -263,8 +271,8 @@ export default function StudentAnalyse() {
           </select>
         </label>
 
-        <button onClick={handleShowHighLoad} disabled={!selectedLessonId || loading}>
-          {loading ? 'Loading...' : 'Show Medium, High & Very High Cognitive Load'}
+        <button onClick={handleShowHighLoad} disabled={!selectedLessonId || !selectedStudentId || loading}>
+          {loading ? 'Aggregating...' : 'Generate Student-Lesson Summary'}
         </button>
       </section>
 
@@ -272,46 +280,58 @@ export default function StudentAnalyse() {
       {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
 
       <section className="student-analyse-results glass-panel">
-        <h2>Medium, High and Very High Results</h2>
+        <h2>Aggregated Student Summary</h2>
 
         {!predictions.length ? (
           <p className="empty-state">No results loaded yet.</p>
         ) : (
           <div className="results-table-wrapper">
             <table>
-              <thead>
-                <tr>
-                  <th>Lesson</th>
-                  <th>Student</th>
-                  <th>Minute</th>
-                  <th>Cognitive Load</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {predictions.map((row) => (
-                  <tr key={row.id}>
-                    <td>{row.lesson_id}</td>
-                    <td>{row.student_id}</td>
-                    <td>{row.minute_index}</td>
-                    <td>
-                      <span className={`load-badge ${row.predicted_cognitive_load === 'Very High' ? 'very-high' : row.predicted_cognitive_load === 'High' ? 'high' : 'medium'}`}>
-                        {row.predicted_cognitive_load}
-                      </span>
-                    </td>
-                    <td>
-                      <button
-                        className={`raw-analyse-btn ${selectedAnalysisRowId === row.id ? 'active' : ''}`}
-                        onClick={() => handleRawAnalyse(row)}
-                        disabled={Boolean(analysisLoadingId)}
-                      >
-                        {analysisLoadingId === row.id ? 'Analysing...' : 'Raw Analyse'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+  <thead>
+    <tr>
+      <th>Lesson</th>
+      <th>Student</th>
+      <th>Cognitive Load</th>
+      <th>Action</th>
+    </tr>
+  </thead>
+  <tbody>
+    {predictions.map((row) => (
+      <tr key={row.id}>
+        <td>{row.lesson_id}</td>
+        <td>{row.student_id}</td>
+        <td>
+          <span
+            className={`load-badge ${
+              row.predicted_cognitive_load === 'Very High'
+                ? 'very-high'
+                : row.predicted_cognitive_load === 'High'
+                ? 'high'
+                : 'medium'
+            }`}
+          >
+            {row.predicted_cognitive_load}
+          </span>
+        </td>
+        <td>
+          {isNoRecommendationLoad(row.predicted_cognitive_load) ? (
+            <span className="empty-state">No recommendation needed</span>
+          ) : (
+            <button
+              className={`raw-analyse-btn ${
+                selectedAnalysisRowId === row.id ? 'active' : ''
+              }`}
+              onClick={() => handleRawAnalyse(row)}
+              disabled={Boolean(analysisLoadingId)}
+            >
+              {analysisLoadingId === row.id ? 'Analysing...' : 'Raw Analyse'}
+            </button>
+          )}
+        </td>
+      </tr>
+    ))}
+  </tbody>
+</table>
           </div>
         )}
       </section>

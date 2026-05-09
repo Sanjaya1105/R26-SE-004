@@ -28,3 +28,33 @@ CREATE TABLE IF NOT EXISTS `cognitive-load` (
     INDEX idx_cognitive_load_student_lesson (student_id, lesson_id),
     INDEX idx_cognitive_load_session_minute (session_id, minute_index)
 );
+
+CREATE TABLE IF NOT EXISTS `student-lesson-summary` (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    student_id VARCHAR(50) NOT NULL,
+    lesson_id VARCHAR(50) NOT NULL,
+    session_id VARCHAR(100) DEFAULT NULL,
+    minute_index INT NOT NULL DEFAULT 0,
+    window_start DATETIME DEFAULT NULL,
+    window_end DATETIME DEFAULT NULL,
+    pause_frequency FLOAT NOT NULL,
+    navigation_count_video FLOAT NOT NULL,
+    rewatch_segments FLOAT NOT NULL,
+    playback_rate_change FLOAT NOT NULL,
+    idle_duration_video FLOAT NOT NULL,
+    time_on_content FLOAT NOT NULL,
+    navigation_count_adaptation FLOAT NOT NULL,
+    revisit_frequency FLOAT NOT NULL,
+    idle_duration_adaptation FLOAT NOT NULL,
+    quiz_response_time FLOAT NOT NULL,
+    error_rate FLOAT NOT NULL,
+    predicted_cognitive_load VARCHAR(20) NOT NULL,
+    predicted_score INT NOT NULL,
+    confidence FLOAT NOT NULL,
+    record_count INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_student_lesson (student_id, lesson_id),
+    INDEX idx_summary_student_lesson (student_id, lesson_id)
+);
