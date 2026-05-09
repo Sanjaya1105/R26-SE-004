@@ -1,13 +1,150 @@
-import React from "react";
+import React ,{ useState } from "react";
 import { useNavigate } from "react-router-dom";
 import CursorTracker from "./CursorTracker";
 import GazeTracker from "./GazeTracker2";
 
 function Module2() {
   const navigate = useNavigate();
+  const [showConsentBox, setShowConsentBox] = useState(true);
+
   const handleChoice = (type) => {
     alert(`You selected: ${type}`);
   };
+
+const cardStyle = {
+  backgroundColor: "#ffffff",
+  border: "1px solid #e3e3e3",
+  borderRadius: "12px",
+  padding: "12px",
+  boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+  minHeight: "370px",
+  display: "flex",
+  flexDirection: "column",
+};
+
+  const imageStyle = {
+    width: "100%",
+    height: "180px",
+    objectFit: "cover",
+    borderRadius: "10px",
+    marginBottom: "10px",
+    filter: "grayscale(100%)",
+  };
+
+  const titleStyle = {
+    margin: 0,
+    fontWeight: "bold",
+    color: "#333",
+    fontSize: "16px",
+  };
+
+  const bodyStyle = {
+    margin: "6px 0 0 0",
+    color: "#555",
+    fontSize: "15px",
+    lineHeight: "1.6",
+  };
+
+  const verbalBoxStyle = {
+    width: "100%",
+    height: "180px",
+    borderRadius: "10px",
+    marginBottom: "10px",
+    backgroundColor: "#f4f6f8",
+    border: "1px solid #e3e3e3",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    textAlign: "center",
+    padding: "16px",
+    boxSizing: "border-box",
+    color: "#444",
+    fontSize: "16px",
+    lineHeight: "1.6",
+  };
+
+ const concepts = [
+  {
+    title: "Sunlight Absorption",
+    image: "/images/VisualVerbal Images/img1.png",
+    alt: "Sunlight Absorption",
+    visualText: "Show sunlight reaching the leaves of the plant.",
+    verbalText:
+      "The plant captures sunlight through its leaves. Sunlight provides the energy needed for photosynthesis.",
+    fact:
+      "Fact: Leaves contain chlorophyll, a green pigment that helps plants capture sunlight energy.",
+  },
+  {
+    title: "Water from Roots",
+    image: "/images/VisualVerbal Images/img2.png",
+    alt: "Water from Roots",
+    visualText: "Show roots absorbing water from the soil.",
+    verbalText:
+      "The roots absorb water from the soil. The water travels upward from the roots to the leaves.",
+    fact:
+      "Fact: Water moves through tiny tube-like structures inside the plant called xylem.",
+  },
+  {
+    title: "Carbon Dioxide Intake",
+    image: "/images/VisualVerbal Images/img3.png",
+    alt: "Carbon Dioxide Intake",
+    visualText: "Show carbon dioxide entering the leaf from the air.",
+    verbalText:
+      "The leaves take in carbon dioxide from the air through tiny openings called stomata.",
+    fact:
+      "Fact: Stomata can open and close to control gas exchange and water loss.",
+  },
+  {
+    title: "Food and Oxygen Output",
+    image: "/images/VisualVerbal Images/img4.png",
+    alt: "Food and Oxygen Output",
+    visualText: "Show glucose being made and oxygen being released.",
+    verbalText:
+      "The plant produces glucose as food. Oxygen is released into the air during photosynthesis.",
+    fact:
+      "Fact: Glucose gives the plant energy for growth, repair, and making new cells.",
+  },
+  {
+    title: "Chlorophyll",
+    image: "/images/VisualVerbal Images/img5.png",
+    alt: "Chlorophyll in leaves",
+    visualText: "Show chlorophyll inside the leaves capturing light energy.",
+    verbalText:
+      "Chlorophyll is the green pigment in leaves that captures energy from sunlight.",
+    fact:
+      "Fact: Chlorophyll is one reason many plant leaves appear green.",
+  },
+  {
+    title: "Stomata",
+    image: "/images/VisualVerbal Images/img6.png",
+    alt: "Stomata on leaf",
+    visualText: "Show tiny openings on the leaf surface where gases move in and out.",
+    verbalText:
+      "Stomata are tiny openings on leaves that allow carbon dioxide to enter and oxygen to leave.",
+    fact:
+      "Fact: Most stomata are found on the underside of leaves.",
+  },
+  {
+    title: "Glucose as Energy",
+    image: "/images/VisualVerbal Images/img7.png",
+    alt: "Glucose energy in plant",
+    visualText: "Show glucose being used by the plant as food energy.",
+    verbalText:
+      "Glucose is the sugar made during photosynthesis. The plant uses it as a source of energy.",
+    fact:
+      "Fact: Plants can also store extra glucose as starch for later use.",
+  },
+  {
+    title: "Oxygen Release",
+    image: "/images/VisualVerbal Images/img8.png",
+    alt: "Oxygen released from leaves",
+    visualText: "Show oxygen leaving the leaves and moving into the air.",
+    verbalText:
+      "Oxygen is released from the leaves after the plant uses sunlight, water, and carbon dioxide.",
+    fact:
+      "Fact: The oxygen released by plants supports humans, animals, and many other living things.",
+  },
+];
 
   return (
     <div
@@ -19,9 +156,161 @@ function Module2() {
         position: "relative",
       }}
     >
-      <CursorTracker />
-      <GazeTracker />
+{!showConsentBox && (
+  <>
+    <CursorTracker />
+    <GazeTracker />
+  </>
+)}
+{showConsentBox && (
+  <div
+    style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      width: "100%",
+      height: "100%",
+      backgroundColor: "rgba(0, 0, 0, 0.55)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 9999,
+    }}
+  >
+    <div
+      style={{
+        backgroundColor: "#ffffff",
+        width: "620px",
+        maxWidth: "92%",
+        borderRadius: "18px",
+        padding: "30px",
+        boxShadow: "0 12px 35px rgba(0,0,0,0.28)",
+        fontFamily: "sans-serif",
+      }}
+    >
+      <h2
+        style={{
+          marginTop: 0,
+          marginBottom: "12px",
+          color: "#222",
+          fontSize: "25px",
+          textAlign: "center",
+        }}
+      >
+        Cognitive Style Detection Module
+      </h2>
 
+      <p
+        style={{
+          color: "#444",
+          fontSize: "16px",
+          lineHeight: "1.7",
+          textAlign: "center",
+          marginBottom: "22px",
+        }}
+      >
+        In this module, we will analyze your learning preference and cognitive
+        style based on your interaction with visual and verbal learning
+        materials.
+      </p>
+
+      <div
+        style={{
+          backgroundColor: "#f4f6f8",
+          border: "1px solid #e0e0e0",
+          borderRadius: "12px",
+          padding: "18px",
+          marginBottom: "20px",
+        }}
+      >
+        <p
+          style={{
+            marginTop: 0,
+            marginBottom: "10px",
+            fontWeight: "bold",
+            color: "#333",
+            fontSize: "16px",
+          }}
+        >
+          Please read the following guidelines carefully:
+        </p>
+
+        <ul
+          style={{
+            margin: 0,
+            paddingLeft: "22px",
+            color: "#555",
+            fontSize: "15px",
+            lineHeight: "1.8",
+          }}
+        >
+          <li>
+            Your behavioral interaction data will be collected during this
+            activity.
+          </li>
+          <li>
+            This may include cursor movements, clicks, scrolling behavior, and
+            time spent on different sections.
+          </li>
+          <li>
+            Your gaze or attention behavior may be captured using your web
+            camera.
+          </li>
+          <li>
+            Please keep your face visible to the camera while completing the
+            module.
+          </li>
+          <li>
+            Try to interact naturally with the learning materials without
+            rushing.
+          </li>
+          <li>
+            Choose the learning format that feels more comfortable and useful
+            to you.
+          </li>
+          <li>
+            The collected data will be used only for cognitive style detection
+            and learning behavior analysis.
+          </li>
+        </ul>
+      </div>
+
+      <p
+        style={{
+          color: "#666",
+          fontSize: "14px",
+          lineHeight: "1.6",
+          textAlign: "center",
+          marginBottom: "24px",
+        }}
+      >
+        By continuing, you acknowledge that you understand the purpose of this
+        module and the types of data being collected.
+      </p>
+
+      <div style={{ display: "flex", justifyContent: "center" }}>
+        <button
+          onClick={() => setShowConsentBox(false)}
+          style={{
+            padding: "12px 28px",
+            border: "none",
+            borderRadius: "10px",
+            backgroundColor: "#778197",
+            color: "#fff",
+            fontSize: "16px",
+            fontWeight: "bold",
+            cursor: "pointer",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+          }}
+        >
+          I Understand and Continue
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+      {/* VISUAL SCREEN */}
       <div
         data-zone="VISUAL"
         onClick={() => handleChoice("Visual")}
@@ -44,138 +333,50 @@ function Module2() {
               margin: 0,
             }}
           >
-            <strong>Photosynthesis</strong> can be understood visually by following how a plant uses
-            sunlight, water, and carbon dioxide to make food.
+            <strong>Photosynthesis</strong> can be understood by following how
+            a plant uses sunlight, water, and carbon dioxide to make food and
+            release oxygen.
           </p>
 
           <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, 1fr)",
-              gap: "15px",
-            }}
-          >
-            <div
-              style={{
-                backgroundColor: "#ffffff",
-                borderRadius: "12px",
-                padding: "12px",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-              }}
-            >
-              <img
-                src="/images/VisualVerbal Images/img1.png" // <-- your image path here
-                alt="Sunlight Absorption"
-                style={{
-                  width: "100%",
-                  height: "180px",
-                  objectFit: "cover",
-                  borderRadius: "10px",
-                  marginBottom: "10px",
-                }}
-              />
-              <p style={{ margin: 0, fontWeight: "bold", color: "#333" }}>Sunlight Absorption</p>
-              <p style={{ margin: "6px 0 0 0", color: "#555", fontSize: "15px", lineHeight: "1.6" }}>
-                Show sunlight reaching the leaves of the plant.
-              </p>
-            </div>
+  style={{
+    display: "grid",
+    gridTemplateColumns: "repeat(2, 1fr)",
+    gap: "15px",
+  }}
+>
+  {concepts.map((item) => (
+    <div key={item.title} style={cardStyle}>
+      <img src={item.image} alt={item.alt} style={imageStyle} />
 
-            <div
-              style={{
-                backgroundColor: "#ffffff",
-                borderRadius: "12px",
-                padding: "12px",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-              }}
-            >
-              <img
-                src="/images/VisualVerbal Images/img2.png" // <-- your image path here
-                alt="Water from Roots"
-                style={{
-                  width: "100%",
-                  height: "180px",
-                  objectFit: "cover",
-                  borderRadius: "10px",
-                  marginBottom: "10px",
-                }}
-              />
-              <p style={{ margin: 0, fontWeight: "bold", color: "#333" }}>Water from Roots</p>
-              <p style={{ margin: "6px 0 0 0", color: "#555", fontSize: "15px", lineHeight: "1.6" }}>
-                Show roots absorbing water from the soil.
-              </p>
-            </div>
+      <p style={titleStyle}>{item.title}</p>
 
-            <div
-              style={{
-                backgroundColor: "#ffffff",
-                borderRadius: "12px",
-                padding: "12px",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-              }}
-            >
-              <img
-                src="/images/VisualVerbal Images/img3.png" // <-- your image path here
-                alt="Carbon Dioxide Intake"
-                style={{
-                  width: "100%",
-                  height: "180px",
-                  objectFit: "cover",
-                  borderRadius: "10px",
-                  marginBottom: "10px",
-                }}
-              />
-              <p style={{ margin: 0, fontWeight: "bold", color: "#333" }}>Carbon Dioxide Intake</p>
-              <p style={{ margin: "6px 0 0 0", color: "#555", fontSize: "15px", lineHeight: "1.6" }}>
-                Show carbon dioxide entering the leaf from the air.
-              </p>
-            </div>
+      <p style={bodyStyle}>{item.visualText}</p>
 
-            <div
-              style={{
-                backgroundColor: "#ffffff",
-                borderRadius: "12px",
-                padding: "12px",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-              }}
-            >
-              <img
-                src="/images/VisualVerbal Images/img4.png" // <-- your image path here
-                alt="Food and Oxygen Output"
-                style={{
-                  width: "100%",
-                  height: "180px",
-                  objectFit: "cover",
-                  borderRadius: "10px",
-                  marginBottom: "10px",
-                }}
-              />
-              <p style={{ margin: 0, fontWeight: "bold", color: "#333" }}>Food and Oxygen Output</p>
-              <p style={{ margin: "6px 0 0 0", color: "#555", fontSize: "15px", lineHeight: "1.6" }}>
-                Show glucose being made and oxygen being released.
-              </p>
-            </div>
-          </div>
+      <p
+        style={{
+          margin: "10px 0 0 0",
+          color: "#555",
+          fontSize: "14px",
+          lineHeight: "1.6",
+          backgroundColor: "#f4f6f8",
+          padding: "10px",
+          borderRadius: "8px",
+        }}
+      >
+        {item.fact}
+      </p>
+    </div>
+  ))}
+</div>
 
           <div
             style={{
-              backgroundColor: "#ffffff",
-              borderRadius: "12px",
-              padding: "16px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+              display: "flex",
+              justifyContent: "center",
+              marginTop: "24px",
             }}
           >
-            <p style={{ margin: "0 0 10px 0", fontWeight: "bold", color: "#333" }}>
-              Visual flow:
-            </p>
-            <ul style={{ margin: 0, paddingLeft: "22px", color: "#555", lineHeight: "1.7" }}>
-              <li>Sunlight falls on the leaves</li>
-              <li>Roots absorb water from the soil</li>
-              <li>Leaves take in carbon dioxide</li>
-              <li>The plant makes food using sunlight energy</li>
-              <li>Oxygen is released into the air</li>
-            </ul>
-          </div>
-          <div style={{ display: "flex", justifyContent: "center", marginTop: "24px" }}>
             <button
               onClick={() => navigate("/geft")}
               style={{
@@ -207,6 +408,7 @@ function Module2() {
         </p>
       </div>
 
+      {/* VERBAL SCREEN */}
       <div
         data-zone="TEXT"
         onClick={() => handleChoice("Verbal")}
@@ -221,143 +423,59 @@ function Module2() {
       >
         <h2 style={{ textAlign: "center" }}>Verbal</h2>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px", color: "#333" }}>
-          <div
+        <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+          <p
             style={{
-              backgroundColor: "#ffffff",
-              border: "1px solid #e3e3e3",
-              borderRadius: "12px",
-              padding: "18px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+              fontSize: "18px",
+              lineHeight: "1.8",
+              color: "#333",
+              margin: 0,
             }}
           >
-            <p style={{ margin: 0, fontSize: "18px", lineHeight: "1.8" }}>
-              <strong>Photosynthesis</strong> is the process by which green plants make their own food.
-            </p>
-          </div>
+            <strong>Photosynthesis</strong> can be understood by following how
+            a plant uses sunlight, water, and carbon dioxide to make food and
+            release oxygen.
+          </p>
 
           <div
-            style={{
-              backgroundColor: "#ffffff",
-              border: "1px solid #e3e3e3",
-              borderRadius: "12px",
-              padding: "18px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-            }}
-          >
-            <p style={{ margin: "0 0 12px 0", fontWeight: "bold", fontSize: "18px" }}>
-              Main idea
-            </p>
-            <hr style={{ border: "none", borderTop: "1px solid #e5e5e5", margin: "0 0 14px 0" }} />
+  style={{
+    display: "grid",
+    gridTemplateColumns: "repeat(2, 1fr)",
+    gap: "15px",
+  }}
+>
+  {concepts.map((item) => (
+    <div key={item.title} style={cardStyle}>
+      <div style={verbalBoxStyle}>{item.verbalText}</div>
 
-            <ul style={{ margin: 0, paddingLeft: "24px", fontSize: "18px", lineHeight: "1.8" }}>
-              <li style={{ marginBottom: "10px" }}>Plants use sunlight as their main energy source.</li>
-              <li style={{ marginBottom: "10px" }}>They take in carbon dioxide from the air.</li>
-              <li style={{ marginBottom: "10px" }}>They absorb water from the soil through their roots.</li>
-              <li style={{ marginBottom: "10px" }}>They produce glucose as food.</li>
-              <li style={{ marginBottom: "0" }}>They release oxygen into the air.</li>
-            </ul>
-          </div>
+      <p style={titleStyle}>{item.title}</p>
 
-          <div
-            style={{
-              backgroundColor: "#ffffff",
-              border: "1px solid #e3e3e3",
-              borderRadius: "12px",
-              padding: "18px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-            }}
-          >
-            <p style={{ margin: "0 0 12px 0", fontWeight: "bold", fontSize: "18px" }}>
-              Step-by-step process
-            </p>
-            <hr style={{ border: "none", borderTop: "1px solid #e5e5e5", margin: "0 0 14px 0" }} />
+      <p style={bodyStyle}>{item.verbalText}</p>
 
-            <div style={{ fontSize: "18px", lineHeight: "1.8" }}>
-              <p style={{ margin: "0 0 12px 0" }}>
-                <strong>Step 1:</strong> The plant absorbs <strong>water</strong> from the soil through its roots.
-              </p>
-              <hr style={{ border: "none", borderTop: "1px solid #f0f0f0", margin: "0 0 12px 0" }} />
-
-              <p style={{ margin: "0 0 12px 0" }}>
-                <strong>Step 2:</strong> The leaves take in <strong>carbon dioxide</strong> from the air.
-              </p>
-              <hr style={{ border: "none", borderTop: "1px solid #f0f0f0", margin: "0 0 12px 0" }} />
-
-              <p style={{ margin: "0 0 12px 0" }}>
-                <strong>Step 3:</strong> <strong>Sunlight</strong> is captured by chlorophyll, the green pigment in leaves.
-              </p>
-              <hr style={{ border: "none", borderTop: "1px solid #f0f0f0", margin: "0 0 12px 0" }} />
-
-              <p style={{ margin: "0 0 12px 0" }}>
-                <strong>Step 4:</strong> The plant uses sunlight energy to convert water and carbon dioxide into <strong>glucose</strong>.
-              </p>
-              <hr style={{ border: "none", borderTop: "1px solid #f0f0f0", margin: "0 0 12px 0" }} />
-
-              <p style={{ margin: 0 }}>
-                <strong>Step 5:</strong> <strong>Oxygen</strong> is produced and released into the atmosphere.
-              </p>
-            </div>
-          </div>
+      <p
+        style={{
+          margin: "10px 0 0 0",
+          color: "#555",
+          fontSize: "14px",
+          lineHeight: "1.6",
+          backgroundColor: "#f4f6f8",
+          padding: "10px",
+          borderRadius: "8px",
+        }}
+      >
+        {item.fact}
+      </p>
+    </div>
+  ))}
+</div>
 
           <div
             style={{
-              backgroundColor: "#ffffff",
-              border: "1px solid #e3e3e3",
-              borderRadius: "12px",
-              padding: "18px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+              display: "flex",
+              justifyContent: "center",
+              marginTop: "24px",
             }}
           >
-            <p style={{ margin: "0 0 12px 0", fontWeight: "bold", fontSize: "18px" }}>
-              Important parts involved
-            </p>
-            <hr style={{ border: "none", borderTop: "1px solid #e5e5e5", margin: "0 0 14px 0" }} />
-
-            <ul style={{ margin: 0, paddingLeft: "24px", fontSize: "18px", lineHeight: "1.8" }}>
-              <li style={{ marginBottom: "10px" }}><strong>Roots</strong> - absorb water from the soil</li>
-              <li style={{ marginBottom: "10px" }}><strong>Leaves</strong> - take in carbon dioxide and capture sunlight</li>
-              <li style={{ marginBottom: "10px" }}><strong>Chlorophyll</strong> - helps trap sunlight energy</li>
-              <li style={{ marginBottom: "0" }}><strong>Stomata</strong> - tiny openings in leaves for gas exchange</li>
-            </ul>
-          </div>
-
-          <div
-            style={{
-              backgroundColor: "#ffffff",
-              border: "1px solid #e3e3e3",
-              borderRadius: "12px",
-              padding: "18px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-            }}
-          >
-            <p style={{ margin: "0 0 12px 0", fontWeight: "bold", fontSize: "18px" }}>
-              Why photosynthesis is important
-            </p>
-            <hr style={{ border: "none", borderTop: "1px solid #e5e5e5", margin: "0 0 14px 0" }} />
-
-            <ul style={{ margin: 0, paddingLeft: "24px", fontSize: "18px", lineHeight: "1.8" }}>
-              <li style={{ marginBottom: "10px" }}>It provides food for plants.</li>
-              <li style={{ marginBottom: "10px" }}>It supports the food chain.</li>
-              <li style={{ marginBottom: "10px" }}>It releases oxygen needed by humans and animals.</li>
-              <li style={{ marginBottom: "0" }}>It helps maintain the balance of gases in the atmosphere.</li>
-            </ul>
-          </div>
-
-          <div
-            style={{
-              backgroundColor: "#ffffff",
-              border: "1px solid #e3e3e3",
-              borderRadius: "12px",
-              padding: "18px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-            }}
-          >
-            <p style={{ margin: 0, fontSize: "18px", lineHeight: "1.8", color: "#555" }}>
-              <strong>In short:</strong> sunlight + water + carbon dioxide = food for the plant + oxygen for the air.
-            </p>
-          </div>
-          <div style={{ display: "flex", justifyContent: "center", marginTop: "24px" }}>
             <button
               onClick={() => navigate("/geft")}
               style={{
