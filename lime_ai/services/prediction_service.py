@@ -2,9 +2,9 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException
+import re
 import httpx
 import numpy as np
-import re
 from lime.lime_tabular import LimeTabularExplainer
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -77,7 +77,6 @@ LECTURE_SUPPORT_USER_PROMPT_TEMPLATE = (
     "Cognitive Load Level: {predicted_label}\n"
     "Behavioral Signals: {signals_text}\n\n"
     "Rules:\n"
-    "0) Do NOT include greetings or salutations (for example 'Hello', 'Good afternoon'). Start directly with the numbered strategies.\n"
     "1) Create 3-5 specific, actionable strategies tailored to their cognitive load level.\n"
     "2) Start with the most urgent/important strategy first.\n"
     "3) Each strategy should be something the student can do immediately or in the next study session.\n"
@@ -89,7 +88,11 @@ LECTURE_SUPPORT_USER_PROMPT_TEMPLATE = (
     "Example format:\n"
     "1) [Specific action] - This will help you [benefit]\n"
     "2) [Specific action] - This will help you [benefit]\n"
-    "Do not include generic advice. Make it specific to their signals."
+    "Do not include generic advice. Make it specific to their signals.\n\n"
+    "--- OUTPUT FORMAT ---\n"
+    "Output ONLY the numbered strategies below. Do NOT echo back any rules, examples, or input data.\n"
+    "Each line must start with a number and either ')' or '.' (for example '1) ...' or '1. ...').\n"
+    "If you cannot generate strategies, return exactly: Unable to generate strategies at this time."
 )
 
 STUDY_TECHNIQUE_SYSTEM_PROMPT = (
@@ -535,27 +538,60 @@ def _generate_lecture_support(
     
     support_text, source = _generate_llm_text(LECTURE_SUPPORT_SYSTEM_PROMPT, user_prompt)
     
-    # Remove prompt details if Ollama echoed them back
+    # Post-process: extract ONLY numbered strategies to avoid prompt echo
+    def _extract_numbered_strategies(text: str) -> list[str]:
+        if not text:
+            return []
+
+        # First try: lines that start with a number and delimiter
+        items: list[str] = []
+        pattern = re.compile(r"^\s*(\d+)\s*[\)\.:-]\s*(.+)$")
+        for line in text.splitlines():
+            m = pattern.match(line)
+            if m:
+                items.append(m.group(2).strip())
+
+        if items:
+            return [f"{i+1}) {items[i]}" for i in range(len(items))]
+
+        # Second try: inline numbered blocks in one line (e.g. '1) foo 2) bar')
+        inline = re.findall(r"\d+\s*[\)\.:-]\s*([^\d]+?)(?=(?:\d+\s*[\)\.:-])|$)", text)
+        inline = [s.strip().strip(' -–—') for s in inline if s.strip()]
+        if inline:
+            return [f"{i+1}) {inline[i]}" for i in range(len(inline))]
+
+        # Third try: detect repeated 'Number |' patterns produced by some templates
+        if 'Number |' in text:
+            parts = text.split('Number |')[1:]
+            parsed: list[str] = []
+            for p in parts:
+                # attempt to capture until the next numeric token
+                m = re.match(r"\s*(\d+)\s*\|\s*(.*?)\s*(?=(\d+\s*\|)|$)", p, re.S)
+                if m:
+                    parsed.append(m.group(2).strip())
+                else:
+                    # fallback: take the first clause
+                    parsed.append(p.strip().split('|')[0].strip())
+            if parsed:
+                return [f"{i+1}) {parsed[i]}" for i in range(len(parsed))]
+
+        return []
+
+    # Clean initial text (strip surrounding whitespace)
     if support_text:
-        # Find where the actual strategies start (after the input section)
-        lines = support_text.split('\n')
-        start_index = 0
-        for i, line in enumerate(lines):
-            # Look for numbered strategies (1), 2), 3), etc.)
-            if line.strip() and line.strip()[0].isdigit() and ')' in line.strip()[:3]:
-                start_index = i
-                break
-        
-        # Keep only the actual strategies
-        if start_index > 0:
-            support_text = '\n'.join(lines[start_index:]).strip()
-        # Strip common greetings/salutations at the start (e.g., "Good afternoon, student!")
-        support_text = re.sub(r'^(?:\s*(?:hello|hi|dear student|dear learner|greetings|good (?:morning|afternoon|evening)|dear)[^\n]*\n)+', '', support_text, flags=re.I).strip()
-        # Also remove a short leading sentence that is just a salutation followed by punctuation
-        support_text = re.sub(r'^(?:\s*(?:hello|hi|dear student|dear learner|greetings|good (?:morning|afternoon|evening))[\.!,-:;]*\s*)+', '', support_text, flags=re.I).strip()
+        support_text = support_text.strip()
+
+    extracted = _extract_numbered_strategies(support_text)
+    if extracted:
+        # Limit to 5 strategies
+        extracted = extracted[:5]
+        clean_text = "\n".join(extracted)
+    else:
+        # If we couldn't reliably extract numbered items, return a clear fallback
+        clean_text = "Unable to generate strategies at this time."
     
     return {
-        "strategies": support_text if support_text else "Unable to generate strategies at this time.",
+        "strategies": clean_text,
         "source": source,
     }
 

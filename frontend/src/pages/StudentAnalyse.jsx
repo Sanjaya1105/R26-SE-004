@@ -227,9 +227,9 @@ export default function StudentAnalyse() {
         </button>
         <div>
           <p className="eyebrow">Student Analyse</p>
-          <h1>Student Cognitive Load Monitor</h1>
+          <h1>High Cognitive Load Monitor</h1>
           <p className="hero-copy">
-            Select lesson and student from Database, then display High , Very High and medium cognitive-load results.
+            Select lesson and student from LIME AI records, then display High and Very High cognitive-load results.
           </p>
         </div>
       </header>
@@ -348,20 +348,23 @@ export default function StudentAnalyse() {
 
               <div className="explanation-split-block">
                 <p className="split-block-title">Recommendation Part</p>
-                {recommendationItems.length ? (
-                  <div>
-                    <div className="recommendation-header">
-                      <span className="rec-meta">Student: {aggregateExplanation?.student_id || limeExplanation?.student_id || 'N/A'}</span>
-                      <span className="rec-meta">Cognitive Load: {aggregateExplanation?.predicted_cognitive_load || limeExplanation?.predicted_cognitive_load || 'N/A'}</span>
-                    </div>
-                    <div className="recommendation-list">
-                      {recommendationItems.map((item, index) => (
-                        <div key={`${index}-${item}`} className="recommendation-item">
-                          <span className="recommendation-item-number">{index + 1}</span>
-                          <p className="recommendation-item-text">{item}</p>
-                        </div>
-                      ))}
-                    </div>
+                {aggregateExplanation?.lecture_support?.strategies ? (
+                  <div className="recommendation-list">
+                    {formatRecommendationItems(aggregateExplanation.lecture_support.strategies).map((item, index) => (
+                      <div key={`${index}-${item}`} className="recommendation-item">
+                        <span className="recommendation-item-number">{index + 1}</span>
+                        <p className="recommendation-item-text">{item}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : recommendationItems.length ? (
+                  <div className="recommendation-list">
+                    {recommendationItems.map((item, index) => (
+                      <div key={`${index}-${item}`} className="recommendation-item">
+                        <span className="recommendation-item-number">{index + 1}</span>
+                        <p className="recommendation-item-text">{item}</p>
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <p className="human-explanation-text">No recommendation text returned.</p>
