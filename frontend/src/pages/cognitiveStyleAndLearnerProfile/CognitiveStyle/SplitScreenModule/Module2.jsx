@@ -8,8 +8,8 @@ function Module2() {
   const [showConsentBox, setShowConsentBox] = useState(true);
 
   const handleChoice = (type) => {
-    alert(`You selected: ${type}`);
-  };
+  console.log(`Selected: ${type}`);
+};
 
 const cardStyle = {
   backgroundColor: "#ffffff",
@@ -313,7 +313,6 @@ const cardStyle = {
       {/* VISUAL SCREEN */}
       <div
         data-zone="VISUAL"
-        onClick={() => handleChoice("Visual")}
         style={{
           flex: 1,
           backgroundColor: "#f4f6f8",
@@ -391,7 +390,7 @@ const cardStyle = {
                 boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
               }}
             >
-              I Prefer This
+              Next
             </button>
           </div>
         </div>
@@ -411,7 +410,6 @@ const cardStyle = {
       {/* VERBAL SCREEN */}
       <div
         data-zone="TEXT"
-        onClick={() => handleChoice("Verbal")}
         style={{
           flex: 1,
           backgroundColor: "#ffffff",
@@ -490,7 +488,7 @@ const cardStyle = {
                 boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
               }}
             >
-              I Prefer This
+              Next
             </button>
           </div>
         </div>

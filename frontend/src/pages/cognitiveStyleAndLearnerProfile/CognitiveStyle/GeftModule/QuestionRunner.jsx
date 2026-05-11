@@ -2,10 +2,12 @@ import React, { useMemo, useRef, useState } from "react";
 import GazeTracker from "./GazeTracker";
 import CursorTracker from "./CursorTrackerForQuestionTracker";
 import QuestionView from "./QuestionView";
+import { useNavigate } from "react-router-dom";
 
 export default function QuestionRunner() {
 
     const ANSWER_BACKEND_URL = "http://localhost:4000/cognitive-style/question-runner/answers";
+    const navigate = useNavigate();
 
     const userPayload = useMemo(() => {
         const token = localStorage.getItem("token");
@@ -100,6 +102,54 @@ export default function QuestionRunner() {
                 ],
                 correctAnswer: "D",
             },
+            {
+                id: 5,
+                target: "D",
+                complexImage: "/images/Question_5/q5_complex.png",
+                options: [
+                    { id: "A", image: "/images/Question_5/q5_A.png" },
+                    { id: "B", image: "/images/Question_5/q5_B.png" },
+                    { id: "C", image: "/images/Question_5/q5_C.png" },
+                    { id: "D", image: "/images/Question_5/q5_D.png" }, // optional if you add D
+                ],
+                correctAnswer: "C",
+            },
+            {
+                id: 6,
+                target: "D",
+                complexImage: "/images/Question_6/q6_complex.png",
+                options: [
+                    { id: "A", image: "/images/Question_6/q6_A.png" },
+                    { id: "B", image: "/images/Question_6/q6_B.png" },
+                    { id: "C", image: "/images/Question_6/q6_C.png" },
+                    { id: "D", image: "/images/Question_6/q6_D.png" }, // optional if you add D
+                ],
+                correctAnswer: "C",
+            },
+            {
+                id: 7,
+                target: "A",
+                complexImage: "/images/Question_7/q7_complex.png",
+                options: [
+                    { id: "A", image: "/images/Question_7/q7_A.png" },
+                    { id: "B", image: "/images/Question_7/q7_B.png" },
+                    { id: "C", image: "/images/Question_7/q7_C.png" },
+                    { id: "D", image: "/images/Question_7/q7_D.png" }, // optional if you add D
+                ],
+                correctAnswer: "A",
+            },
+            {
+                id: 8,
+                target: "G",
+                complexImage: "/images/Question_8/q8_complex.png",
+                options: [
+                    { id: "A", image: "/images/Question_8/q8_A.png" },
+                    { id: "B", image: "/images/Question_8/q8_B.png" },
+                    { id: "C", image: "/images/Question_8/q8_C.png" },
+                    { id: "D", image: "/images/Question_8/q8_D.png" }, // optional if you add D
+                ],
+                correctAnswer: "G",
+            }
         ];
     }, []);
 
@@ -183,18 +233,21 @@ export default function QuestionRunner() {
         }
     };
 
-    const handleFinishSession = async () => {
-        if (cursorTrackerRef.current) {
-            await cursorTrackerRef.current.finalizeQuestion();
-        }
+   const handleFinishSession = async () => {
+    if (cursorTrackerRef.current) {
+        await cursorTrackerRef.current.finalizeQuestion();
+    }
 
-        if (currentQuestion) {
-            await postAnswer(currentQuestion);
-        }
-        setSessionEnded(true);
-        setSessionStarted(false);
-        setSessionEndTime(Date.now());
-    };
+    if (currentQuestion) {
+        await postAnswer(currentQuestion);
+    }
+
+    setSessionEnded(true);
+    setSessionStarted(false);
+    setSessionEndTime(Date.now());
+
+    navigate("/course");
+};
 
     const finalSessionData = {
         sessionStartTime,
