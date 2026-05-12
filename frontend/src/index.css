@@ -1,14 +1,14 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 :root {
-  --primary: #4f46e5; /* Indigo 600 */
-  --primary-hover: #4338ca;
-  --secondary: #ec4899; /* Pink 500 */
-  --background: #0f172a; /* Slate 900 */
-  --surface: #1e293b; /* Slate 800 */
-  --surface-light: #334155;
-  --text: #f8fafc;
-  --text-muted: #94a3b8;
+  --primary: #2563eb; /* Blue 600 */
+  --primary-hover: #1d4ed8; /* Blue 700 */
+  --secondary: #3b82f6; /* Blue 500 */
+  --background: #ffffff;
+  --surface: #f8fafc;
+  --surface-light: #e2e8f0;
+  --text: #0f172a;
+  --text-muted: #64748b;
   --danger: #ef4444;
   --success: #10b981;
 }
@@ -37,16 +37,16 @@ body {
 
 /* Glassmorphism Classes */
 .glass-panel {
-  background: rgba(30, 41, 59, 0.7);
+  background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow: 0 10px 40px -12px rgba(15, 23, 42, 0.12);
   border-radius: 16px;
 }
 
 .gradient-text {
-  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -75,7 +75,7 @@ body {
 .form-input {
   width: 100%;
   padding: 0.75rem 1rem;
-  background-color: rgba(15, 23, 42, 0.5);
+  background-color: #ffffff;
   border: 1px solid var(--surface-light);
   border-radius: 8px;
   color: var(--text);
@@ -86,7 +86,7 @@ body {
 .form-input:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
 }
 
 .btn {
@@ -99,18 +99,26 @@ body {
   font-size: 1rem;
   cursor: pointer;
   transition: all 0.3s ease;
-  border: none;
+  border: 1px solid var(--surface-light);
+  background: #ffffff;
+  color: var(--text);
+}
+
+.btn:not(.btn-primary):hover {
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--primary) 0%, #6366f1 100%);
-  color: white;
-  box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.4);
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.35);
 }
 
 .btn-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.5);
+  box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.45);
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
 }
 
 .auth-container {
@@ -119,7 +127,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: 2rem;
-  background: radial-gradient(circle at top right, #1e1b4b, var(--background));
+  background: var(--background);
 }
 
 .auth-box {
@@ -157,7 +165,7 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 1.5rem 2rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--surface-light);
 }
 
 .stats-grid {
@@ -200,13 +208,13 @@ body {
 }
 .diagram-preview-table th,
 .diagram-preview-table td {
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--surface-light);
   padding: 0.5rem 0.75rem;
   text-align: left;
   vertical-align: top;
 }
 .diagram-preview-table th {
-  background: rgba(15, 23, 42, 0.6);
+  background: var(--surface);
   font-weight: 600;
 }
 

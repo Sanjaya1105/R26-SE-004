@@ -31,6 +31,23 @@ function truncate(text, maxLen) {
   return `${t.slice(0, maxLen)}\n\n[…truncated for length…]`;
 }
 
+function normalizeCognitiveStyle(styleRaw) {
+  const raw = clean(styleRaw);
+  if (!raw) return "Visual";
+  if (COGNITIVE_STYLES.has(raw)) return raw;
+
+  const low = raw.toLowerCase();
+  if (low.includes("textual") || low.includes("read") || low.includes("write")) {
+    return "Read/Write";
+  }
+  if (low.includes("visual")) return "Visual";
+  if (low.includes("auditory") || low.includes("audio")) return "Auditory";
+  if (low.includes("kinesthetic") || low.includes("kinaesthetic")) {
+    return "Kinesthetic";
+  }
+  return "Visual";
+}
+
 /**
  * @param {object} input
  * @param {string} [input.courseName]
@@ -45,13 +62,12 @@ function truncate(text, maxLen) {
 function buildPedagogicalPrompt(input = {}) {
   const major = clean(input.studentProfile?.major) || "[Major]";
   const year = clean(input.studentProfile?.year) || "[Year]";
-  const interests =
-    clean(input.studentProfile?.interests) || "[Interests]";
+  const interests = clean(input.studentProfile?.interests) || "[Interests]";
+  const learningApproach =
+    clean(input.studentProfile?.learningApproach) || "[Learning Approach]";
 
-  let style = clean(input.cognitiveStyle) || "Visual";
-  if (!COGNITIVE_STYLES.has(style)) {
-    style = "Visual";
-  }
+  const originalStyle = clean(input.cognitiveStyle);
+  const style = normalizeCognitiveStyle(input.cognitiveStyle);
 
   let loadLevel = clean(input.cognitiveLoad?.level) || "Medium";
   if (!LOAD_LEVELS.has(loadLevel)) {
@@ -88,8 +104,9 @@ function buildPedagogicalPrompt(input = {}) {
   return `System Role: You are a pedagogical expert specializing in instructional content transformation. Your goal is to adapt a specific knowledge chunk for a student to maximize engagement and minimize cognitive fatigue.
 
 Inputs:
-Student Profile: {Major: ${major}, Year: ${year}, Interests: ${interests}}
+Student Profile: {Major: ${major}, Year: ${year}, Interests: ${interests}, Learning Approach: ${learningApproach}}
 Cognitive Style: {Style: ${style} (1 of 4: Visual, Auditory, Read/Write, Kinesthetic)}
+${originalStyle ? `Cognitive Style Source (from UI): ${originalStyle}` : ""}
 Current Cognitive Load: {Level: ${loadLevel} (1 of 5: Very Low, Low, Medium, High, Very High), Frustration: ${frustration} (Low, Moderate, High)}
 Knowledge Chunk: {Original Text/Transcript from Educator}
 

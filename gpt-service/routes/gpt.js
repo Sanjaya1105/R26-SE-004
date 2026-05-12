@@ -9,6 +9,7 @@ const {
   FRUSTRATION_LEVELS,
 } = require("../components/promptBuilder");
 const { buildEducationalVisual } = require("../services/educationalVisualService");
+const { hfChatCompletion } = require("../services/hfChat");
 
 const router = express.Router();
 
@@ -62,6 +63,86 @@ router.post("/build-prompt", (req, res) => {
   } catch (error) {
     return res.status(400).json({
       message: error?.message || "Failed to build prompt.",
+    });
+  }
+});
+
+/**
+ * Summarize extracted PPT + PDF content for visual learners.
+ * Public (no JWT): used on public course detail page.
+ */
+router.post("/summarize-material", async (req, res) => {
+  try {
+    const body = req.body || {};
+    const pptText = String(body.pptText || "").trim();
+    const pdfText = String(body.pdfText || "").trim();
+    const subsectionTitle = String(body.subsectionTitle || "").trim();
+    const courseName = String(body.courseName || "").trim();
+    const cognitiveStyle = String(body.cognitiveStyle || "").trim().toLowerCase();
+
+    if (!pptText && !pdfText) {
+      return res.status(400).json({
+        message: "At least one extracted source (PPT or PDF) is required.",
+      });
+    }
+
+    const system = `You are an educational summarizer.
+Return ONLY valid JSON:
+{
+  "summary": string,
+  "main_points": string[]
+}
+Rules:
+- The summary must include all major ideas from the provided material.
+- Keep it concise and classroom-friendly.
+- main_points should contain 4-10 concrete bullets.
+- Do not invent facts not present in the source.`;
+
+    const user = [
+      courseName ? `Course: ${courseName}` : "",
+      subsectionTitle ? `Subsection: ${subsectionTitle}` : "",
+      cognitiveStyle ? `Learner preference: ${cognitiveStyle}` : "",
+      "",
+      "Extracted PPT text:",
+      pptText || "(none)",
+      "",
+      "Extracted PDF text:",
+      pdfText || "(none)",
+      "",
+      "Task: Create a merged summary that includes all main points.",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const { text, model } = await hfChatCompletion(
+      [
+        { role: "system", content: system },
+        { role: "user", content: user.slice(0, 16000) },
+      ],
+      { max_tokens: 1400, temperature: 0.15 }
+    );
+
+    let parsed = null;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = null;
+    }
+
+    const summary =
+      String(parsed?.summary || "").trim() || String(text || "").trim();
+    const main_points = Array.isArray(parsed?.main_points)
+      ? parsed.main_points.map((x) => String(x).trim()).filter(Boolean)
+      : [];
+
+    return res.status(200).json({
+      success: true,
+      data: { summary, main_points, model },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Failed to summarize extracted materials.",
+      detail: error?.message || "Unknown error",
     });
   }
 });
@@ -130,7 +211,7 @@ router.post("/ask", verifyToken, async (req, res) => {
             },
             { role: "user", content: question },
           ],
-          max_tokens: 512,
+          max_tokens: 1500,
         },
         {
           headers: {

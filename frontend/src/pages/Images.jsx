@@ -29,6 +29,20 @@ function formatVisualTypeLabel(v) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function illustrationImageHint(status, error) {
+  if (status === 'wikipedia_empty') {
+    return 'No suitable Wikipedia images found for this topic. Try adding more specific lesson text.';
+  }
+  if (status === 'wikipedia_failed') {
+    const code = error?.code ? ` (${error.code})` : '';
+    return `Wikipedia image fetch failed${code}. Please try again.`;
+  }
+  if (status === 'wikipedia_success') {
+    return 'Showing the latest relevant Wikipedia images.';
+  }
+  return 'Searching for Wikipedia images...';
+}
+
 export default function Images() {
   const navigate = useNavigate();
   const [form, setForm] = useState(initialForm);
@@ -105,6 +119,7 @@ export default function Images() {
               mermaid: result.mermaid || '',
               image_prompt: result.image_prompt || '',
               image_url: result.image_url || '',
+              wiki_images: Array.isArray(result.wiki_images) ? result.wiki_images : [],
               labels: Array.isArray(result.labels) ? result.labels : [],
               alt_text: result.alt_text || '',
               student_caption: result.student_caption || '',
@@ -177,7 +192,29 @@ export default function Images() {
             />
           </div>
         ) : null}
-        {visualType === 'illustration' && !visual?.image_url ? (
+        {visualType === 'illustration' && Array.isArray(visual?.wiki_images) && visual.wiki_images.length > 0 ? (
+          <div style={{ marginTop: '0.75rem' }}>
+            <p className="form-label" style={{ marginBottom: '0.45rem' }}>Wikipedia images (latest 3)</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.6rem' }}>
+              {visual.wiki_images.slice(0, 3).map((w, i) => (
+                <a
+                  key={String(i)}
+                  href={w.description_url || w.image_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ display: 'block' }}
+                >
+                  <img
+                    src={w.image_url}
+                    alt={w.title || `Wikipedia image ${i + 1}`}
+                    style={{ width: '100%', height: '140px', objectFit: 'cover', borderRadius: '8px' }}
+                  />
+                </a>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {visualType === 'illustration' && !visual?.image_url && (!Array.isArray(visual?.wiki_images) || visual.wiki_images.length === 0) ? (
           <div
             style={{
               marginTop: '0.75rem',

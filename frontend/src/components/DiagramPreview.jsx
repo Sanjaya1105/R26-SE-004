@@ -72,6 +72,48 @@ async function renderMermaid(code, container) {
   return svg;
 }
 
+function normalizeMermaidSource(source) {
+  if (!source) return '';
+  const subscriptMap = {
+    '₀': '0',
+    '₁': '1',
+    '₂': '2',
+    '₃': '3',
+    '₄': '4',
+    '₅': '5',
+    '₆': '6',
+    '₇': '7',
+    '₈': '8',
+    '₉': '9',
+  };
+
+  const normalizeLabelText = (label) =>
+    String(label)
+      .replace(/[₀-₉]/g, (char) => subscriptMap[char] || char)
+      .replace(/→/g, '-->')
+      .replace(/&/g, 'and')
+      .replace(/"/g, "'");
+
+  const base = String(source)
+    .replace(/\r\n?/g, '\n')
+    .replace(/^\s*```(?:mermaid)?\s*\n?/i, '')
+    .replace(/\n?\s*```\s*$/i, '')
+    .replace(/[₀-₉]/g, (char) => subscriptMap[char] || char)
+    .replace(/→/g, '-->')
+    .replace(/&/g, 'and')
+    .trim();
+
+  // For flowcharts, quote bracket labels to avoid parser issues with special text.
+  if (!/^\s*flowchart\b/i.test(base)) {
+    return base;
+  }
+
+  return base.replace(/\[([^\]\n]+)\]/g, (_match, rawLabel) => {
+    const cleaned = normalizeLabelText(rawLabel).trim();
+    return `["${cleaned}"]`;
+  });
+}
+
 function ChartPreview({ chart }) {
   const type = String(chart?.chart_type || 'bar').toLowerCase();
   const title = chart?.title || '';
@@ -189,6 +231,7 @@ export default function DiagramPreview({ diagramData }) {
   const fmt = diagramData?.format;
   const rawSource = diagramData?.mermaid || diagramData?.source;
   const mermaidSrc = typeof rawSource === 'string' ? rawSource.trim() : '';
+  const normalizedMermaidSrc = normalizeMermaidSource(mermaidSrc);
 
   useLayoutEffect(() => {
     if (fmt === 'map_card') {
@@ -212,7 +255,15 @@ export default function DiagramPreview({ diagramData }) {
       el.removeAttribute('data-processed');
       el.replaceChildren();
       try {
-        await renderMermaid(mermaidSrc, el);
+        try {
+          await renderMermaid(mermaidSrc, el);
+        } catch {
+          if (normalizedMermaidSrc && normalizedMermaidSrc !== mermaidSrc) {
+            await renderMermaid(normalizedMermaidSrc, el);
+          } else {
+            throw new Error('Mermaid render failed');
+          }
+        }
         if (cancelled) return;
         setMermaidFailed(false);
       } catch {
@@ -227,7 +278,7 @@ export default function DiagramPreview({ diagramData }) {
     return () => {
       cancelled = true;
     };
-  }, [fmt, mermaidSrc]);
+  }, [fmt, mermaidSrc, normalizedMermaidSrc]);
 
   if (!diagramData || typeof diagramData !== 'object') {
     return null;

@@ -1,3 +1,4 @@
+const axios = require("axios");
 const { hfChatCompletion } = require("./hfChat");
 const { analyzeLesson } = require("./lessonAnalysisService");
 const { parseJsonFromLlm } = require("../lib/parseJsonFromLlm");
@@ -5,9 +6,7 @@ const {
   extractLearningSignals,
 } = require("../lib/visualDecision");
 const {
-  generateImage,
   generateImageFromPrompt,
-  isImageApiConfigured,
 } = require("../lib/hfTextToImage");
 const {
   extractTimelineRows,
@@ -17,6 +16,7 @@ const {
   buildGoogleMapsUrls,
   resolveMapsQuery,
 } = require("../lib/googleMapsUrls");
+const WIKIMEDIA_API_URL = "https://commons.wikimedia.org/w/api.php";
 
 function styleModifier(style) {
   const s = String(style || "textbook").toLowerCase();
@@ -157,6 +157,103 @@ function buildContextBlock(payload, analysis) {
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+function isUsableCommonsImage(filePage) {
+  const ii = filePage?.imageinfo?.[0] || {};
+  const mime = String(ii.mime || "").toLowerCase();
+  if (!mime.startsWith("image/")) return false;
+  if (mime.includes("svg") || mime.includes("gif")) return false;
+  const title = String(filePage?.title || "").toLowerCase();
+  if (!title.startsWith("file:")) return false;
+  if (
+    /\b(icon|logo|wordmark|coat of arms|seal|emblem|flag map|locator map|disambiguation)\b/i.test(
+      title
+    )
+  ) {
+    return false;
+  }
+  const width = Number(ii.width || 0);
+  const height = Number(ii.height || 0);
+  return width >= 320 && height >= 240;
+}
+
+function wikiQueriesFrom(analysis, payload) {
+  const out = [];
+  const add = (v) => {
+    const s = String(v || "").trim();
+    if (!s) return;
+    if (!out.includes(s)) out.push(s);
+  };
+  add(analysis?.main_topic);
+  add(payload?.subject);
+  if (Array.isArray(analysis?.key_concepts)) {
+    for (const k of analysis.key_concepts.slice(0, 3)) add(k);
+  }
+  return out.slice(0, 4);
+}
+
+async function fetchWikipediaImagesForIllustration(analysis, payload, maxCount = 3) {
+  const queries = wikiQueriesFrom(analysis, payload);
+  if (!queries.length) return [];
+
+  const allCandidates = [];
+  for (const q of queries) {
+    try {
+      const response = await axios.get(WIKIMEDIA_API_URL, {
+        params: {
+          action: "query",
+          format: "json",
+          origin: "*",
+          generator: "search",
+          gsrnamespace: 6,
+          gsrlimit: 16,
+          gsrsort: "last_edit_desc",
+          gsrsearch: `${q} filetype:bitmap`,
+          prop: "imageinfo|info",
+          iiprop: "url|mime|size|timestamp",
+          inprop: "url",
+        },
+        timeout: 20000,
+      });
+      const pages = Object.values(response?.data?.query?.pages || {});
+      for (const p of pages) {
+        if (!isUsableCommonsImage(p)) continue;
+        const ii = p.imageinfo[0] || {};
+        const ts = String(ii.timestamp || p.touched || "");
+        allCandidates.push({
+          title: String(p.title || "").replace(/^File:/i, "").replace(/_/g, " "),
+          image_url: String(ii.url || "").trim(),
+          description_url: String(p.fullurl || "").trim(),
+          mime_type: String(ii.mime || "").trim(),
+          width: Number(ii.width || 0) || undefined,
+          height: Number(ii.height || 0) || undefined,
+          last_updated: ts,
+          source: "wikimedia_commons",
+        });
+      }
+    } catch {
+      // Best-effort fetch; continue with remaining queries.
+    }
+  }
+
+  const dedup = new Map();
+  for (const c of allCandidates) {
+    const key = String(c.image_url || "").toLowerCase();
+    if (!key) continue;
+    const prev = dedup.get(key);
+    if (!prev) {
+      dedup.set(key, c);
+      continue;
+    }
+    const prevTs = Date.parse(prev.last_updated || "") || 0;
+    const currTs = Date.parse(c.last_updated || "") || 0;
+    if (currTs > prevTs) dedup.set(key, c);
+  }
+
+  return [...dedup.values()]
+    .sort((a, b) => (Date.parse(b.last_updated || "") || 0) - (Date.parse(a.last_updated || "") || 0))
+    .slice(0, maxCount);
 }
 
 const MERMAID_TYPES = new Set([
@@ -661,35 +758,15 @@ Lesson:\n${String(payload.lessonText || "").slice(0, 12000)}`;
   image_prompt = ensureIllustrationImportantBlock(image_prompt);
 
   let generated_image = null;
-  let illustration_image_status = "not_configured";
-  /** Safe subset for UI / debugging (no tokens or raw HF bodies). */
+  let illustration_image_status = "wikipedia_empty";
   let illustration_image_error = null;
-  if (isImageApiConfigured()) {
-    illustration_image_status = "failed";
-    try {
-      const dataUrl = await generateImage(image_prompt);
-      const m =
-        typeof dataUrl === "string" &&
-        dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-      if (m) {
-        generated_image = { mime_type: m[1], base64: m[2] };
-        illustration_image_status = "success";
-      }
-    } catch (e) {
-      console.error(
-        "[generateIllustration] HF image:",
-        e?.code,
-        e?.status,
-        e?.message
-      );
-      generated_image = null;
-      illustration_image_status = "failed";
-      illustration_image_error = {
-        code: e?.code || "UNKNOWN",
-        httpStatus:
-          typeof e?.status === "number" ? e.status : undefined,
-      };
-    }
+  let wiki_images = [];
+  try {
+    wiki_images = await fetchWikipediaImagesForIllustration(analysis, payload, 3);
+    illustration_image_status = wiki_images.length > 0 ? "wikipedia_success" : "wikipedia_empty";
+  } catch (e) {
+    illustration_image_status = "wikipedia_failed";
+    illustration_image_error = { code: "WIKIPEDIA_FETCH_FAILED" };
   }
 
   const baseNotes = [
@@ -699,12 +776,12 @@ Lesson:\n${String(payload.lessonText || "").slice(0, 12000)}`;
   ];
   const parsedNotes = Array.isArray(parsed.verification_notes) ? parsed.verification_notes : [];
   const verification_notes = [...parsedNotes, ...baseNotes];
-  if (illustration_image_status === "not_configured") {
-    verification_notes.push(
-      "Image generation is not configured (set HF_IMAGE_API_URL and HF_API_TOKEN or HF_API_KEY)."
-    );
-  } else if (illustration_image_status === "failed") {
-    verification_notes.push("Image generation did not return an image; you can try again or check the API.");
+  if (illustration_image_status === "wikipedia_success") {
+    verification_notes.push("Using top 3 most recently updated Wikimedia images for illustration.");
+  } else if (illustration_image_status === "wikipedia_empty") {
+    verification_notes.push("No suitable Wikimedia images were found for this topic.");
+  } else if (illustration_image_status === "wikipedia_failed") {
+    verification_notes.push("Could not fetch Wikimedia images right now; try again.");
   }
 
   const topic = String(analysis.main_topic || "").trim();
@@ -725,6 +802,7 @@ Lesson:\n${String(payload.lessonText || "").slice(0, 12000)}`;
     student_caption,
     verification_notes,
     generated_image,
+    wiki_images,
     illustration_image_status,
     illustration_image_error,
   };
@@ -974,7 +1052,13 @@ function buildVisualCard(result, visualType, idx, reason) {
         base64: result.generated_image.base64,
       }
     : null;
-  const image_url = img ? `data:${img.mime};base64,${img.base64}` : "";
+  const wikiImages = Array.isArray(result.wiki_images) ? result.wiki_images : [];
+  const primaryWikiImage = wikiImages.find((w) => String(w?.image_url || "").trim());
+  const image_url = img
+    ? `data:${img.mime};base64,${img.base64}`
+    : primaryWikiImage
+      ? String(primaryWikiImage.image_url)
+      : "";
   return {
     id: `visual_${idx + 1}`,
     title: `${String(visualType || "visual").replace(/_/g, " ")} visual`,
@@ -990,6 +1074,7 @@ function buildVisualCard(result, visualType, idx, reason) {
     student_caption: result.student_caption || "",
     verification_notes: result.verification_notes || [],
     generated_image: result.generated_image || undefined,
+    wiki_images: wikiImages,
     illustration_image_status: result.illustration_image_status || null,
     illustration_image_error: result.illustration_image_error || null,
   };
@@ -1143,6 +1228,7 @@ async function buildEducationalVisual(payload) {
     out.student_caption = first.student_caption || "";
     out.verification_notes = first.verification_notes || [];
     out.image_url = first.image_url || "";
+    out.wiki_images = Array.isArray(first.wiki_images) ? first.wiki_images : [];
     if (first.generated_image?.base64) {
       out.generated_image = first.generated_image;
     }

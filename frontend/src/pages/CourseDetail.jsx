@@ -3,6 +3,11 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { getGatewayBaseUrl } from '../config/gateway';
 import AssistantMarkdown from '../components/AssistantMarkdown';
+import DiagramPreview from '../components/DiagramPreview';
+import MapCard from '../components/MapCard';
+import LabeledDiagramPreview from '../utils/renderLabeledDiagram';
+import { generateEducationalVisual } from '../services/educationalImageService';
+import { resolveLabeledDiagramTemplate } from '../utils/labeledDiagramTemplate';
 
 function buildGptAskUrls() {
   const base = getGatewayBaseUrl();
@@ -21,6 +26,16 @@ function buildGptPromptUrls() {
     'http://localhost:4000/api/gpt/build-prompt',
     'http://127.0.0.1:4000/api/gpt/build-prompt',
     'http://localhost:5002/api/gpt/build-prompt',
+  ].filter((url, i, arr) => arr.indexOf(url) === i);
+}
+
+function buildGptSummaryUrls() {
+  const base = getGatewayBaseUrl();
+  return [
+    `${base}/api/gpt/summarize-material`,
+    'http://localhost:4000/api/gpt/summarize-material',
+    'http://127.0.0.1:4000/api/gpt/summarize-material',
+    'http://localhost:5002/api/gpt/summarize-material',
   ].filter((url, i, arr) => arr.indexOf(url) === i);
 }
 
@@ -52,6 +67,27 @@ function formatIsoDateTime(value) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return String(value);
   return parsed.toLocaleString();
+}
+
+function formatVisualTypeLabel(v) {
+  if (!v) return '';
+  return String(v)
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function illustrationImageHint(status, error) {
+  if (status === 'wikipedia_empty') {
+    return 'No suitable Wikipedia images found for this topic. Try refining the summary.';
+  }
+  if (status === 'wikipedia_failed') {
+    const code = error?.code ? ` (${error.code})` : '';
+    return `Wikipedia image fetch failed${code}. Please try again.`;
+  }
+  if (status === 'wikipedia_success') {
+    return 'Showing the latest relevant Wikipedia images.';
+  }
+  return 'Searching for Wikipedia images...';
 }
 
 function getLivePredictionSummary(result) {
@@ -115,6 +151,14 @@ function getDisplayRawEventCount(summary, localRawEventCount) {
   return null;
 }
 
+function deriveFrustrationFromLoad(level) {
+  const normalized = String(level || '').trim().toLowerCase();
+  if (normalized === 'very low' || normalized === 'low') return 'Low';
+  if (normalized === 'medium') return 'Moderate';
+  if (normalized === 'high' || normalized === 'very high') return 'High';
+  return 'Moderate';
+}
+
 function getCompletedWindowInfo(sessionStart, sessionId, now = new Date()) {
   if (!(sessionStart instanceof Date) || !sessionId) {
     return null;
@@ -172,14 +216,23 @@ const CourseDetail = () => {
   const [pedagogicalPrompt, setPedagogicalPrompt] = useState('');
   const [promptLoading, setPromptLoading] = useState(false);
   const [promptError, setPromptError] = useState('');
-  const [studentAge, setStudentAge] = useState('');
+  /** When false, prompt fields are hidden so assistant reply can use more space */
+  const [showPedagogicalPromptPanel, setShowPedagogicalPromptPanel] = useState(true);
+  const [visualSummary, setVisualSummary] = useState('');
+  const [visualMainPoints, setVisualMainPoints] = useState([]);
+  const [visualSummaryLoading, setVisualSummaryLoading] = useState(false);
+  const [visualSummaryError, setVisualSummaryError] = useState('');
   const [cognitivePreference, setCognitivePreference] = useState('visual');
   const [cognitiveProcessing, setCognitiveProcessing] = useState('analytic');
   const [loadLevel, setLoadLevel] = useState('Medium');
-  const [frustration, setFrustration] = useState('Low');
+  const [learningApproach, setLearningApproach] = useState('Deep Organized');
   const [cognitiveLoadResult, setCognitiveLoadResult] = useState(null);
   const [cognitiveLoadError, setCognitiveLoadError] = useState('');
   const [cognitiveLoadLoading, setCognitiveLoadLoading] = useState(false);
+  const [visualGenLoading, setVisualGenLoading] = useState(false);
+  const [visualGenError, setVisualGenError] = useState('');
+  const [visualGenResult, setVisualGenResult] = useState(null);
+  const [showGeneratedVisuals, setShowGeneratedVisuals] = useState(false);
   const [videoSessionId, setVideoSessionId] = useState('');
   const [localRawEventCount, setLocalRawEventCount] = useState(0);
   const videoRef = useRef(null);
@@ -203,6 +256,7 @@ const CourseDetail = () => {
   const predictionInFlightWindowKeyRef = useRef('');
   const rawEventQueueRef = useRef(Promise.resolve());
   const cognitiveStyle = `${cognitivePreference} ${cognitiveProcessing}`;
+  const derivedFrustration = deriveFrustrationFromLoad(loadLevel);
 
   const toggleSection = (sectionId) => {
     const k = String(sectionId);
@@ -229,6 +283,12 @@ const CourseDetail = () => {
     setGptError('');
     setPedagogicalPrompt('');
     setPromptError('');
+    setVisualSummary('');
+    setVisualMainPoints([]);
+    setVisualSummaryError('');
+    setVisualGenError('');
+    setVisualGenResult(null);
+    setShowGeneratedVisuals(false);
     setCognitiveLoadResult(null);
     setCognitiveLoadError('');
     setCognitiveLoadLoading(false);
@@ -236,6 +296,7 @@ const CourseDetail = () => {
     setLocalRawEventCount(0);
     lastPredictedWindowKeyRef.current = '';
     predictionInFlightWindowKeyRef.current = '';
+    setShowPedagogicalPromptPanel(true);
   }, [courseId]);
 
   useEffect(() => {
@@ -244,6 +305,13 @@ const CourseDetail = () => {
     setGptError('');
     setPedagogicalPrompt('');
     setPromptError('');
+    setVisualSummary('');
+    setVisualMainPoints([]);
+    setVisualSummaryError('');
+    setVisualGenError('');
+    setVisualGenResult(null);
+    setShowGeneratedVisuals(false);
+    setShowPedagogicalPromptPanel(true);
   }, [mainVideo?.url]);
 
   useEffect(() => {
@@ -657,11 +725,11 @@ const CourseDetail = () => {
         pptText: mainVideo.pptText || '',
         pdfText: mainVideo.pdfText || '',
         studentProfile: {
-          age: studentAge,
-          year: studentAge,
+          year: 'Undergraduate',
+          learningApproach,
         },
         cognitiveStyle,
-        cognitiveLoad: { level: loadLevel, frustration },
+        cognitiveLoad: { level: loadLevel, frustration: derivedFrustration },
       };
 
       const urls = buildGptPromptUrls();
@@ -709,12 +777,92 @@ const CourseDetail = () => {
     mainVideo?.pptText,
     mainVideo?.pdfText,
     course?.courseName,
-    studentAge,
+    learningApproach,
     cognitivePreference,
     cognitiveProcessing,
     cognitiveStyle,
     loadLevel,
-    frustration,
+  ]);
+
+  useEffect(() => {
+    if (!mainVideo?.url || cognitivePreference !== 'visual') {
+      setVisualSummary('');
+      setVisualMainPoints([]);
+      setVisualSummaryError('');
+      setVisualSummaryLoading(false);
+      return undefined;
+    }
+
+    const pptText = String(mainVideo.pptText || '').trim();
+    const pdfText = String(mainVideo.pdfText || '').trim();
+    if (!pptText && !pdfText) {
+      setVisualSummary('');
+      setVisualMainPoints([]);
+      setVisualSummaryError('No extracted PPT/PDF text available to summarize.');
+      return undefined;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setVisualSummaryLoading(true);
+      setVisualSummaryError('');
+      try {
+        const body = {
+          courseName: course?.courseName || '',
+          subsectionTitle: mainVideo.title || '',
+          pptText,
+          pdfText,
+          cognitiveStyle,
+        };
+        const urls = buildGptSummaryUrls();
+        let res;
+        let lastErr;
+        for (const url of urls) {
+          try {
+            res = await axios.post(url, body);
+            lastErr = null;
+            break;
+          } catch (e) {
+            lastErr = e;
+            if (e.response?.status === 404) continue;
+            if (!e.response && e.code === 'ERR_NETWORK') continue;
+            throw e;
+          }
+        }
+        if (!res && lastErr) throw lastErr;
+        if (!cancelled) {
+          setVisualSummary(String(res.data?.data?.summary || '').trim());
+          setVisualMainPoints(
+            Array.isArray(res.data?.data?.main_points) ? res.data.data.main_points : []
+          );
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setVisualSummary('');
+          setVisualMainPoints([]);
+          setVisualSummaryError(
+            [err.response?.data?.message, err.response?.data?.detail, err.message]
+              .filter(Boolean)
+              .join('\n\n') || 'Could not generate visual summary.'
+          );
+        }
+      } finally {
+        if (!cancelled) setVisualSummaryLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    mainVideo?.url,
+    mainVideo?.title,
+    mainVideo?.pptText,
+    mainVideo?.pdfText,
+    course?.courseName,
+    cognitivePreference,
+    cognitiveStyle,
   ]);
 
   useEffect(() => {
@@ -772,10 +920,10 @@ const CourseDetail = () => {
       ? course.keywords
       : [];
 
-  const askCourseGpt = async () => {
+  const askCourseGpt = async (directQuestion) => {
     setGptError('');
     setGptAnswer('');
-    const q = gptQuestion.trim();
+    const q = String(directQuestion ?? gptQuestion).trim();
     if (!q) {
       setGptError('Enter a question for the assistant.');
       return;
@@ -846,6 +994,99 @@ const CourseDetail = () => {
       setGptLoading(false);
     }
   };
+
+  const askFromPedagogicalPrompt = () => {
+    const q = String(pedagogicalPrompt ?? '').trim();
+    if (!q) {
+      setGptError('Enter a question for the assistant.');
+      return;
+    }
+    if (!localStorage.getItem('token')) {
+      setGptError('Sign in to use the assistant (open /login in another tab).');
+      return;
+    }
+    setShowPedagogicalPromptPanel(false);
+    askCourseGpt(pedagogicalPrompt);
+  };
+
+  const runVisualGenerate = async () => {
+    setVisualGenError('');
+    setVisualGenResult(null);
+    const learnerLevel = 'Undergraduate';
+    if (!visualSummary.trim()) {
+      setVisualGenError('Visual summary is not ready yet.');
+      return;
+    }
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setVisualGenError('Sign in to generate visuals.');
+      return;
+    }
+
+    const lessonTextForVisual = [
+      `Visual summary (from extracted PPT + PDF):`,
+      visualSummary.trim(),
+      '',
+      `Student level: ${learnerLevel}`,
+      ...(Array.isArray(visualMainPoints) && visualMainPoints.length
+        ? ['', 'Main points:', ...visualMainPoints.map((p) => `- ${String(p)}`)]
+        : []),
+    ].join('\n');
+
+    try {
+      setVisualGenLoading(true);
+      const data = await generateEducationalVisual(
+        {
+          lessonText: lessonTextForVisual,
+          studentAge: learnerLevel,
+          imageStyle: 'textbook',
+          language: 'English',
+        },
+        token
+      );
+      setVisualGenResult(data);
+      setShowGeneratedVisuals(true);
+    } catch (err) {
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        navigate('/login');
+        return;
+      }
+      setVisualGenError(
+        [err.response?.data?.message, err.response?.data?.detail, err.message]
+          .filter(Boolean)
+          .join('\n\n') || 'Visual generation failed.'
+      );
+    } finally {
+      setVisualGenLoading(false);
+    }
+  };
+
+  const visualCards =
+    Array.isArray(visualGenResult?.visuals) && visualGenResult.visuals.length > 0
+      ? visualGenResult.visuals
+      : visualGenResult
+        ? [
+            {
+              id: 'visual_1',
+              title: `${formatVisualTypeLabel(visualGenResult.primary_visual || 'visual')} visual`,
+              visual_type: visualGenResult.primary_visual || '',
+              visual_reason: visualGenResult.visual_reason || '',
+              diagram_format: visualGenResult.diagram_format || '',
+              diagram_data: visualGenResult.diagram_data || {},
+              mermaid: visualGenResult.mermaid || '',
+              image_prompt: visualGenResult.image_prompt || '',
+              image_url: visualGenResult.image_url || '',
+              wiki_images: Array.isArray(visualGenResult.wiki_images) ? visualGenResult.wiki_images : [],
+              labels: Array.isArray(visualGenResult.labels) ? visualGenResult.labels : [],
+              alt_text: visualGenResult.alt_text || '',
+              student_caption: visualGenResult.student_caption || '',
+              illustration_image_status: visualGenResult.illustration_image_status || null,
+              illustration_image_error: visualGenResult.illustration_image_error || null,
+            },
+          ]
+        : [];
 
   return (
     <div
@@ -1361,7 +1602,7 @@ const CourseDetail = () => {
                                                   });
                                                 }}
                                               >
-                                                Video link
+                                                🎬 Video
                                                 {' '}
                                                 <span
                                                   style={{
@@ -1380,7 +1621,7 @@ const CourseDetail = () => {
                                                 rel="noopener noreferrer"
                                                 style={{ color: '#93c5fd' }}
                                               >
-                                                PPT link
+                                                📊 PPT
                                               </a>
                                             ) : null}
                                             {sub.pdfUrl ? (
@@ -1390,7 +1631,7 @@ const CourseDetail = () => {
                                                 rel="noopener noreferrer"
                                                 style={{ color: '#93c5fd' }}
                                               >
-                                                PDF link
+                                                📄 PDF
                                               </a>
                                             ) : null}
                                             {hasImages
@@ -1406,7 +1647,7 @@ const CourseDetail = () => {
                                                         wordBreak: 'break-all',
                                                       }}
                                                     >
-                                                      Image {ii + 1} link
+                                                      🖼️ Image {ii + 1}
                                                     </a>
                                                   ) : null
                                                 )
@@ -1691,122 +1932,6 @@ const CourseDetail = () => {
               </div>
               <div
                 style={{
-                  marginTop: '1rem',
-                  padding: '1rem',
-                  borderRadius: '12px',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  background: 'rgba(15, 23, 42, 0.35)',
-                }}
-              >
-                <p
-                  className="form-label"
-                  style={{
-                    margin: 0,
-                    fontSize: '0.8rem',
-                    marginBottom: '0.5rem',
-                    letterSpacing: '0.02em',
-                  }}
-                >
-                  Extracted video text
-                </p>
-                {mainVideo.transcriptText ? (
-                  <div
-                    style={{
-                      maxHeight: '220px',
-                      overflowY: 'auto',
-                      whiteSpace: 'pre-wrap',
-                      lineHeight: 1.5,
-                      fontSize: '0.9rem',
-                      color: 'var(--text-muted)',
-                    }}
-                  >
-                    {mainVideo.transcriptText}
-                  </div>
-                ) : (
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: '0.85rem',
-                      color: 'var(--text-muted)',
-                    }}
-                  >
-                    No extracted text available for this video yet.
-                  </p>
-                )}
-              </div>
-              {mainVideo.pptText ? (
-                <div
-                  style={{
-                    marginTop: '0.75rem',
-                    padding: '1rem',
-                    borderRadius: '12px',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    background: 'rgba(15, 23, 42, 0.35)',
-                  }}
-                >
-                  <p
-                    className="form-label"
-                    style={{
-                      margin: 0,
-                      fontSize: '0.8rem',
-                      marginBottom: '0.5rem',
-                      letterSpacing: '0.02em',
-                    }}
-                  >
-                    Extracted PPT text
-                  </p>
-                  <div
-                    style={{
-                      maxHeight: '220px',
-                      overflowY: 'auto',
-                      whiteSpace: 'pre-wrap',
-                      lineHeight: 1.5,
-                      fontSize: '0.9rem',
-                      color: 'var(--text-muted)',
-                    }}
-                  >
-                    {mainVideo.pptText}
-                  </div>
-                </div>
-              ) : null}
-              {mainVideo.pdfText ? (
-                <div
-                  style={{
-                    marginTop: '0.75rem',
-                    padding: '1rem',
-                    borderRadius: '12px',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    background: 'rgba(15, 23, 42, 0.35)',
-                  }}
-                >
-                  <p
-                    className="form-label"
-                    style={{
-                      margin: 0,
-                      fontSize: '0.8rem',
-                      marginBottom: '0.5rem',
-                      letterSpacing: '0.02em',
-                    }}
-                  >
-                    Extracted PDF text
-                  </p>
-                  <div
-                    style={{
-                      maxHeight: '220px',
-                      overflowY: 'auto',
-                      whiteSpace: 'pre-wrap',
-                      lineHeight: 1.5,
-                      fontSize: '0.9rem',
-                      color: 'var(--text-muted)',
-                    }}
-                  >
-                    {mainVideo.pdfText}
-                  </div>
-                </div>
-              ) : null}
-
-              <div
-                style={{
                   marginTop: '0.75rem',
                   padding: '1rem',
                   borderRadius: '12px',
@@ -1814,226 +1939,477 @@ const CourseDetail = () => {
                   background: 'rgba(22, 101, 52, 0.12)',
                 }}
               >
-                <p
-                  className="form-label"
-                  style={{
-                    margin: 0,
-                    fontSize: '0.8rem',
-                    marginBottom: '0.5rem',
-                    letterSpacing: '0.02em',
-                  }}
-                >
-                  Pedagogical prompt (subsection)
-                </p>
-                <p
-                  style={{
-                    margin: '0 0 0.65rem 0',
-                    fontSize: '0.75rem',
-                    color: 'var(--text-muted)',
-                    lineHeight: 1.45,
-                  }}
-                >
-                  Built from this subsection’s extracted video, PPT, and PDF text.
-                  Adjust profile fields to refresh the template.
-                </p>
                 <div
                   style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
-                    gap: '0.5rem',
-                    marginBottom: '0.65rem',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    gap: '0.75rem',
+                    flexWrap: 'wrap',
+                    marginBottom: showPedagogicalPromptPanel ? '0.5rem' : '0.65rem',
                   }}
                 >
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Student age"
-                    value={studentAge}
-                    onChange={(e) => setStudentAge(e.target.value)}
-                    style={{ fontSize: '0.82rem' }}
-                  />
-                  <select
-                    className="form-input"
-                    value={cognitivePreference}
-                    onChange={(e) => setCognitivePreference(e.target.value)}
-                    style={{ fontSize: '0.82rem' }}
-                  >
-                    <option value="visual">Visual</option>
-                    <option value="textual">Textual</option>
-                  </select>
-                  <select
-                    className="form-input"
-                    value={cognitiveProcessing}
-                    onChange={(e) => setCognitiveProcessing(e.target.value)}
-                    style={{ fontSize: '0.82rem' }}
-                  >
-                    <option value="analytic">Analytic</option>
-                    <option value="holistic">Holistic</option>
-                  </select>
-                  <select
-                    className="form-input"
-                    value={loadLevel}
-                    onChange={(e) => setLoadLevel(e.target.value)}
-                    style={{ fontSize: '0.82rem' }}
-                  >
-                    <option value="Very Low">Load: Very Low</option>
-                    <option value="Low">Load: Low</option>
-                    <option value="Medium">Load: Medium</option>
-                    <option value="High">Load: High</option>
-                    <option value="Very High">Load: Very High</option>
-                  </select>
-                  <select
-                    className="form-input"
-                    value={frustration}
-                    onChange={(e) => setFrustration(e.target.value)}
-                    style={{ fontSize: '0.82rem' }}
-                  >
-                    <option value="Low">Frustration: Low</option>
-                    <option value="Moderate">Frustration: Moderate</option>
-                    <option value="High">Frustration: High</option>
-                  </select>
+                  <div style={{ flex: '1 1 200px', minWidth: 0 }}>
+                    <p
+                      className="form-label"
+                      style={{
+                        margin: 0,
+                        fontSize: '0.8rem',
+                        marginBottom: '0.35rem',
+                        letterSpacing: '0.02em',
+                      }}
+                    >
+                      Pedagogical prompt (subsection)
+                    </p>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: '0.75rem',
+                        color: 'var(--text-muted)',
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      Built from this subsection’s extracted video, PPT, and PDF text.
+                      Adjust profile fields to refresh the template.
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem', alignItems: 'center' }}>
+                    {!showPedagogicalPromptPanel ? (
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={() => setShowPedagogicalPromptPanel(true)}
+                        style={{ fontSize: '0.82rem', padding: '0.45rem 0.85rem' }}
+                      >
+                        Show prompt
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn"
+                        onClick={() => setShowPedagogicalPromptPanel(false)}
+                        style={{ fontSize: '0.82rem', padding: '0.45rem 0.85rem' }}
+                      >
+                        Hide prompt
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <p
-                  style={{
-                    margin: '0 0 0.5rem 0',
-                    fontSize: '0.78rem',
-                    color: 'var(--text-muted)',
-                  }}
-                >
-                  Cognitive style: <strong style={{ color: 'var(--text)' }}>{cognitiveStyle}</strong>
-                </p>
-                {promptLoading ? (
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: '0.82rem',
-                      color: 'var(--text-muted)',
-                    }}
-                  >
-                    Building prompt…
-                  </p>
-                ) : null}
-                {promptError ? (
-                  <p
-                    style={{
-                      margin: '0.35rem 0 0 0',
-                      fontSize: '0.82rem',
-                      color: 'var(--danger)',
-                      whiteSpace: 'pre-wrap',
-                    }}
-                  >
-                    {promptError}
-                  </p>
-                ) : null}
-                <textarea
-                  className="form-input"
-                  readOnly
-                  rows={14}
-                  value={pedagogicalPrompt}
-                  placeholder={
-                    promptLoading
-                      ? ''
-                      : 'Prompt will appear here when the subsection has loaded.'
-                  }
-                  style={{
-                    marginTop: '0.5rem',
-                    resize: 'vertical',
-                    fontSize: '0.78rem',
-                    lineHeight: 1.45,
-                    fontFamily: 'ui-monospace, monospace',
-                    maxHeight: '360px',
-                  }}
-                />
-              </div>
 
-              <div
-                style={{
-                  marginTop: '0.75rem',
-                  padding: '1rem',
-                  borderRadius: '12px',
-                  border: '1px solid rgba(129, 140, 248, 0.25)',
-                  background: 'rgba(79, 70, 229, 0.08)',
-                }}
-              >
-                <p
-                  className="form-label"
-                  style={{
-                    margin: 0,
-                    fontSize: '0.8rem',
-                    marginBottom: '0.5rem',
-                    letterSpacing: '0.02em',
-                  }}
-                >
-                  Ask the assistant
-                </p>
-                <p
-                  style={{
-                    margin: '0 0 0.65rem 0',
-                    fontSize: '0.75rem',
-                    color: 'var(--text-muted)',
-                    lineHeight: 1.45,
-                  }}
-                >
-                  Questions use this subsection’s extracted text when available.{' '}
-                  <Link to="/login" style={{ color: '#93c5fd' }}>
-                    Sign in
-                  </Link>{' '}
-                  to ask.
-                </p>
-                <textarea
-                  className="form-input"
-                  rows={3}
-                  value={gptQuestion}
-                  onChange={(e) => setGptQuestion(e.target.value)}
-                  placeholder="Ask about this lesson…"
-                  style={{ resize: 'vertical', fontSize: '0.88rem' }}
-                />
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={askCourseGpt}
-                  disabled={gptLoading}
-                  style={{ marginTop: '0.5rem', width: '100%', fontSize: '0.85rem' }}
-                >
-                  {gptLoading ? 'Asking…' : 'Ask'}
-                </button>
-                {gptError ? (
-                  <p
-                    style={{
-                      marginTop: '0.65rem',
-                      marginBottom: 0,
-                      fontSize: '0.82rem',
-                      color: 'var(--danger)',
-                      whiteSpace: 'pre-wrap',
-                    }}
-                  >
-                    {gptError}
-                  </p>
-                ) : null}
-                {gptAnswer ? (
+                {!showPedagogicalPromptPanel ? (
+                  <>
+                    <div
+                      style={{
+                        padding: '0.85rem',
+                        borderRadius: '10px',
+                        border: '1px solid var(--surface-light)',
+                        background: '#ffffff',
+                        boxShadow: '0 1px 3px rgba(15, 23, 42, 0.06)',
+                        minHeight: gptLoading ? '120px' : undefined,
+                      }}
+                    >
+                      <p
+                        className="form-label"
+                        style={{
+                          marginBottom: '0.5rem',
+                          fontSize: '0.75rem',
+                          color: 'var(--text-muted)',
+                        }}
+                      >
+                        Assistant reply
+                      </p>
+                      {gptLoading ? (
+                        <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-muted)' }}>
+                          Asking…
+                        </p>
+                      ) : null}
+                      {!gptLoading && gptAnswer ? (
+                        <AssistantMarkdown
+                          style={{
+                            maxHeight: 'min(65vh, 640px)',
+                            overflowY: 'auto',
+                            fontSize: '0.92rem',
+                          }}
+                        >
+                          {gptAnswer}
+                        </AssistantMarkdown>
+                      ) : null}
+                      {!gptLoading && !gptAnswer && !gptError ? (
+                        <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                          Run “Ask again” below, or open the prompt to build a question.
+                        </p>
+                      ) : null}
+                    </div>
+                    {gptError ? (
+                      <p
+                        style={{
+                          marginTop: '0.65rem',
+                          marginBottom: 0,
+                          fontSize: '0.82rem',
+                          color: 'var(--danger)',
+                          whiteSpace: 'pre-wrap',
+                        }}
+                      >
+                        {gptError}
+                      </p>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={askFromPedagogicalPrompt}
+                      disabled={gptLoading || !pedagogicalPrompt.trim()}
+                      style={{ marginTop: '0.65rem', width: '100%', fontSize: '0.85rem' }}
+                    >
+                      {gptLoading ? 'Asking…' : 'Ask again'}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+                        gap: '0.5rem',
+                        marginBottom: '0.65rem',
+                      }}
+                    >
+                      <select
+                        className="form-input"
+                        value={cognitivePreference}
+                        onChange={(e) => setCognitivePreference(e.target.value)}
+                        style={{ fontSize: '0.82rem' }}
+                      >
+                        <option value="visual">Visual</option>
+                        <option value="textual">Textual</option>
+                      </select>
+                      <select
+                        className="form-input"
+                        value={cognitiveProcessing}
+                        onChange={(e) => setCognitiveProcessing(e.target.value)}
+                        style={{ fontSize: '0.82rem' }}
+                      >
+                        <option value="analytic">Analytic</option>
+                        <option value="holistic">Holistic</option>
+                      </select>
+                      <select
+                        className="form-input"
+                        value={loadLevel}
+                        onChange={(e) => setLoadLevel(e.target.value)}
+                        style={{ fontSize: '0.82rem' }}
+                      >
+                        <option value="Very Low">Load: Very Low</option>
+                        <option value="Low">Load: Low</option>
+                        <option value="Medium">Load: Medium</option>
+                        <option value="High">Load: High</option>
+                        <option value="Very High">Load: Very High</option>
+                      </select>
+                      <select
+                        className="form-input"
+                        value={learningApproach}
+                        onChange={(e) => setLearningApproach(e.target.value)}
+                        style={{ fontSize: '0.82rem' }}
+                      >
+                        <option value="Deep Organized">Deep Organized</option>
+                        <option value="Unorganized">Unorganized</option>
+                        <option value="Unreflective">Unreflective</option>
+                        <option value="Desonent">Desonent</option>
+                      </select>
+                    </div>
+                    <p
+                      style={{
+                        margin: '0 0 0.5rem 0',
+                        fontSize: '0.78rem',
+                        color: 'var(--text-muted)',
+                      }}
+                    >
+                      Cognitive style: <strong style={{ color: 'var(--text)' }}>{cognitiveStyle}</strong>
+                    </p>
+                    <p
+                      style={{
+                        margin: '0 0 0.5rem 0',
+                        fontSize: '0.78rem',
+                        color: 'var(--text-muted)',
+                      }}
+                    >
+                      Learning approach:{' '}
+                      <strong style={{ color: 'var(--text)' }}>{learningApproach}</strong>
+                    </p>
+                    {promptLoading ? (
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: '0.82rem',
+                          color: 'var(--text-muted)',
+                        }}
+                      >
+                        Building prompt…
+                      </p>
+                    ) : null}
+                    {promptError ? (
+                      <p
+                        style={{
+                          margin: '0.35rem 0 0 0',
+                          fontSize: '0.82rem',
+                          color: 'var(--danger)',
+                          whiteSpace: 'pre-wrap',
+                        }}
+                      >
+                        {promptError}
+                      </p>
+                    ) : null}
+                    <textarea
+                      className="form-input"
+                      readOnly
+                      rows={14}
+                      value={pedagogicalPrompt}
+                      placeholder={
+                        promptLoading
+                          ? ''
+                          : 'Prompt will appear here when the subsection has loaded.'
+                      }
+                      style={{
+                        marginTop: '0.5rem',
+                        resize: 'vertical',
+                        fontSize: '0.78rem',
+                        lineHeight: 1.45,
+                        fontFamily: 'ui-monospace, monospace',
+                        maxHeight: '360px',
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={askFromPedagogicalPrompt}
+                      disabled={gptLoading || !pedagogicalPrompt.trim()}
+                      style={{ marginTop: '0.6rem', width: '100%', fontSize: '0.85rem' }}
+                    >
+                      {gptLoading ? 'Asking…' : 'Ask Assistant From Prompt'}
+                    </button>
+                    {gptError ? (
+                      <p
+                        style={{
+                          marginTop: '0.65rem',
+                          marginBottom: 0,
+                          fontSize: '0.82rem',
+                          color: 'var(--danger)',
+                          whiteSpace: 'pre-wrap',
+                        }}
+                      >
+                        {gptError}
+                      </p>
+                    ) : null}
+                    {gptAnswer ? (
+                      <div
+                        style={{
+                          marginTop: '0.75rem',
+                          padding: '0.85rem',
+                          borderRadius: '10px',
+                          border: '1px solid var(--surface-light)',
+                          background: 'var(--surface)',
+                          boxShadow: '0 1px 3px rgba(15, 23, 42, 0.06)',
+                        }}
+                      >
+                        <p
+                          className="form-label"
+                          style={{ marginBottom: '0.45rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}
+                        >
+                          Assistant reply
+                        </p>
+                        <AssistantMarkdown
+                          style={{ maxHeight: '240px', overflowY: 'auto' }}
+                        >
+                          {gptAnswer}
+                        </AssistantMarkdown>
+                      </div>
+                    ) : null}
+                  </>
+                )}
+                {cognitivePreference === 'visual' ? (
                   <div
                     style={{
                       marginTop: '0.75rem',
-                      padding: '0.75rem',
+                      padding: '0.85rem',
                       borderRadius: '10px',
-                      border: '1px solid rgba(255,255,255,0.08)',
-                      background: 'rgba(15, 23, 42, 0.45)',
+                      border: '1px solid rgba(56, 189, 248, 0.24)',
+                      background: 'rgba(14, 116, 144, 0.14)',
                     }}
                   >
-                    <p
-                      className="form-label"
-                      style={{ marginBottom: '0.35rem', fontSize: '0.75rem' }}
-                    >
-                      Assistant reply
+                    <p className="form-label" style={{ margin: 0, marginBottom: '0.4rem', fontSize: '0.78rem' }}>
+                      Visual summary (from extracted PPT + PDF)
                     </p>
-                    <AssistantMarkdown
-                      style={{ maxHeight: '240px', overflowY: 'auto' }}
+                    {visualSummaryLoading ? (
+                      <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                        Generating summary...
+                      </p>
+                    ) : null}
+                    {visualSummaryError ? (
+                      <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--danger)', whiteSpace: 'pre-wrap' }}>
+                        {visualSummaryError}
+                      </p>
+                    ) : null}
+                    {visualSummary ? (
+                      <>
+                        <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.84rem', lineHeight: 1.5 }}>
+                          {visualSummary}
+                        </p>
+                        {Array.isArray(visualMainPoints) && visualMainPoints.length > 0 ? (
+                          <ul style={{ margin: '0.55rem 0 0', paddingLeft: '1.15rem', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                            {visualMainPoints.map((pt, i) => (
+                              <li key={String(i)}>{pt}</li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </>
+                    ) : null}
+                    <div
+                      style={{
+                        marginTop: '0.75rem',
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '0.5rem',
+                        alignItems: 'center',
+                      }}
                     >
-                      {gptAnswer}
-                    </AssistantMarkdown>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        disabled={visualGenLoading || !visualSummary.trim()}
+                        onClick={runVisualGenerate}
+                        style={{ fontSize: '0.82rem' }}
+                      >
+                        {visualGenLoading ? 'Generating visuals…' : 'Get Visual Generate'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn"
+                        disabled={!visualGenResult}
+                        onClick={() => setShowGeneratedVisuals((prev) => !prev)}
+                        style={{ fontSize: '0.82rem' }}
+                      >
+                        {showGeneratedVisuals ? 'Hide Visual' : 'View Visual'}
+                      </button>
+                    </div>
+                    {visualGenError ? (
+                      <p style={{ margin: '0.45rem 0 0', fontSize: '0.8rem', color: 'var(--danger)', whiteSpace: 'pre-wrap' }}>
+                        {visualGenError}
+                      </p>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
+
+              {showGeneratedVisuals && visualCards.length > 0 ? (
+                <div
+                  style={{
+                    marginTop: '0.75rem',
+                    padding: '1rem',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(56, 189, 248, 0.24)',
+                    background: 'rgba(2, 132, 199, 0.08)',
+                  }}
+                >
+                  <p className="form-label" style={{ margin: 0, marginBottom: '0.55rem', fontSize: '0.8rem' }}>
+                    Generated visuals
+                  </p>
+                  {visualCards.map((visual, idx) => {
+                    const visualType = visual?.visual_type;
+                    const diagramData = visual?.diagram_data || {};
+                    const mergedDiagram =
+                      visual?.diagram_format === 'mermaid' && !diagramData.mermaid
+                        ? { ...diagramData, format: 'mermaid', mermaid: visual?.mermaid || '' }
+                        : diagramData;
+                    const labels = Array.isArray(visual?.labels) ? visual.labels : [];
+                    const showLabeledTemplate = visualType === 'labeled_diagram';
+                    const template = showLabeledTemplate
+                      ? resolveLabeledDiagramTemplate(visualGenResult?.topic || visual?.title, mergedDiagram)
+                      : null;
+
+                    return (
+                      <div
+                        key={visual?.id || String(idx)}
+                        style={{
+                          border: '1px solid rgba(255,255,255,0.08)',
+                          borderRadius: '12px',
+                          background: 'rgba(15, 23, 42, 0.35)',
+                          padding: '1rem',
+                          marginBottom: idx === visualCards.length - 1 ? 0 : '0.85rem',
+                        }}
+                      >
+                        <div style={{ marginBottom: '0.5rem' }}>
+                          <strong>{visual?.title || `Visual ${idx + 1}`}</strong>
+                        </div>
+                        <div style={{ marginBottom: '0.35rem', color: 'var(--text-muted)' }}>
+                          Type: <strong>{formatVisualTypeLabel(visualType)}</strong>
+                        </div>
+                        {visual?.visual_reason ? (
+                          <div style={{ marginBottom: '0.6rem', color: 'var(--text-muted)' }}>
+                            Why selected: {visual.visual_reason}
+                          </div>
+                        ) : null}
+                        {visualType === 'map' ? <MapCard data={mergedDiagram} /> : null}
+                        {showLabeledTemplate ? (
+                          <div style={{ marginBottom: '0.8rem' }}>
+                            <LabeledDiagramPreview
+                              topic={visualGenResult?.topic || visual?.title}
+                              labels={labels}
+                              diagramData={mergedDiagram}
+                            />
+                          </div>
+                        ) : null}
+                        {visualType !== 'map' && (!showLabeledTemplate || !template) ? (
+                          <DiagramPreview diagramData={mergedDiagram} />
+                        ) : null}
+                        {visual?.image_url ? (
+                          <div style={{ marginTop: '0.7rem' }}>
+                            <img
+                              src={visual.image_url}
+                              alt={visual?.alt_text || 'Generated visual'}
+                              style={{ width: '100%', maxHeight: '420px', objectFit: 'contain', borderRadius: '10px' }}
+                            />
+                          </div>
+                        ) : null}
+                        {visualType === 'illustration' && Array.isArray(visual?.wiki_images) && visual.wiki_images.length > 0 ? (
+                          <div style={{ marginTop: '0.7rem' }}>
+                            <p className="form-label" style={{ marginBottom: '0.45rem' }}>Wikipedia images (latest 3)</p>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.6rem' }}>
+                              {visual.wiki_images.slice(0, 3).map((w, i) => (
+                                <a
+                                  key={String(i)}
+                                  href={w.description_url || w.image_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  style={{ display: 'block' }}
+                                >
+                                  <img
+                                    src={w.image_url}
+                                    alt={w.title || `Wikipedia image ${i + 1}`}
+                                    style={{ width: '100%', height: '140px', objectFit: 'cover', borderRadius: '8px' }}
+                                  />
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                        {visualType === 'illustration' && !visual?.image_url && (!Array.isArray(visual?.wiki_images) || visual.wiki_images.length === 0) ? (
+                          <div
+                            style={{
+                              marginTop: '0.7rem',
+                              padding: '0.75rem 1rem',
+                              borderRadius: '8px',
+                              background: 'rgba(245, 158, 11, 0.12)',
+                              border: '1px solid rgba(245, 158, 11, 0.35)',
+                              color: 'var(--text-muted)',
+                            }}
+                          >
+                            {illustrationImageHint(visual?.illustration_image_status, visual?.illustration_image_error)}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+
             </>
           ) : (
            <p
