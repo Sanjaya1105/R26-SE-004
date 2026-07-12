@@ -38,6 +38,40 @@ async def build_visual_verbal_feature_row(session_id: str):
     return combined
 
 
+# async def predict_visual_verbal_ml(session_id: str):
+#     model, feature_columns = load_model_once()
+#
+#     feature_row = await build_visual_verbal_feature_row(session_id)
+#     if not feature_row:
+#         return {"error": "Missing simple cursor or gaze data"}
+#
+#     df = pd.DataFrame([feature_row])
+#
+#     for col in feature_columns:
+#         if col not in df.columns:
+#             df[col] = 0
+#
+#     df = df[feature_columns]
+#
+#     prediction = model.predict(df)[0]
+#
+#     probabilities = None
+#     if hasattr(model, "predict_proba"):
+#         proba = model.predict_proba(df)[0]
+#         probabilities = {
+#             cls: float(prob)
+#             for cls, prob in zip(model.classes_, proba)
+#         }
+#
+#     return {
+#         "sessionId": session_id,
+#         "prediction": prediction,
+#         "probabilities": probabilities,
+#         "features": feature_row,
+#     }
+
+
+
 async def predict_visual_verbal_ml(session_id: str):
     model, feature_columns = load_model_once()
 
@@ -63,11 +97,30 @@ async def predict_visual_verbal_ml(session_id: str):
             for cls, prob in zip(model.classes_, proba)
         }
 
+    # Only return selected features
+    selected_feature_keys = [
+        "visualTimeRatio",
+        "textTimeRatio",
+        "avgHoverVisual",
+        "avgHoverText",
+        "avgSpeedVisual",
+        "avgSpeedText",
+        "scrollCountVisual",
+        "scrollCountText",
+        "avgEyeLookInLeft",
+        "avgEyeLookInRight",
+    ]
+
+    selected_features = {
+        key: feature_row.get(key, 0)
+        for key in selected_feature_keys
+    }
+
     return {
         "sessionId": session_id,
         "prediction": prediction,
         "probabilities": probabilities,
-        "features": feature_row,
+        "features": selected_features,
     }
 
 #Sanjaya requested Function to return only the prediction

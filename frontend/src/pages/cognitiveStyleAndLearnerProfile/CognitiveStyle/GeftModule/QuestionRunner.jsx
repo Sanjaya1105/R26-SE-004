@@ -2,10 +2,12 @@ import React, { useMemo, useRef, useState } from "react";
 import GazeTracker from "./GazeTracker";
 import CursorTracker from "./CursorTrackerForQuestionTracker";
 import QuestionView from "./QuestionView";
+import { useNavigate } from "react-router-dom";
 
 export default function QuestionRunner() {
 
     const ANSWER_BACKEND_URL = "http://localhost:4000/cognitive-style/question-runner/answers";
+    const navigate = useNavigate();
 
     const userPayload = useMemo(() => {
         const token = localStorage.getItem("token");
@@ -100,6 +102,54 @@ export default function QuestionRunner() {
                 ],
                 correctAnswer: "D",
             },
+            {
+                id: 5,
+                target: "D",
+                complexImage: "/images/Question_5/q5_complex.png",
+                options: [
+                    { id: "A", image: "/images/Question_5/q5_A.png" },
+                    { id: "B", image: "/images/Question_5/q5_B.png" },
+                    { id: "C", image: "/images/Question_5/q5_C.png" },
+                    { id: "D", image: "/images/Question_5/q5_D.png" }, // optional if you add D
+                ],
+                correctAnswer: "C",
+            },
+            {
+                id: 6,
+                target: "D",
+                complexImage: "/images/Question_6/q6_complex.png",
+                options: [
+                    { id: "A", image: "/images/Question_6/q6_A.png" },
+                    { id: "B", image: "/images/Question_6/q6_B.png" },
+                    { id: "C", image: "/images/Question_6/q6_C.png" },
+                    { id: "D", image: "/images/Question_6/q6_D.png" }, // optional if you add D
+                ],
+                correctAnswer: "C",
+            },
+            {
+                id: 7,
+                target: "A",
+                complexImage: "/images/Question_7/q7_complex.png",
+                options: [
+                    { id: "A", image: "/images/Question_7/q7_A.png" },
+                    { id: "B", image: "/images/Question_7/q7_B.png" },
+                    { id: "C", image: "/images/Question_7/q7_C.png" },
+                    { id: "D", image: "/images/Question_7/q7_D.png" }, // optional if you add D
+                ],
+                correctAnswer: "A",
+            },
+            {
+                id: 8,
+                target: "G",
+                complexImage: "/images/Question_8/q8_complex.png",
+                options: [
+                    { id: "A", image: "/images/Question_8/q8_A.png" },
+                    { id: "B", image: "/images/Question_8/q8_B.png" },
+                    { id: "C", image: "/images/Question_8/q8_C.png" },
+                    { id: "D", image: "/images/Question_8/q8_D.png" }, // optional if you add D
+                ],
+                correctAnswer: "G",
+            }
         ];
     }, []);
 
@@ -183,18 +233,21 @@ export default function QuestionRunner() {
         }
     };
 
-    const handleFinishSession = async () => {
-        if (cursorTrackerRef.current) {
-            await cursorTrackerRef.current.finalizeQuestion();
-        }
+   const handleFinishSession = async () => {
+    if (cursorTrackerRef.current) {
+        await cursorTrackerRef.current.finalizeQuestion();
+    }
 
-        if (currentQuestion) {
-            await postAnswer(currentQuestion);
-        }
-        setSessionEnded(true);
-        setSessionStarted(false);
-        setSessionEndTime(Date.now());
-    };
+    if (currentQuestion) {
+        await postAnswer(currentQuestion);
+    }
+
+    setSessionEnded(true);
+    setSessionStarted(false);
+    setSessionEndTime(Date.now());
+
+    navigate("/course");
+};
 
     const finalSessionData = {
         sessionStartTime,
@@ -209,19 +262,61 @@ export default function QuestionRunner() {
         <div style={styles.page}>
             <h1 style={styles.title}>GEFT Question Runner</h1>
 
-            {!sessionStarted && !sessionEnded && (
-                <div style={styles.card}>
-                    <p style={styles.text}>
-                        This is the common parent component for your GEFT flow.
-                    </p>
-                    <p style={styles.text}>
-                        Questions are intentionally left blank for now.
-                    </p>
-                    <button style={styles.primaryButton} onClick={handleStartSession}>
-                        Start Session
-                    </button>
-                </div>
-            )}
+           {!sessionStarted && !sessionEnded && (
+    <div style={styles.card}>
+        <h2 style={styles.subtitle}>Before You Begin</h2>
+
+        <p style={styles.text}>
+            You are about to start the <strong>Group Embedded Figures Test</strong>,
+            commonly known as <strong>GEFT</strong>.
+        </p>
+
+        <p style={styles.text}>
+            GEFT is a cognitive-style activity used to understand how a person
+            identifies simple shapes hidden inside more complex figures. It helps
+            analyze whether a learner tends to process information more independently
+            from surrounding details or more dependently within the overall context.
+        </p>
+
+        <div style={styles.infoBox}>
+            <p style={styles.infoTitle}>What you need to do:</p>
+
+            <ul style={styles.guidelineList}>
+                <li>
+                    For each question, carefully observe the complex image shown on
+                    the screen.
+                </li>
+                <li>
+                    Identify which answer option matches the target simple figure
+                    hidden inside the complex image.
+                </li>
+                <li>
+                    Select the answer that you think is correct before moving to the
+                    next question.
+                </li>
+                <li>
+                    Try to answer naturally and avoid random guessing.
+                </li>
+                <li>
+                    Keep your face visible to the camera during the session.
+                </li>
+                <li>
+                    Your gaze behavior, cursor movement, answer selection, and
+                    interaction patterns may be collected for learning-behavior
+                    analysis.
+                </li>
+            </ul>
+        </div>
+
+        <p style={styles.noteText}>
+            The session will begin only after you click the button below.
+        </p>
+
+        <button style={styles.primaryButton} onClick={handleStartSession}>
+            I Understand — Start GEFT Session
+        </button>
+    </div>
+)}
 
             {sessionStarted && (
                 <div style={styles.layout}>
@@ -412,4 +507,35 @@ rightPanel: {
         fontSize: "12px",
         marginBottom: "16px",
     },
+    infoBox: {
+    background: "#f1f5f9",
+    border: "1px solid #e2e8f0",
+    borderRadius: "12px",
+    padding: "16px",
+    marginTop: "16px",
+    marginBottom: "16px",
+},
+
+infoTitle: {
+    fontSize: "15px",
+    fontWeight: "700",
+    marginTop: 0,
+    marginBottom: "10px",
+    color: "#0f172a",
+},
+
+guidelineList: {
+    margin: 0,
+    paddingLeft: "22px",
+    fontSize: "15px",
+    lineHeight: 1.8,
+    color: "#334155",
+},
+
+noteText: {
+    fontSize: "14px",
+    lineHeight: 1.6,
+    color: "#64748b",
+    marginBottom: "16px",
+},
 };
