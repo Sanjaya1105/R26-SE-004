@@ -30,7 +30,7 @@ pip install -r requirements.txt
 3. Start the service:
 
 ```bash
-uvicorn main:app --host 0.0.0.0 --port 8010
+uvicorn main:app --host 0.0.0.0 --port 8110
 ```
 
 On startup, the service creates the `lime-data` database if it does not exist and then creates the `cognitive-load` table automatically.

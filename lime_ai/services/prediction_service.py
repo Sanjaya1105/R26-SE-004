@@ -2,18 +2,19 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException
-import re
-import httpx
 import numpy as np
 from lime.lime_tabular import LimeTabularExplainer
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from config.settings import settings
 from models.prediction import CognitiveLoadPrediction
 from models.student_lesson_summary import StudentLessonSummary
 from schemas.prediction import AggregateExplanationRequest, CognitiveLoadInput
+from services.human_explanation_service import generate_human_explanation
+from services.lecture_support_service import generate_lecture_support
 from services.model_client import ModelClientError, request_prediction
+from services.ollama_client import OllamaServiceError
+from services.study_technique_service import generate_study_techniques
 
 
 RAW_FEATURE_FIELDS = [
@@ -42,84 +43,6 @@ INT_FEATURE_FIELDS = {
     "idle_duration_adaptation",
     "quiz_response_time",
 }
-
-
-AGGREGATE_SYSTEM_PROMPT = (
-    "You are an educational analytics assistant. Create concise, practical, student-friendly "
-    "explanations from combined LIME and SHAP signals."
-)
-
-AGGREGATE_USER_PROMPT_TEMPLATE = (
-    "Write one short, natural paragraph addressed to the student using combined LIME and SHAP evidence.\n"
-    "Student ID: {student_id}\n"
-    "Lesson ID: {lesson_id}\n"
-    "Predicted cognitive load: {predicted_label}\n"
-    "Top combined classroom signals (LIME+SHAP):\n"
-    "{signals_text}\n\n"
-    "Rules:\n"
-    "1) Explain the likely reason for high cognitive load in a natural sentence.\n"
-    "2) Mention the strongest signals and what they mean for the student.\n"
-    "3) Include practical advice the student should follow directly.\n"
-    "4) If cognitive load is High or Very High, give clear support steps the student can follow now.\n"
-    "5) Do not include numbers, percentages, formulas, or feature names.\n"
-    "6) Avoid bullet points and keep under 120 words.\n"
-    "7) Use wording like: 'You may be feeling high cognitive load because you paused the video often, spent a long time on the lesson, and revisited parts repeatedly. Try focusing on one section at a time and taking short breaks before moving forward.'"
-)
-
-LECTURE_SUPPORT_SYSTEM_PROMPT = (
-    "You are an experienced educational support advisor. Provide personalized, actionable lecture support "
-    "strategies for students based on their cognitive load level and behavioral patterns."
-)
-
-LECTURE_SUPPORT_USER_PROMPT_TEMPLATE = (
-    "Generate specific lecture support strategies for this student:\n"
-    "Student ID: {student_id}\n"
-    "Lesson ID: {lesson_id}\n"
-    "Cognitive Load Level: {predicted_label}\n"
-    "Behavioral Signals: {signals_text}\n\n"
-    "Rules:\n"
-    "1) Create 3-5 specific, actionable strategies tailored to their cognitive load level.\n"
-    "2) Start with the most urgent/important strategy first.\n"
-    "3) Each strategy should be something the student can do immediately or in the next study session.\n"
-    "4) Use simple, direct language (no jargon).\n"
-    "5) Format as a numbered list.\n"
-    "6) Keep total length under 150 words.\n"
-    "7) If cognitive load is Very High, emphasize immediate relief strategies.\n"
-    "8) If cognitive load is Low/Medium, emphasize mastery and deeper engagement.\n"
-    "Example format:\n"
-    "1) [Specific action] - This will help you [benefit]\n"
-    "2) [Specific action] - This will help you [benefit]\n"
-    "Do not include generic advice. Make it specific to their signals.\n\n"
-    "--- OUTPUT FORMAT ---\n"
-    "Output ONLY the numbered strategies below. Do NOT echo back any rules, examples, or input data.\n"
-    "Each line must start with a number and either ')' or '.' (for example '1) ...' or '1. ...').\n"
-    "If you cannot generate strategies, return exactly: Unable to generate strategies at this time."
-)
-
-STUDY_TECHNIQUE_SYSTEM_PROMPT = (
-    "You are a learning advisor. Recommend 1-2 study techniques for students."
-)
-
-STUDY_TECHNIQUE_USER_PROMPT_TEMPLATE = (
-    "Student cognitive load: {predicted_label}\n"
-    "Behavioral signals: {signals_text}\n\n"
-    "Recommend 1-2 techniques from: Mind Map, Short Notes, Concept Map, Flowchart, Cornell Notes\n"
-    "Return ONLY technique names, one per line. No explanation needed.\n"
-    "Example:\nMind Map\nShort Notes"
-)
-
-
-def _has_gpt_api_key() -> bool:
-    return bool(settings.GPT_API_KEY and settings.GPT_API_KEY.strip())
-
-
-def _selected_llm_provider() -> str:
-    provider = settings.LLM_PROVIDER.strip().lower()
-    return provider or "ollama"
-
-
-def _has_ollama_config() -> bool:
-    return bool(settings.OLLAMA_BASE_URL.strip() and settings.OLLAMA_MODEL.strip())
 
 
 def _signal_to_teacher_phrase(signal: str) -> str:
@@ -152,172 +75,6 @@ def _signal_to_teacher_phrase(signal: str) -> str:
 
     return "the signal points to higher cognitive load"
 
-
-def _is_high_load(predicted_label: str) -> bool:
-     return predicted_label.strip().lower() in {"high", "very high"}
-
-
-def _teacher_recommendation(predicted_label: str) -> str:
-    if _is_high_load(predicted_label):
-        return (
-            "Student advice: slow your pace, study in smaller steps, and ask for short feedback after each step."
-        )
-    return (
-        "Student advice: keep your pace, but use short checkpoints and clarify difficult points early."
-    )
-
-
-def _top_human_reasons_from_factors(factors: list[dict[str, Any]], limit: int = 3) -> list[str]:
-    positive_factors = [factor for factor in factors if factor.get("impact") == "positive"]
-    ranked = sorted(
-        positive_factors or factors,
-        key=lambda item: abs(float(item.get("weight", 0.0))),
-        reverse=True,
-    )
-
-    reasons: list[str] = []
-    for factor in ranked:
-        phrase = _signal_to_teacher_phrase(str(factor.get("rule", "")))
-        if phrase not in reasons:
-            reasons.append(phrase)
-        if len(reasons) >= max(1, limit):
-            break
-
-    return reasons
-
-
-def _why_cognitive_load_high_text(predicted_label: str, reasons: list[str]) -> str:
-    if reasons:
-        return f"This student likely has {predicted_label.lower()} cognitive load because {', '.join(reasons)}."
-    return (
-        f"This student is showing {predicted_label.lower()} cognitive load, but no strong behavior reason was detected "
-        "from the current explanation signals."
-    )
-
-
-def _generate_gpt_text(system_prompt: str, user_prompt: str) -> str:
-    from openai import OpenAI
-
-    client = OpenAI(api_key=settings.GPT_API_KEY, timeout=settings.GPT_TIMEOUT_SECONDS)
-    response = client.chat.completions.create(
-        model=settings.GPT_MODEL,
-        temperature=0.2,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-    )
-    content = response.choices[0].message.content if response.choices else ""
-    return (content or "").strip()
-
-
-def _generate_ollama_text(system_prompt: str, user_prompt: str) -> str:
-    base_url = settings.OLLAMA_BASE_URL.strip().rstrip("/")
-    if not base_url:
-        raise ValueError("OLLAMA_BASE_URL is not configured.")
-
-    url = f"{base_url}/api/chat"
-    timeout = httpx.Timeout(settings.OLLAMA_TIMEOUT_SECONDS)
-    payload = {
-        "model": settings.OLLAMA_MODEL.strip(),
-        "stream": False,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-    }
-
-    try:
-        with httpx.Client(timeout=timeout) as client:
-            response = client.post(url, json=payload)
-    except httpx.TimeoutException as exc:
-        raise RuntimeError(f"Ollama request timed out for {url}.") from exc
-    except httpx.RequestError as exc:
-        raise RuntimeError(f"Could not connect to Ollama at {url}.") from exc
-
-    if response.status_code >= 400:
-        raise RuntimeError(f"Ollama returned HTTP {response.status_code}: {response.text.strip()}")
-
-    try:
-        response_json = response.json()
-    except ValueError as exc:
-        raise RuntimeError("Ollama response was not valid JSON.") from exc
-
-    content = ""
-    if isinstance(response_json, dict):
-        message = response_json.get("message")
-        if isinstance(message, dict):
-            content = str(message.get("content", ""))
-        elif isinstance(response_json.get("response"), str):
-            content = str(response_json.get("response", ""))
-
-    return content.strip()
-
-
-def _generate_llm_text(system_prompt: str, user_prompt: str) -> tuple[str, str]:
-    provider = _selected_llm_provider()
-
-    if provider == "gpt":
-        if not _has_gpt_api_key():
-            return "", "gpt"
-        try:
-            generated = _generate_gpt_text(system_prompt, user_prompt)
-            if generated:
-                return generated, "gpt"
-        except Exception:
-            return "", "gpt"
-        return "", "gpt"
-
-    if provider == "ollama":
-        if not _has_ollama_config():
-            return "", "ollama"
-        try:
-            generated = _generate_ollama_text(system_prompt, user_prompt)
-            if generated:
-                return generated, "ollama"
-        except Exception:
-            return "", "ollama"
-        return "", "ollama"
-
-    return "", provider
-
-
-def _fallback_human_explanation(
-    *,
-    predicted_label: str,
-    factors: list[dict[str, Any]],
-) -> str:
-    reasons = _top_human_reasons_from_factors(factors, limit=3)
-    recommendation = _teacher_recommendation(predicted_label)
-
-    if reasons:
-        joined = ", ".join(reasons)
-        return f"This student likely has {predicted_label.lower()} cognitive load because {joined}. {recommendation}"
-
-    return (
-        f"This student is showing {predicted_label.lower()} cognitive load, but no clear behavior reason was detected. "
-        f"{recommendation}"
-    )
-
-
-def _build_aggregate_prompt(
-    *,
-    student_id: str,
-    lesson_id: str,
-    predicted_label: str,
-    top_signals: list[dict[str, Any]],
-) -> str:
-    signals_text = "\n".join(
-        f"- {_signal_to_teacher_phrase(item['signal'])}"
-        for item in top_signals
-    ) if top_signals else "- no strong combined signal detected"
-
-    return AGGREGATE_USER_PROMPT_TEMPLATE.format(
-        student_id=student_id,
-        lesson_id=lesson_id,
-        predicted_label=predicted_label,
-        signals_text=signals_text,
-    )
 
 
 def _top_aggregate_signals(
@@ -352,249 +109,9 @@ def _top_aggregate_signals(
             }
         )
 
-    positive_only = [entry for entry in combined if entry["impact"] == "positive"]
-    ranked = positive_only or combined
-    ranked.sort(key=lambda entry: entry["strength"], reverse=True)
+    ranked = sorted(combined, key=lambda entry: entry["strength"], reverse=True)
     return ranked[: max(1, limit)]
 
-
-def _fallback_aggregate_explanation(
-    *,
-    predicted_label: str,
-    top_signals: list[dict[str, Any]],
-) -> str:
-    recommendation = _teacher_recommendation(predicted_label)
-
-    if not top_signals:
-        return (
-            f"This student is showing {predicted_label.lower()} cognitive load, but no strong combined behavior reason was detected. "
-            f"{recommendation}"
-        )
-
-    highlights = ", ".join(_signal_to_teacher_phrase(item["signal"]) for item in top_signals[:3])
-    return (
-        f"This student likely has {predicted_label.lower()} cognitive load because {highlights}. "
-        f"{recommendation}"
-    )
-
-
-def _get_all_study_technique_links() -> dict[str, dict[str, Any]]:
-    """Return available study techniques with minimal info."""
-    return {
-        "mind map": {
-            "title": "Mind Map",
-            "emoji": "🧠",
-            "link": "https://mindmeister.com/app/map/new",
-            "link_text": "Create Mind Map",
-        },
-        "short notes": {
-            "title": "Short Notes",
-            "emoji": "📝",
-            "link": "https://www.notion.so/",
-            "link_text": "Start Taking Notes",
-        },
-        "concept map": {
-            "title": "Concept Map",
-            "emoji": "🔗",
-            "link": "https://app.creately.com/",
-            "link_text": "Create Concept Map",
-        },
-        "flowchart": {
-            "title": "Flowchart",
-            "emoji": "📊",
-            "link": "https://www.lucidchart.com/",
-            "link_text": "Create Flowchart",
-        },
-        "cornell notes": {
-            "title": "Cornell Notes",
-            "emoji": "📄",
-            "link": "https://www.evernote.com/",
-            "link_text": "Start Cornell Notes",
-        }
-    }
-
-
-def _parse_ollama_technique_response(response_text: str) -> list[str]:
-    """Parse Ollama's response to extract technique names."""
-    technique_names = []
-    all_techniques = set(_get_all_study_technique_links().keys())
-    
-    lines = response_text.strip().split("\n")
-    
-    for line in lines:
-        line_lower = line.lower().strip()
-        for technique in all_techniques:
-            if technique in line_lower:
-                if technique not in technique_names:
-                    technique_names.append(technique)
-                break
-    
-    return technique_names
-
-
-def _build_study_technique_prompt(
-    student_id: str,
-    lesson_id: str,
-    predicted_label: str,
-    top_signals: list[dict[str, Any]],
-) -> str:
-    """Build the study technique recommendation prompt for Ollama."""
-    signals_text = "\n".join(
-        f"- {_signal_to_teacher_phrase(item['signal'])}"
-        for item in top_signals
-    ) if top_signals else "- no strong signals detected"
-    
-    return STUDY_TECHNIQUE_USER_PROMPT_TEMPLATE.format(
-        student_id=student_id,
-        lesson_id=lesson_id,
-        predicted_label=predicted_label,
-        signals_text=signals_text,
-    )
-
-
-def _get_study_technique_recommendation(
-    student_id: str,
-    lesson_id: str,
-    predicted_label: str,
-    top_signals: list[dict[str, Any]],
-) -> dict[str, Any]:
-    """Generate study technique recommendations using Ollama."""
-    user_prompt = _build_study_technique_prompt(
-        student_id=student_id,
-        lesson_id=lesson_id,
-        predicted_label=predicted_label,
-        top_signals=top_signals,
-    )
-    
-    recommendation_text, source = _generate_llm_text(STUDY_TECHNIQUE_SYSTEM_PROMPT, user_prompt)
-    
-    # Parse recommended techniques from response
-    recommended_techniques = _parse_ollama_technique_response(recommendation_text)
-    
-    # Build techniques array with links
-    techniques_with_links = []
-    all_links = _get_all_study_technique_links()
-    
-    for technique_name in recommended_techniques:
-        if technique_name in all_links:
-            technique_data = all_links[technique_name]
-            techniques_with_links.append({
-                "technique": technique_name,
-                "title": technique_data["title"],
-                "emoji": technique_data["emoji"],
-                "link": technique_data["link"],
-                "link_text": technique_data["link_text"],
-            })
-    
-    # Fallback to Mind Map if nothing recommended
-    if not techniques_with_links:
-        mind_map = all_links["mind map"]
-        techniques_with_links.append({
-            "technique": "mind map",
-            "title": mind_map["title"],
-            "emoji": mind_map["emoji"],
-            "link": mind_map["link"],
-            "link_text": mind_map["link_text"],
-        })
-    
-    return {
-        "techniques": techniques_with_links,
-        "source": source,
-    }
-
-
-def _build_lecture_support_prompt(
-    student_id: str,
-    lesson_id: str,
-    predicted_label: str,
-    top_signals: list[dict[str, Any]],
-) -> str:
-    """Build the lecture support prompt for Ollama."""
-    signals_text = "\n".join(
-        f"- {_signal_to_teacher_phrase(item['signal'])}"
-        for item in top_signals
-    ) if top_signals else "- no strong signals detected"
-    
-    return LECTURE_SUPPORT_USER_PROMPT_TEMPLATE.format(
-        student_id=student_id,
-        lesson_id=lesson_id,
-        predicted_label=predicted_label,
-        signals_text=signals_text,
-    )
-
-
-def _generate_lecture_support(
-    student_id: str,
-    lesson_id: str,
-    predicted_label: str,
-    top_signals: list[dict[str, Any]],
-) -> dict[str, Any]:
-    """Generate lecture support recommendations using Ollama."""
-    user_prompt = _build_lecture_support_prompt(
-        student_id=student_id,
-        lesson_id=lesson_id,
-        predicted_label=predicted_label,
-        top_signals=top_signals,
-    )
-    
-    support_text, source = _generate_llm_text(LECTURE_SUPPORT_SYSTEM_PROMPT, user_prompt)
-    
-    # Post-process: extract ONLY numbered strategies to avoid prompt echo
-    def _extract_numbered_strategies(text: str) -> list[str]:
-        if not text:
-            return []
-
-        # First try: lines that start with a number and delimiter
-        items: list[str] = []
-        pattern = re.compile(r"^\s*(\d+)\s*[\)\.:-]\s*(.+)$")
-        for line in text.splitlines():
-            m = pattern.match(line)
-            if m:
-                items.append(m.group(2).strip())
-
-        if items:
-            return [f"{i+1}) {items[i]}" for i in range(len(items))]
-
-        # Second try: inline numbered blocks in one line (e.g. '1) foo 2) bar')
-        inline = re.findall(r"\d+\s*[\)\.:-]\s*([^\d]+?)(?=(?:\d+\s*[\)\.:-])|$)", text)
-        inline = [s.strip().strip(' -–—') for s in inline if s.strip()]
-        if inline:
-            return [f"{i+1}) {inline[i]}" for i in range(len(inline))]
-
-        # Third try: detect repeated 'Number |' patterns produced by some templates
-        if 'Number |' in text:
-            parts = text.split('Number |')[1:]
-            parsed: list[str] = []
-            for p in parts:
-                # attempt to capture until the next numeric token
-                m = re.match(r"\s*(\d+)\s*\|\s*(.*?)\s*(?=(\d+\s*\|)|$)", p, re.S)
-                if m:
-                    parsed.append(m.group(2).strip())
-                else:
-                    # fallback: take the first clause
-                    parsed.append(p.strip().split('|')[0].strip())
-            if parsed:
-                return [f"{i+1}) {parsed[i]}" for i in range(len(parsed))]
-
-        return []
-
-    # Clean initial text (strip surrounding whitespace)
-    if support_text:
-        support_text = support_text.strip()
-
-    extracted = _extract_numbered_strategies(support_text)
-    if extracted:
-        # Limit to 5 strategies
-        extracted = extracted[:5]
-        clean_text = "\n".join(extracted)
-    else:
-        # If we couldn't reliably extract numbered items, return a clear fallback
-        clean_text = "Unable to generate strategies at this time."
-    
-    return {
-        "strategies": clean_text,
-        "source": source,
-    }
 
 
 def generate_aggregate_explanation(payload: AggregateExplanationRequest) -> dict[str, Any]:
@@ -606,45 +123,39 @@ def generate_aggregate_explanation(payload: AggregateExplanationRequest) -> dict
         limit=3,
     )
 
-    fallback = _fallback_aggregate_explanation(
-        predicted_label=payload.predicted_cognitive_load,
-        top_signals=top_signals,
-    )
+    signals = [_signal_to_teacher_phrase(item["signal"]) for item in top_signals]
+    human_signals = [
+        f"{item['impact']} cognitive-load influence: {_signal_to_teacher_phrase(item['signal'])}"
+        for item in top_signals
+    ]
 
-    system_prompt = AGGREGATE_SYSTEM_PROMPT
-    user_prompt = _build_aggregate_prompt(
-        student_id=payload.student_id,
-        lesson_id=payload.lesson_id,
-        predicted_label=payload.predicted_cognitive_load,
-        top_signals=top_signals,
-    )
-
-    explanation_text, source = _generate_llm_text(system_prompt, user_prompt)
-    if not explanation_text:
-        explanation_text = fallback
-        source = "fallback"
-
-    aggregate_reasons = [_signal_to_teacher_phrase(item["signal"]) for item in top_signals[:3]]
-    why_cognitive_load_high = _why_cognitive_load_high_text(
-        payload.predicted_cognitive_load,
-        aggregate_reasons,
-    )
-
-    # Generate study technique recommendations via Ollama
-    study_technique = _get_study_technique_recommendation(
-        student_id=payload.student_id,
-        lesson_id=payload.lesson_id,
-        predicted_label=payload.predicted_cognitive_load,
-        top_signals=top_signals,
-    )
-
-    # Generate lecture support via Ollama
-    lecture_support = _generate_lecture_support(
-        student_id=payload.student_id,
-        lesson_id=payload.lesson_id,
-        predicted_label=payload.predicted_cognitive_load,
-        top_signals=top_signals,
-    )
+    try:
+        explanation_text = generate_human_explanation(
+            student_id=payload.student_id,
+            lesson_id=payload.lesson_id,
+            predicted_label=payload.predicted_cognitive_load,
+            signals=human_signals,
+        )
+        study_technique = generate_study_techniques(
+            predicted_label=payload.predicted_cognitive_load,
+            signals=signals,
+        )
+        lecture_support = generate_lecture_support(
+            student_id=payload.student_id,
+            lesson_id=payload.lesson_id,
+            predicted_label=payload.predicted_cognitive_load,
+            signals=signals,
+        )
+    except OllamaServiceError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "success": False,
+                "message": str(exc),
+                "data": None,
+                "errors": ["Ollama could not generate the requested student guidance."],
+            },
+        ) from exc
 
     return {
         "success": True,
@@ -657,9 +168,8 @@ def generate_aggregate_explanation(payload: AggregateExplanationRequest) -> dict
             "predicted_score": payload.predicted_score,
             "confidence": payload.confidence,
             "top_signals": top_signals,
-            "why_cognitive_load_high": why_cognitive_load_high,
             "human_explanation": explanation_text,
-            "explanation_source": source,
+            "explanation_source": "ollama",
             "study_technique": study_technique,
             "lecture_support": lecture_support,
         },
@@ -1219,18 +729,6 @@ def get_lime_explanation_for_prediction(
         for rule, weight in explanation.as_list()
     ]
 
-    human_explanation = _fallback_human_explanation(
-        predicted_label=target_row.predicted_cognitive_load,
-        factors=factors,
-    )
-    explanation_source = "fallback"
-
-    lime_reasons = _top_human_reasons_from_factors(factors, limit=3)
-    why_cognitive_load_high = _why_cognitive_load_high_text(
-        target_row.predicted_cognitive_load,
-        lime_reasons,
-    )
-
     return {
         "success": True,
         "message": "LIME explanation generated successfully.",
@@ -1243,9 +741,6 @@ def get_lime_explanation_for_prediction(
             "confidence": target_row.confidence,
             "intercept": float(explanation.intercept[0]) if explanation.intercept else 0.0,
             "factors": factors,
-            "why_cognitive_load_high": why_cognitive_load_high,
-            "human_explanation": human_explanation,
-            "explanation_source": explanation_source,
         },
         "errors": [],
     }

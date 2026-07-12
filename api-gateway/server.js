@@ -18,9 +18,9 @@ const GATEWAY_SHARED_SECRET =
 const EXPLAINABLE_AI_BACKEND_URL =
   process.env.EXPLAINABLE_AI_BACKEND_URL || "http://localhost:8000";
 const LIME_AI_SERVICE_URL =
-  process.env.LIME_AI_SERVICE_URL || "http://localhost:8010";
+  process.env.LIME_AI_SERVICE_URL || "http://localhost:8110";
 const SHAP_AI_SERVICE_URL =
-  process.env.SHAP_AI_SERVICE_URL || "http://localhost:8011";
+  process.env.SHAP_AI_SERVICE_URL || "http://localhost:8111";
 const RECOMMENDATION_AI_URL = 
   process.env.RECOMMENDATION_AI_URL || "http://localhost:5002";
 const COGNITIVE_LOAD_SERVICE_URL =

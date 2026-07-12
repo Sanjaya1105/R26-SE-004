@@ -178,7 +178,7 @@ def _ensure_feature_window_saved(feature_window_data: dict):
 
 
 def _post_feature_window_to_lime(feature_window_data: dict) -> dict:
-    endpoint = os.getenv("LIME_PREDICT_URL", "http://127.0.0.1:8010/api/v1/predict").strip()
+    endpoint = os.getenv("LIME_PREDICT_URL", "http://127.0.0.1:8110/api/v1/predict").strip()
     request_body = json.dumps(
         {
             key: _serialize_value(value)

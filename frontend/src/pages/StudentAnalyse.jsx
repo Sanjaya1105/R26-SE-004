@@ -15,25 +15,48 @@ import '../styles/studentAnalyse.css';
 function formatRecommendationItems(text) {
   if (!text) return [];
 
-  const normalized = String(text).replace(/\r/g, ' ').replace(/\s+/g, ' ').trim();
-  if (!normalized) return [];
-
-  const numberedText = normalized.replace(/\s+(?=\d+[).]\s+)/g, '\n');
-  const numberedItems = numberedText
-    .split('\n')
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .map((item) => item.replace(/^\s*(?:-|\d+[).:-])\s*/, '').trim())
-    .filter(Boolean);
-
-  if (numberedItems.length > 1) {
-    return numberedItems;
+  // If backend returned "Unable to generate", return empty
+  if (text.includes('Unable to generate strategies')) {
+    return [];
   }
 
+  const normalized = String(text).replace(/\r/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!normalized || normalized.length < 5) return [];
+
+  // Strategy 1: Split by numbered patterns (1) text, 1. text, 1- text, 1: text)
+  const items = [];
+  const patterns = [
+    /^\s*\d+[\).:-]\s*(.+?)$/gm,  // Lines starting with number
+    /(\d+[\).:-]\s*[^):\n]+(?=[1-9][\).:-]|$))/g  // Inline numbered items
+  ];
+
+  for (const pattern of patterns) {
+    const matches = normalized.matchAll(pattern);
+    for (const match of matches) {
+      const text = match[1] || match[0];
+      if (text && text.length > 5) {
+        // Clean quotes and special leading chars
+        const clean = text
+          .replace(/^[\d)\-.:]\s*/, '')
+          .replace(/^["']|["']$/g, '')
+          .trim();
+        if (clean && !items.includes(clean)) {
+          items.push(clean);
+        }
+      }
+    }
+  }
+
+  if (items.length > 0) {
+    return items.slice(0, 5); // Max 5 items
+  }
+
+  // Strategy 2: Split by sentence endings if no numbered pattern found
   return normalized
     .split(/(?<=[.!?])\s+/)
-    .map((item) => item.trim())
-    .filter(Boolean);
+    .map(item => item.trim())
+    .filter(item => item.length > 5)
+    .slice(0, 5);
 }
 
 function isNoRecommendationLoad(level) {
@@ -353,15 +376,13 @@ export default function StudentAnalyse() {
             <div className="human-explanation-card">
               <p className="human-explanation-title">Combined Human-Readable Explanation (LIME + SHAP)</p>
               <p className="human-explanation-source">
-                Source: {(aggregateExplanation?.explanation_source || limeExplanation.explanation_source || 'fallback').toUpperCase()}
+                Source: {(aggregateExplanation?.explanation_source || 'unavailable').toUpperCase()}
               </p>
 
               <div className="explanation-split-block">
                 <p className="split-block-title">Explanation Output</p>
                 <p className="human-explanation-text">
-                  {aggregateExplanation?.why_cognitive_load_high ||
-                    limeExplanation.why_cognitive_load_high ||
-                    shapExplanation?.summary ||
+                  {aggregateExplanation?.human_explanation ||
                     'No explanation text returned.'}
                 </p>
               </div>
@@ -377,7 +398,7 @@ export default function StudentAnalyse() {
                       </div>
                     ))}
                   </div>
-                ) : recommendationItems.length ? (
+                ) : recommendationItems.length > 0 ? (
                   <div className="recommendation-list">
                     {recommendationItems.map((item, index) => (
                       <div key={`${index}-${item}`} className="recommendation-item">
@@ -387,7 +408,7 @@ export default function StudentAnalyse() {
                     ))}
                   </div>
                 ) : (
-                  <p className="human-explanation-text">No recommendation text returned.</p>
+                  <p className="human-explanation-text">No specific strategies available. Focus on the explanation and top signals above.</p>
                 )}
               </div>
 

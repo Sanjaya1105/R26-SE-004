@@ -58,7 +58,7 @@ API Gateway :4000
   |-- /api/courses, /api/sections, /files -> Resource_upload :5000
   |-- /api/gpt -> gpt-service :5002
   |-- /api/cognitive-load -> COGNITIVE-LOAD-API
-  |-- /api/lime-ai -> lime_ai :8010
+  |-- /api/lime-ai -> lime_ai :8110
   |-- /api/shap-ai -> sharp_ai :8011
   |-- /api/explainable -> explanable_ai :8000
   |-- /api/recommendation -> recommendation_ai
@@ -85,7 +85,7 @@ API Gateway :4000
 | Recommendation service | `http://localhost:5002` by default, but use a different `PORT` if running with `gpt-service` |
 | Explainable AI service | `http://localhost:8000` |
 | Cognitive-load prediction API | commonly run on `http://127.0.0.1:8021` from its launcher |
-| LIME AI service | `http://localhost:8010` |
+| LIME AI service | `http://localhost:8110` |
 | SHAP AI service | `http://localhost:8011` |
 | Cognitive style backend | `http://localhost:8003` |
 
@@ -120,7 +120,7 @@ BACKEND_SERVICE_URL=http://localhost:5001
 GPT_SERVICE_URL=http://localhost:5002
 RESOURCE_UPLOAD_URL=http://localhost:5000
 EXPLAINABLE_AI_BACKEND_URL=http://localhost:8000
-LIME_AI_SERVICE_URL=http://localhost:8010
+LIME_AI_SERVICE_URL=http://localhost:8110
 SHAP_AI_SERVICE_URL=http://localhost:8011
 RECOMMENDATION_AI_URL=http://localhost:5003
 COGNITIVE_LOAD_SERVICE_URL=http://127.0.0.1:8021
@@ -184,7 +184,7 @@ MYSQL_PORT=3306
 MYSQL_USER=root
 MYSQL_PASSWORD=
 MYSQL_DATABASE=cognitive_load_db
-LIME_PREDICT_URL=http://127.0.0.1:8010/api/v1/predict
+LIME_PREDICT_URL=http://127.0.0.1:8110/api/v1/predict
 ```
 
 ### `lime_ai/.env`
@@ -303,7 +303,7 @@ Start the services in separate terminals:
 GET http://localhost:4000/
 GET http://localhost:5002/health
 GET http://127.0.0.1:8021/health
-GET http://localhost:8010/api/v1/health
+GET http://localhost:8110/api/v1/health
 GET http://localhost:8011/api/v1/health
 ```
 

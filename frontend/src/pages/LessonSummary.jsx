@@ -35,6 +35,7 @@ const LessonSummary = () => {
   const [lessons, setLessons] = useState([]);
   const [selectedLesson, setSelectedLesson] = useState('');
   const [chartData, setChartData] = useState([]);
+  const [countChartData, setCountChartData] = useState([]);
   const [recommendationData, setRecommendationData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -67,6 +68,7 @@ const LessonSummary = () => {
     setError('');
     setRecommendationData(null);
     setChartData([]);
+    setCountChartData([]);
     
     try {
       // 1. Trigger analysis and generate chart data
@@ -90,11 +92,16 @@ const LessonSummary = () => {
           });
         }
       }
+
+      const countData = Object.entries(groups)
+        .filter(([, values]) => values.length > 0)
+        .map(([key, values]) => ({ x: key, y: values.length }));
       
       setChartData([{
         type: 'boxPlot',
         data: newChartData
       }]);
+      setCountChartData([{ name: 'Student Count', data: countData }]);
 
       // 2. Fetch the recommendation for the next lesson
       const recResponse = await axios.get(`${gatewayBaseUrl}/api/recommendation/recommend/${selectedLesson}`);
@@ -201,6 +208,46 @@ const LessonSummary = () => {
               series={chartData} 
               type="boxPlot" 
               height={350} 
+            />
+          </div>
+        )}
+
+        {countChartData.length > 0 && countChartData[0].data.length > 0 && (
+          <div className="glass-panel" style={{ padding: '2rem', minHeight: '380px', marginBottom: '2rem', border: '1px solid #dbeafe', background: 'linear-gradient(180deg, #ffffff, #f8fbff)' }}>
+            <h3 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Count Distribution Chart: Cognitive Load vs Student Count</h3>
+            <ReactApexChart
+              options={{
+                chart: { type: 'bar', height: 320, toolbar: { show: false } },
+                colors: ['#1d4ed8'],
+                plotOptions: {
+                  bar: {
+                    borderRadius: 6,
+                    distributed: true,
+                    columnWidth: '45%'
+                  }
+                },
+                dataLabels: { enabled: true },
+                xaxis: {
+                  type: 'category',
+                  title: { text: 'Cognitive Load', style: { color: 'var(--text-muted)' } },
+                  labels: { style: { colors: 'var(--text-muted)' } }
+                },
+                yaxis: {
+                  title: { text: 'Student Count', style: { color: 'var(--text-muted)' } },
+                  labels: { style: { colors: 'var(--text-muted)' } },
+                  min: 0,
+                  forceNiceScale: true
+                },
+                grid: { borderColor: '#e2e8f0' },
+                tooltip: {
+                  y: {
+                    formatter: (val) => `${val} students`
+                  }
+                }
+              }}
+              series={countChartData}
+              type="bar"
+              height={320}
             />
           </div>
         )}
