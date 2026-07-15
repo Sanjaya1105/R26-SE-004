@@ -8,7 +8,9 @@ This service receives cognitive-load feature payloads, calls the model API, and 
 - `lesson_id`
 - `session_id`
 - `minute_index`
-- all input feature values
+- the six model feature values: `pause_frequency`, `navigation_count_video`,
+  `rewatch_segments`, `playback_rate_change`, `idle_duration_video`, and
+  `time_on_content`
 - predicted cognitive load label
 - predicted score
 - confidence

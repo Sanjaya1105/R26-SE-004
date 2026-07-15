@@ -1,6 +1,8 @@
 # SHAP AI Service
 
 This service generates SHAP explanations for saved cognitive-load predictions.
+Both SHAP perturbations and calls to the cognitive-load model use its current
+six video/content features only.
 
 ## Endpoints
 - `GET /api/v1/health`

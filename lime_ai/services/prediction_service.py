@@ -24,11 +24,6 @@ RAW_FEATURE_FIELDS = [
     "playback_rate_change",
     "idle_duration_video",
     "time_on_content",
-    "navigation_count_adaptation",
-    "revisit_frequency",
-    "idle_duration_adaptation",
-    "quiz_response_time",
-    "error_rate",
 ]
 
 INT_FEATURE_FIELDS = {
@@ -38,10 +33,16 @@ INT_FEATURE_FIELDS = {
     "playback_rate_change",
     "idle_duration_video",
     "time_on_content",
-    "navigation_count_adaptation",
-    "revisit_frequency",
-    "idle_duration_adaptation",
-    "quiz_response_time",
+}
+
+# These columns remain in the shared table so existing installations and old
+# prediction rows continue to work. They are no longer accepted as model inputs.
+LEGACY_FEATURE_DEFAULTS = {
+    "navigation_count_adaptation": 0,
+    "revisit_frequency": 0,
+    "idle_duration_adaptation": 0,
+    "quiz_response_time": 0,
+    "error_rate": 0.0,
 }
 
 
@@ -55,11 +56,6 @@ def _signal_to_teacher_phrase(signal: str) -> str:
         "playback_rate_change": "the student changed playback speed a lot",
         "idle_duration_video": "the student stayed inactive during the video for long periods",
         "time_on_content": "the student spent a long time on the lesson content",
-        "navigation_count_adaptation": "the student moved around the adaptation content often",
-        "revisit_frequency": "the student returned to earlier parts several times",
-        "idle_duration_adaptation": "the student paused during the adaptation content for long periods",
-        "quiz_response_time": "the student took a long time to answer quiz items",
-        "error_rate": "the student made more quiz errors",
     }
 
     for feature_name, phrase in phrase_map.items():
@@ -224,11 +220,7 @@ def save_prediction(db: Session, data: CognitiveLoadInput, prediction_payload: d
         playback_rate_change=data.playback_rate_change,
         idle_duration_video=data.idle_duration_video,
         time_on_content=data.time_on_content,
-        navigation_count_adaptation=data.navigation_count_adaptation,
-        revisit_frequency=data.revisit_frequency,
-        idle_duration_adaptation=data.idle_duration_adaptation,
-        quiz_response_time=data.quiz_response_time,
-        error_rate=data.error_rate,
+        **LEGACY_FEATURE_DEFAULTS,
         predicted_cognitive_load=_prediction_label(prediction_payload),
         predicted_score=_prediction_score(prediction_payload),
         confidence=_confidence(prediction_payload),
@@ -274,11 +266,6 @@ def predict_and_store(db: Session, data: CognitiveLoadInput) -> dict[str, Any]:
             "playback_rate_change": saved_row.playback_rate_change,
             "idle_duration_video": saved_row.idle_duration_video,
             "time_on_content": saved_row.time_on_content,
-            "navigation_count_adaptation": saved_row.navigation_count_adaptation,
-            "revisit_frequency": saved_row.revisit_frequency,
-            "idle_duration_adaptation": saved_row.idle_duration_adaptation,
-            "quiz_response_time": saved_row.quiz_response_time,
-            "error_rate": saved_row.error_rate,
             "predicted_cognitive_load": saved_row.predicted_cognitive_load,
             "predicted_score": saved_row.predicted_score,
             "confidence": saved_row.confidence,
@@ -315,11 +302,6 @@ def list_predictions(db: Session, limit: int = 50) -> dict[str, Any]:
                 "playback_rate_change": row.playback_rate_change,
                 "idle_duration_video": row.idle_duration_video,
                 "time_on_content": row.time_on_content,
-                "navigation_count_adaptation": row.navigation_count_adaptation,
-                "revisit_frequency": row.revisit_frequency,
-                "idle_duration_adaptation": row.idle_duration_adaptation,
-                "quiz_response_time": row.quiz_response_time,
-                "error_rate": row.error_rate,
                 "predicted_cognitive_load": row.predicted_cognitive_load,
                 "predicted_score": row.predicted_score,
                 "confidence": row.confidence,
@@ -426,11 +408,6 @@ def list_predictions_filtered(
                 "playback_rate_change": row.playback_rate_change,
                 "idle_duration_video": row.idle_duration_video,
                 "time_on_content": row.time_on_content,
-                "navigation_count_adaptation": row.navigation_count_adaptation,
-                "revisit_frequency": row.revisit_frequency,
-                "idle_duration_adaptation": row.idle_duration_adaptation,
-                "quiz_response_time": row.quiz_response_time,
-                "error_rate": row.error_rate,
                 "predicted_cognitive_load": row.predicted_cognitive_load,
                 "predicted_score": row.predicted_score,
                 "confidence": row.confidence,
@@ -478,19 +455,7 @@ def aggregate_and_save_student_lesson_summary(
         )
 
     # Calculate averages
-    numeric_fields = [
-        "pause_frequency",
-        "navigation_count_video",
-        "rewatch_segments",
-        "playback_rate_change",
-        "idle_duration_video",
-        "time_on_content",
-        "navigation_count_adaptation",
-        "revisit_frequency",
-        "idle_duration_adaptation",
-        "quiz_response_time",
-        "error_rate",
-    ]
+    numeric_fields = RAW_FEATURE_FIELDS
     
     aggregated_features = {}
     for field in numeric_fields:
@@ -526,11 +491,6 @@ def aggregate_and_save_student_lesson_summary(
         summary.playback_rate_change = aggregated_features["playback_rate_change"]
         summary.idle_duration_video = aggregated_features["idle_duration_video"]
         summary.time_on_content = aggregated_features["time_on_content"]
-        summary.navigation_count_adaptation = aggregated_features["navigation_count_adaptation"]
-        summary.revisit_frequency = aggregated_features["revisit_frequency"]
-        summary.idle_duration_adaptation = aggregated_features["idle_duration_adaptation"]
-        summary.quiz_response_time = aggregated_features["quiz_response_time"]
-        summary.error_rate = aggregated_features["error_rate"]
         summary.predicted_cognitive_load = majority_load
         summary.predicted_score = avg_score
         summary.confidence = avg_confidence
@@ -551,11 +511,7 @@ def aggregate_and_save_student_lesson_summary(
             playback_rate_change=aggregated_features["playback_rate_change"],
             idle_duration_video=aggregated_features["idle_duration_video"],
             time_on_content=aggregated_features["time_on_content"],
-            navigation_count_adaptation=aggregated_features["navigation_count_adaptation"],
-            revisit_frequency=aggregated_features["revisit_frequency"],
-            idle_duration_adaptation=aggregated_features["idle_duration_adaptation"],
-            quiz_response_time=aggregated_features["quiz_response_time"],
-            error_rate=aggregated_features["error_rate"],
+            **LEGACY_FEATURE_DEFAULTS,
             predicted_cognitive_load=majority_load,
             predicted_score=avg_score,
             confidence=avg_confidence,
@@ -585,11 +541,6 @@ def aggregate_and_save_student_lesson_summary(
             "playback_rate_change": summary.playback_rate_change,
             "idle_duration_video": summary.idle_duration_video,
             "time_on_content": summary.time_on_content,
-            "navigation_count_adaptation": summary.navigation_count_adaptation,
-            "revisit_frequency": summary.revisit_frequency,
-            "idle_duration_adaptation": summary.idle_duration_adaptation,
-            "quiz_response_time": summary.quiz_response_time,
-            "error_rate": summary.error_rate,
             "predicted_cognitive_load": summary.predicted_cognitive_load,
             "predicted_score": summary.predicted_score,
             "confidence": summary.confidence,

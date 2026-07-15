@@ -19,11 +19,6 @@ RAW_FEATURE_FIELDS = [
     "playback_rate_change",
     "idle_duration_video",
     "time_on_content",
-    "navigation_count_adaptation",
-    "revisit_frequency",
-    "idle_duration_adaptation",
-    "quiz_response_time",
-    "error_rate",
 ]
 
 INT_FEATURE_FIELDS = {
@@ -33,10 +28,6 @@ INT_FEATURE_FIELDS = {
     "playback_rate_change",
     "idle_duration_video",
     "time_on_content",
-    "navigation_count_adaptation",
-    "revisit_frequency",
-    "idle_duration_adaptation",
-    "quiz_response_time",
 }
 
 
@@ -204,11 +195,6 @@ def list_predictions_filtered(
                 "playback_rate_change": row.playback_rate_change,
                 "idle_duration_video": row.idle_duration_video,
                 "time_on_content": row.time_on_content,
-                "navigation_count_adaptation": row.navigation_count_adaptation,
-                "revisit_frequency": row.revisit_frequency,
-                "idle_duration_adaptation": row.idle_duration_adaptation,
-                "quiz_response_time": row.quiz_response_time,
-                "error_rate": row.error_rate,
                 "predicted_cognitive_load": row.predicted_cognitive_load,
                 "predicted_score": row.predicted_score,
                 "confidence": row.confidence,

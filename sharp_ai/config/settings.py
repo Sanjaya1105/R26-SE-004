@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     DB_PASSWORD: str = ""
     DB_NAME: str = "lime-data"
 
-    MODEL_API_URL: str = ""
+    MODEL_API_URL: str = "http://127.0.0.1:8021"
     MODEL_API_PREDICT_PATH: str = "/predict"
     MODEL_API_TIMEOUT_SECONDS: int = 30
 
