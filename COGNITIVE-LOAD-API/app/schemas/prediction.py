@@ -17,8 +17,9 @@ class CognitiveLoadInput(BaseModel):
     playback_rate_change: int
     idle_duration_video: int
     time_on_content: int
-    navigation_count_adaptation: int
-    revisit_frequency: int
-    idle_duration_adaptation: int
-    quiz_response_time: int
-    error_rate: float
+    navigation_count_adaptation: int = 0
+    revisit_frequency: int = 0
+    idle_duration_adaptation: int = 0
+    quiz_response_time: int = 0
+    error_rate: float = 0.0
+    save_result: bool = False

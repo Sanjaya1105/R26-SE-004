@@ -17,6 +17,21 @@ from app.services.feature_extraction_service import extract_feature_window_from_
 WINDOW_DURATION = timedelta(minutes=2)
 LIME_TARGET_SERVICE = "lime_ai"
 
+LIME_PAYLOAD_FIELDS = [
+    "student_id",
+    "lesson_id",
+    "session_id",
+    "minute_index",
+    "window_start",
+    "window_end",
+    "pause_frequency",
+    "navigation_count_video",
+    "rewatch_segments",
+    "playback_rate_change",
+    "idle_duration_video",
+    "time_on_content",
+]
+
 
 def process_completed_windows_for_event(event_data: dict) -> dict:
     session_id = event_data.get("session_id")
@@ -183,7 +198,7 @@ def _post_feature_window_to_lime(feature_window_data: dict) -> dict:
         {
             key: _serialize_value(value)
             for key, value in feature_window_data.items()
-            if key != "raw_event_count"
+            if key in LIME_PAYLOAD_FIELDS
         }
     ).encode("utf-8")
 

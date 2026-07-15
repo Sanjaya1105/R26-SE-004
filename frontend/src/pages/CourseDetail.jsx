@@ -75,12 +75,6 @@ function getLivePredictionSummary(result) {
       result.predicted_cognitive_load ??
       result.predicted_label ??
       'Unknown',
-    confidence:
-      typeof prediction?.confidence === 'number'
-        ? prediction.confidence
-        : typeof result.confidence === 'number'
-          ? result.confidence
-          : null,
     minuteIndex:
       prediction?.minute_index ??
       featureWindow?.minute_index ??
@@ -100,6 +94,12 @@ function getLivePredictionSummary(result) {
       prediction?.playback_rate_change ??
       featureWindow?.playback_rate_change ??
       null,
+    idleDurationVideo:
+      prediction?.idle_duration_video ??
+      featureWindow?.idle_duration_video ??
+      null,
+    timeOnContent:
+      prediction?.time_on_content ?? featureWindow?.time_on_content ?? null,
   };
 }
 
@@ -113,6 +113,56 @@ function getDisplayRawEventCount(summary, localRawEventCount) {
   }
 
   return null;
+}
+
+function createEmptyRawEventStats() {
+  return {
+    pauseCount: 0,
+    seekCount: 0,
+    rewatchCount: 0,
+    rateChangeCount: 0,
+    idleDuration: 0,
+    lastEvent: '',
+  };
+}
+
+function getRawEventLabel(eventType) {
+  const labels = {
+    play: 'Play',
+    pause: 'Pause',
+    seek_forward: 'Seek forward',
+    seek_backward: 'Rewatch',
+    rate_change: 'Rate change',
+    adaptation_navigation: 'Video opened',
+    adaptation_revisit: 'Adaptation revisit',
+    adaptation_idle: 'Adaptation idle',
+    idle_start: 'Idle started',
+    idle_end: 'Idle ended',
+    quiz_submit: 'Quiz submitted',
+  };
+
+  return labels[eventType] ?? eventType ?? 'Unknown';
+}
+
+function updateRawEventStats(previousStats, payload) {
+  const nextStats = {
+    ...previousStats,
+    lastEvent: getRawEventLabel(payload.event_type),
+  };
+
+  if (payload.event_type === 'pause') {
+    nextStats.pauseCount += 1;
+  } else if (payload.event_type === 'seek_forward') {
+    nextStats.seekCount += 1;
+  } else if (payload.event_type === 'seek_backward') {
+    nextStats.rewatchCount += 1;
+  } else if (payload.event_type === 'rate_change') {
+    nextStats.rateChangeCount += 1;
+  } else if (payload.event_type === 'adaptation_idle') {
+    nextStats.idleDuration += Number(payload.event_value || 0);
+  }
+
+  return nextStats;
 }
 
 function getCompletedWindowInfo(sessionStart, sessionId, now = new Date()) {
@@ -183,6 +233,7 @@ const CourseDetail = () => {
   const [cognitiveLoadLoading, setCognitiveLoadLoading] = useState(false);
   const [videoSessionId, setVideoSessionId] = useState('');
   const [localRawEventCount, setLocalRawEventCount] = useState(0);
+  const [rawEventStats, setRawEventStats] = useState(createEmptyRawEventStats);
   const videoRef = useRef(null);
   const sessionStartRef = useRef(null);
   const lastVideoTimeRef = useRef(0);
@@ -234,6 +285,7 @@ const CourseDetail = () => {
     setCognitiveLoadLoading(false);
     setVideoSessionId('');
     setLocalRawEventCount(0);
+    setRawEventStats(createEmptyRawEventStats());
     lastPredictedWindowKeyRef.current = '';
     predictionInFlightWindowKeyRef.current = '';
   }, [courseId]);
@@ -251,6 +303,7 @@ const CourseDetail = () => {
       sessionStartRef.current = null;
       setVideoSessionId('');
       setLocalRawEventCount(0);
+      setRawEventStats(createEmptyRawEventStats());
       lastVideoTimeRef.current = 0;
       lastPlaybackRateRef.current = 1;
       idleStartRef.current = null;
@@ -284,6 +337,7 @@ const CourseDetail = () => {
     sessionStartRef.current = startedAt;
     setVideoSessionId(sessionId);
     setLocalRawEventCount(0);
+    setRawEventStats(createEmptyRawEventStats());
     lastVideoTimeRef.current = 0;
     lastPlaybackRateRef.current = 1;
     idleStartRef.current = null;
@@ -402,6 +456,7 @@ const CourseDetail = () => {
           event_type: payload.event_type,
         });
         setLocalRawEventCount((prev) => prev + 1);
+        setRawEventStats((prev) => updateRawEventStats(prev, payload));
       });
 
     return rawEventQueueRef.current;
@@ -594,6 +649,11 @@ const CourseDetail = () => {
             event_type: 'idle_start',
             video_time: Number(videoRef.current?.currentTime?.toFixed(2) || 0),
           });
+        } else {
+          setRawEventStats((prev) => ({
+            ...prev,
+            idleDuration: prev.idleDuration + 1,
+          }));
         }
       }
     }, 1000);
@@ -1611,6 +1671,24 @@ const CourseDetail = () => {
                   </p>
                 ) : null}
 
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                    gap: '0.65rem',
+                    marginTop: '0.9rem',
+                    color: 'var(--text-muted)',
+                    fontSize: '0.82rem',
+                  }}
+                >
+                  <div>Pause count: {rawEventStats.pauseCount}</div>
+                  <div>Seek count: {rawEventStats.seekCount}</div>
+                  <div>Rewatch count: {rawEventStats.rewatchCount}</div>
+                  <div>Rate changes: {rawEventStats.rateChangeCount}</div>
+                  <div>Idle duration: {rawEventStats.idleDuration}s</div>
+                  <div>Last event: {rawEventStats.lastEvent || 'Waiting...'}</div>
+                </div>
+
                 {livePredictionSummary ? (
                   <>
                     <div
@@ -1621,29 +1699,21 @@ const CourseDetail = () => {
                         marginTop: '0.9rem',
                       }}
                     >
-                      <div style={{ padding: '0.85rem', borderRadius: '10px', background: 'rgba(15, 23, 42, 0.42)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                        <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginBottom: '0.28rem' }}>Predicted load</div>
-                        <div style={{ fontSize: '1rem', fontWeight: 700 }}>{livePredictionSummary.predictedLoad}</div>
+                      <div style={{ padding: '0.85rem', borderRadius: '10px', background: 'rgba(15, 23, 42, 0.65)', border: '1px solid rgba(255,255,255,0.12)' }}>
+                        <div style={{ fontSize: '0.74rem', color: '#cbd5e1', marginBottom: '0.28rem' }}>Predicted load</div>
+                        <div style={{ fontSize: '1rem', fontWeight: 700, color: '#f8fafc' }}>{livePredictionSummary.predictedLoad}</div>
                       </div>
-                      <div style={{ padding: '0.85rem', borderRadius: '10px', background: 'rgba(15, 23, 42, 0.42)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                        <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginBottom: '0.28rem' }}>Confidence</div>
-                        <div style={{ fontSize: '1rem', fontWeight: 700 }}>
-                          {livePredictionSummary.confidence != null
-                            ? `${Math.round(livePredictionSummary.confidence * 100)}%`
-                            : 'N/A'}
-                        </div>
-                      </div>
-                      <div style={{ padding: '0.85rem', borderRadius: '10px', background: 'rgba(15, 23, 42, 0.42)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                        <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginBottom: '0.28rem' }}>Window</div>
-                        <div style={{ fontSize: '1rem', fontWeight: 700 }}>
+                      <div style={{ padding: '0.85rem', borderRadius: '10px', background: 'rgba(15, 23, 42, 0.65)', border: '1px solid rgba(255,255,255,0.12)' }}>
+                        <div style={{ fontSize: '0.74rem', color: '#cbd5e1', marginBottom: '0.28rem' }}>Window</div>
+                        <div style={{ fontSize: '1rem', fontWeight: 700, color: '#f8fafc' }}>
                           {livePredictionSummary.minuteIndex != null
                             ? `#${livePredictionSummary.minuteIndex}`
                             : 'N/A'}
                         </div>
                       </div>
-                      <div style={{ padding: '0.85rem', borderRadius: '10px', background: 'rgba(15, 23, 42, 0.42)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                        <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginBottom: '0.28rem' }}>Raw events</div>
-                        <div style={{ fontSize: '1rem', fontWeight: 700 }}>{displayRawEventCount ?? 'N/A'}</div>
+                      <div style={{ padding: '0.85rem', borderRadius: '10px', background: 'rgba(15, 23, 42, 0.65)', border: '1px solid rgba(255,255,255,0.12)' }}>
+                        <div style={{ fontSize: '0.74rem', color: '#cbd5e1', marginBottom: '0.28rem' }}>Raw events</div>
+                        <div style={{ fontSize: '1rem', fontWeight: 700, color: '#f8fafc' }}>{displayRawEventCount ?? 'N/A'}</div>
                       </div>
                     </div>
 
@@ -1661,6 +1731,8 @@ const CourseDetail = () => {
                       <div>Rewatch segments: {livePredictionSummary.rewatchSegments ?? 'N/A'}</div>
                       <div>Video navigation: {livePredictionSummary.navigationCountVideo ?? 'N/A'}</div>
                       <div>Rate changes: {livePredictionSummary.playbackRateChange ?? 'N/A'}</div>
+                      <div>Video idle duration: {livePredictionSummary.idleDurationVideo ?? 'N/A'}s</div>
+                      <div>Time on content: {livePredictionSummary.timeOnContent ?? 'N/A'}s</div>
                     </div>
 
                     {livePredictionSummary.createdAt ? (
