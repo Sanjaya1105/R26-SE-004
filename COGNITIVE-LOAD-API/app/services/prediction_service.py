@@ -39,6 +39,15 @@ CSV_FIELDS = [
 DEFAULT_QUIZ_RESPONSE_TIME = 20
 DEFAULT_ERROR_RATE = 0.22
 
+MODEL_FEATURE_FIELDS = [
+    "pause_frequency",
+    "navigation_count_video",
+    "rewatch_segments",
+    "playback_rate_change",
+    "idle_duration_video",
+    "time_on_content",
+]
+
 
 def get_label(score: int):
     labels = {
@@ -135,10 +144,21 @@ def _normalize_csv_row(row: dict):
     return normalized
 
 
-def predict_cognitive_load(data):
-    normalized_quiz_response_time, normalized_error_rate = _normalize_quiz_inputs(
-        data.quiz_response_time,
-        data.error_rate,
+def predict_cognitive_load(data, persist: bool | None = None):
+    navigation_count_adaptation = _storage_int(
+        getattr(data, "navigation_count_adaptation", 0)
+    )
+    revisit_frequency = _storage_int(getattr(data, "revisit_frequency", 0))
+    idle_duration_adaptation = _storage_int(
+        getattr(data, "idle_duration_adaptation", 0)
+    )
+    quiz_response_time = _storage_int(getattr(data, "quiz_response_time", 0))
+    error_rate = _storage_float(getattr(data, "error_rate", 0.0))
+
+    should_persist = (
+        bool(getattr(data, "save_result", False))
+        if persist is None
+        else persist
     )
 
     # This is the feature snapshot we persist for downstream modules such as logs and XAI.
@@ -155,11 +175,11 @@ def predict_cognitive_load(data):
         "playback_rate_change": data.playback_rate_change,
         "idle_duration_video": data.idle_duration_video,
         "time_on_content": data.time_on_content,
-        "navigation_count_adaptation": data.navigation_count_adaptation,
-        "revisit_frequency": data.revisit_frequency,
-        "idle_duration_adaptation": data.idle_duration_adaptation,
-        "quiz_response_time": normalized_quiz_response_time,
-        "error_rate": normalized_error_rate,
+        "navigation_count_adaptation": navigation_count_adaptation,
+        "revisit_frequency": revisit_frequency,
+        "idle_duration_adaptation": idle_duration_adaptation,
+        "quiz_response_time": quiz_response_time,
+        "error_rate": error_rate,
     }
 
     input_df = pd.DataFrame(
@@ -171,13 +191,9 @@ def predict_cognitive_load(data):
                 "playback_rate_change": data.playback_rate_change,
                 "idle_duration_video": data.idle_duration_video,
                 "time_on_content": data.time_on_content,
-                "navigation_count_adaptation": data.navigation_count_adaptation,
-                "revisit_frequency": data.revisit_frequency,
-                "idle_duration_adaptation": data.idle_duration_adaptation,
-                "quiz_response_time": normalized_quiz_response_time,
-                "error_rate": normalized_error_rate,
             }
-        ]
+        ],
+        columns=MODEL_FEATURE_FIELDS,
     )
 
     prediction = model.predict(input_df)[0]
@@ -195,11 +211,11 @@ def predict_cognitive_load(data):
         "playback_rate_change": data.playback_rate_change,
         "idle_duration_video": data.idle_duration_video,
         "time_on_content": data.time_on_content,
-        "navigation_count_adaptation": data.navigation_count_adaptation,
-        "revisit_frequency": data.revisit_frequency,
-        "idle_duration_adaptation": data.idle_duration_adaptation,
-        "quiz_response_time": normalized_quiz_response_time,
-        "error_rate": normalized_error_rate,
+        "navigation_count_adaptation": navigation_count_adaptation,
+        "revisit_frequency": revisit_frequency,
+        "idle_duration_adaptation": idle_duration_adaptation,
+        "quiz_response_time": quiz_response_time,
+        "error_rate": error_rate,
         "predicted_cognitive_load": label,
         "predicted_score": int(prediction),
         "predicted_label": label,
@@ -207,26 +223,31 @@ def predict_cognitive_load(data):
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    feature_window_id = save_feature_window(feature_window_data)
-    save_prediction_log(
-        {
-            "feature_window_id": feature_window_id,
-            "student_id": data.student_id,
-            "lesson_id": data.lesson_id,
-            "session_id": data.session_id,
-            "predicted_cognitive_load": label,
-            "predicted_score": int(prediction),
-            "confidence": round(float(confidence), 2),
-        }
-    )
-    save_to_csv(response_data)
+    if should_persist:
+        feature_window_id = save_feature_window(feature_window_data)
+        save_prediction_log(
+            {
+                "feature_window_id": feature_window_id,
+                "student_id": data.student_id,
+                "lesson_id": data.lesson_id,
+                "session_id": data.session_id,
+                "predicted_cognitive_load": label,
+                "predicted_score": int(prediction),
+                "confidence": round(float(confidence), 2),
+            }
+        )
+        save_to_csv(response_data)
+
     return response_data
 
 
 def predict_cognitive_load_from_raw(data):
     # The raw-event flow first rebuilds the model features, then reuses the normal prediction path.
     feature_window_data = extract_feature_window_from_raw(data.model_dump())
-    prediction_result = predict_cognitive_load(_build_prediction_input(feature_window_data))
+    prediction_result = predict_cognitive_load(
+        _build_prediction_input(feature_window_data),
+        persist=True,
+    )
 
     return {
         "raw_event_count": feature_window_data["raw_event_count"],
@@ -251,6 +272,26 @@ def _build_prediction_input(feature_window_data: dict):
         setattr(payload, key, value)
 
     return payload
+
+
+def _storage_int(value):
+    if value in (None, ""):
+        return 0
+
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _storage_float(value):
+    if value in (None, ""):
+        return 0.0
+
+    try:
+        return round(float(value), 2)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _normalize_quiz_inputs(quiz_response_time: int | None, error_rate: float | None):

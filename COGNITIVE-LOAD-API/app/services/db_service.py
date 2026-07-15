@@ -200,6 +200,14 @@ def save_prediction_log(prediction_data: dict):
             predicted_score,
             confidence
         ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            id = LAST_INSERT_ID(id),
+            student_id = VALUES(student_id),
+            lesson_id = VALUES(lesson_id),
+            session_id = VALUES(session_id),
+            predicted_cognitive_load = VALUES(predicted_cognitive_load),
+            predicted_score = VALUES(predicted_score),
+            confidence = VALUES(confidence)
     """
     values = (
         prediction_data.get("feature_window_id"),
