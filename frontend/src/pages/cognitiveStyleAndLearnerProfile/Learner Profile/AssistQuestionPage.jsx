@@ -362,7 +362,7 @@ export default function AssistQuestionPage() {
 
       setSuccess("Responses collected successfully.");
       console.log("Submitted payload:", payload);
-      navigate("/split-screen");
+      navigate("/calibration");
     } catch (submitError) {
       setError("Submission failed. Add your backend URL and try again.");
       console.error(submitError);

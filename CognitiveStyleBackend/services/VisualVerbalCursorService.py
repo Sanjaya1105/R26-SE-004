@@ -1,15 +1,58 @@
 from database.connection import visual_verbal_cursor_collection, visual_verbal_cursor_session_collection
 
 
+
+#Commenting out prev impl to check less input impl
+# async def create_simple_event(event_data: dict):
+#     result = await visual_verbal_cursor_collection.insert_one(event_data)
+#     new_event = await visual_verbal_cursor_collection.find_one({"_id": result.inserted_id})
+#
+#     if new_event:
+#         new_event["_id"] = str(new_event["_id"])
+#
+#     return new_event
+
 async def create_simple_event(event_data: dict):
-    result = await visual_verbal_cursor_collection.insert_one(event_data)
+    # Extract raw values from the incoming dictionary
+    visual_time = event_data.get("visualTimeMs", 0)
+    text_time = event_data.get("textTimeMs", 0)
+    visual_scrolls = event_data.get("visualScrolls", 0)
+    text_scrolls = event_data.get("textScrolls", 0)
+    total_active_time = event_data.get("totalActiveTimeMs", 0)
+
+    # Calculation 1: Image Cursor Ratio (visual vs total)
+    total_time = visual_time + text_time
+    if total_time > 0:
+        image_cursor_ratio = round(visual_time / total_time, 4)
+    else:
+        image_cursor_ratio = 0.5  # Neutral baseline if no movement
+
+    # Calculation 2: Image Scroll Ratio (visual vs total)
+    total_scrolls = visual_scrolls + text_scrolls
+    if total_scrolls > 0:
+        image_scroll_ratio = round(visual_scrolls / total_scrolls, 4)
+    else:
+        image_scroll_ratio = 0.5  # Neutral baseline if no scrolling
+
+    # Create the clean document optimized for your ML model
+    db_document = {
+        "userId": event_data.get("userId"),
+        "timeTakenMs": total_active_time,
+        "imageCursorRatio": image_cursor_ratio,
+        "imageScrollRatio": image_scroll_ratio
+    }
+
+    # Database insertion
+    result = await visual_verbal_cursor_collection.insert_one(db_document)
+
+    # Retrieve the inserted document
     new_event = await visual_verbal_cursor_collection.find_one({"_id": result.inserted_id})
 
+    # Format the MongoDB ObjectId to a string before returning
     if new_event:
         new_event["_id"] = str(new_event["_id"])
 
     return new_event
-
 
 async def get_simple_events():
     events = []

@@ -258,16 +258,47 @@
 
 
 from database.connection import visual_verbal_gaze_collection, visual_verbal_gaze_session_collection
+from models.VisualVerbalGazeWithLimitedInputs import GazeEventIncoming,GazeEventDB
 
+#Commenting out to test the model with limited inputs
+# async def create_gaze_event(event_data: dict):
+#     result = await visual_verbal_gaze_collection.insert_one(event_data)
+#     new_event = await visual_verbal_gaze_collection.find_one({"_id": result.inserted_id})
+#
+#     if new_event:
+#         new_event["_id"] = str(new_event["_id"])
+#
+#     return new_event
+#
+# Assuming visual_verbal_gaze_collection is imported here
 
-async def create_gaze_event(event_data: dict):
-    result = await visual_verbal_gaze_collection.insert_one(event_data)
+async def create_gaze_event_service(event: GazeEventIncoming):
+    # 1. Calculate the ImageGazeRatio safely
+    image_gaze_ratio = 0.0
+    if event.totalActiveTimeMs > 0:
+        image_gaze_ratio = event.visualGazeTimeMs / event.totalActiveTimeMs
+
+    # 2. Map the data into the DB Model
+    # Here we explicitly set timeTakenMs = event.totalActiveTimeMs
+    db_payload = GazeEventDB(
+        userId=event.userId,
+        FirstInteractionPreference=event.firstInteractionPreference,
+        ImageGazeRatio=round(image_gaze_ratio, 4),
+        timeTakenMs=event.totalActiveTimeMs
+    )
+
+    # 3. Insert into MongoDB
+    result = await visual_verbal_gaze_collection.insert_one(db_payload.model_dump())
+
+    # 4. Fetch and format the response
     new_event = await visual_verbal_gaze_collection.find_one({"_id": result.inserted_id})
 
     if new_event:
         new_event["_id"] = str(new_event["_id"])
 
     return new_event
+
+
 
 
 async def get_gaze_events_by_session(session_id: str):
