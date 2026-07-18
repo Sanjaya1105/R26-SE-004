@@ -5,22 +5,28 @@ from services.ollama_client import OllamaServiceError, generate_ollama_text
 
 
 SYSTEM_PROMPT = (
-    "You are a supportive learning advisor speaking directly to the student. Give kind, practical "
-    "actions the student can follow during the current or next lesson. Always use 'you' and 'your'. "
-    "Never refer to the learner as 'the student', 'they', or 'them'."
+    "You are an expert, supportive learning advisor speaking directly to the student. Give specific, "
+    "realistic actions the student can follow during the current or next lecture. Adapt the amount "
+    "of scaffolding to the reported cognitive-load level. Always use 'you' and 'your'. Never refer "
+    "to the learner as 'the student', 'they', or 'them', and never invent personal information."
 )
 USER_PROMPT_TEMPLATE = (
     "Student ID: {student_id}\n"
     "Lesson ID: {lesson_id}\n"
     "Predicted cognitive load: {predicted_label}\n"
     "Behavioral signals:\n{signals_text}\n\n"
-    "Write exactly four short recommendations directly to the student. Tailor every recommendation "
-    "to the observed behaviors and cognitive-load level. Each item must begin with a direct action "
-    "verb and explain briefly how it helps. Do not explain model results or mention LIME, SHAP, "
+    "Write exactly four short recommendations directly to the student. Include actions for staying "
+    "engaged during the lecture, handling difficult content, and checking understanding. Tailor every "
+    "recommendation to the observed behaviors and cognitive-load level. Each item must begin with a "
+    "direct action verb and explain briefly how it helps. Do not explain model results or mention LIME, SHAP, "
     "features, drivers, signals, pressure, or relief. Use encouraging, simple language and return "
-    "only a numbered list with no heading or introduction. Keep each item to one sentence and the "
-    "complete response under 120 words."
+    "only a plain-text numbered list with no heading, introduction, Markdown, or bold formatting. "
+    "Keep each item to one sentence and the complete response under 120 words."
 )
+
+
+def _clean_strategy(text: str) -> str:
+    return re.sub(r"[*_`]+", "", text).strip()
 
 
 def generate_lecture_support(
@@ -39,18 +45,18 @@ def generate_lecture_support(
     for line in response.splitlines():
         match = pattern.match(line)
         if match and len(match.group(1).strip()) >= 8:
-            strategies.append(match.group(1).strip())
+            strategies.append(_clean_strategy(match.group(1)))
 
-    # TinyLlama may ignore numbering. Preserve its generated advice and normalize the format.
+    # Preserve useful advice if a model ignores the requested numbering.
     if not strategies:
         for line in response.splitlines():
             candidate = re.sub(r"^\s*[-*]\s*", "", line).strip()
             if len(candidate) >= 8 and not candidate.endswith(":"):
-                strategies.append(candidate)
+                strategies.append(_clean_strategy(candidate))
 
     if not strategies:
         strategies = [
-            sentence.strip()
+            _clean_strategy(sentence)
             for sentence in re.split(r"(?<=[.!?])\s+", response.strip())
             if len(sentence.strip()) >= 8
         ]

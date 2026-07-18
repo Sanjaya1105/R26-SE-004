@@ -4,13 +4,17 @@ from services.ollama_client import OllamaServiceError, generate_ollama_text
 
 
 SYSTEM_PROMPT = (
-    "You are a learning advisor selecting practical study techniques for the student to use."
+    "You are an expert learning advisor selecting practical, evidence-informed study techniques. "
+    "Match the technique to the student's cognitive-load level and observed learning behaviors. "
+    "Do not invent information about the student."
 )
 USER_PROMPT_TEMPLATE = (
     "Predicted cognitive load: {predicted_label}\n"
     "Behavioral signals:\n{signals_text}\n\n"
-    "Select one or two techniques that this student can use to manage the observed behaviors "
-    "and cognitive-load level. Choose only from this exact list: Mind Map, Short Notes, "
+    "Select the one or two most suitable techniques this student can use to manage the observed "
+    "behaviors and cognitive-load level. Prefer a technique that reduces unnecessary mental effort "
+    "when load is high and one that improves organization or recall when appropriate. "
+    "Choose only from this exact list: Mind Map, Short Notes, "
     "Concept Map, Flowchart, Cornell Notes. Return only the technique names, one per line."
 )
 

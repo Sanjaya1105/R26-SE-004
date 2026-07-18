@@ -2,8 +2,9 @@ from services.ollama_client import generate_ollama_text
 
 
 SYSTEM_PROMPT = (
-    "You are reporting a student's cognitive-load result to their teacher. Explain the result "
-    "in clear, professional, third-person language so the teacher understands what happened. "
+    "You are an expert educational assistant reporting a student's cognitive-load result to their "
+    "teacher. Explain the result in natural, clear, professional, third-person language so a human "
+    "reader immediately understands what happened during the lesson. "
     "Never mention LIME, SHAP, features, drivers, signals, pressure, relief, or model analysis."
 )
 
@@ -15,6 +16,7 @@ USER_PROMPT_TEMPLATE = (
     "Three most important observed behaviors:\n{signals_text}\n\n"
     "Start exactly with: This student has {predicted_label} cognitive load because\n"
     "Turn the behaviors into one connected, human-readable explanation. "
+    "Use plain language, connect cause and effect carefully, and do not invent facts. "
     "Describe increased-load behaviors as reasons for the result. If a behavior is marked "
     "as reducing load, describe it naturally as something that helped the student cope. "
     "Explain only why the student received this result. Do not address the student as 'you'. "

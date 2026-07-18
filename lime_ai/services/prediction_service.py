@@ -120,8 +120,13 @@ def generate_aggregate_explanation(payload: AggregateExplanationRequest) -> dict
     )
 
     signals = [_signal_to_teacher_phrase(item["signal"]) for item in top_signals]
+    impact_phrases = {
+        "positive": "behavior associated with increased cognitive load",
+        "negative": "behavior that helped reduce cognitive load",
+        "neutral": "observed behavior",
+    }
     human_signals = [
-        f"{item['impact']} cognitive-load influence: {_signal_to_teacher_phrase(item['signal'])}"
+        f"{impact_phrases[item['impact']]}: {_signal_to_teacher_phrase(item['signal'])}"
         for item in top_signals
     ]
 

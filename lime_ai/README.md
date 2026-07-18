@@ -22,14 +22,28 @@ The service is configured to use a MySQL database named `lime-data` and a table 
 
 ## Run
 
-1. Copy `.env.example` to `.env` and set the model API URL.
-2. Install dependencies:
+1. Install Ollama and download the Gemma 3 12B model:
+
+```bash
+ollama pull gemma3:12b
+```
+
+2. Copy `.env.example` to `.env`, then set the model API and Ollama URLs if
+   they differ from the defaults. `OLLAMA_MODEL` defaults to `gemma3:12b`.
+
+3. Make sure Ollama is running:
+
+```bash
+ollama serve
+```
+
+4. Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Start the service:
+5. Start the service:
 
 ```bash
 uvicorn main:app --host 0.0.0.0 --port 8110
@@ -44,3 +58,5 @@ If you prefer manual setup, you can still run [db/init.sql](db/init.sql).
 - `POST /api/v1/predict` - predicts cognitive load and saves the record automatically
 - `GET /api/v1/predictions` - returns saved rows
 - `GET /api/v1/health` - health check
+- `POST /api/v1/aggregate-explanation` - uses Gemma 3 12B through Ollama to
+  generate a human explanation, lecture support, and personalized study-technique suggestions

@@ -19,7 +19,11 @@ def generate_ollama_text(system_prompt: str, user_prompt: str) -> str:
     payload: dict[str, Any] = {
         "model": model,
         "stream": False,
-        "options": {"temperature": 0.2, "num_predict": 180},
+        "keep_alive": settings.OLLAMA_KEEP_ALIVE,
+        "options": {
+            "temperature": settings.OLLAMA_TEMPERATURE,
+            "num_predict": settings.OLLAMA_NUM_PREDICT,
+        },
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},

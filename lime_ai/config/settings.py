@@ -17,8 +17,11 @@ class Settings(BaseSettings):
     MODEL_API_TIMEOUT_SECONDS: int = 30
 
     OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_MODEL: str = "tinyllama"
-    OLLAMA_TIMEOUT_SECONDS: int = 90
+    OLLAMA_MODEL: str = "gemma3:12b"
+    OLLAMA_TIMEOUT_SECONDS: int = 180
+    OLLAMA_TEMPERATURE: float = 0.2
+    OLLAMA_NUM_PREDICT: int = 512
+    OLLAMA_KEEP_ALIVE: str = "10m"
 
     @property
     def SQLALCHEMY_DATABASE_URL(self) -> str:
