@@ -9,9 +9,9 @@ from routes.QuestionRunnerCursorRouter import router as question_runner_cursor_r
 from routes.QuestionRunnerCognitiveStyleRouter import router as question_runner_cognitivestyle_router
 from routes.QuestionRunnerAnswerRouter import router as question_runner_answer_router
 from routes.QuestionRunnerMLRouter import router as question_runner_ml_router
-from routes.VisualVerbalMLRouter import router as visual_verbal_ml_router
 from routes.AssistQuestionRoute import router as assist_question_runner_gaze_router
 from routes.LearnerProfileRoute import router as learner_profile_router
+from routes.aiModelRoutes.VisualVerbalRoute import router as visual_verbal_ml_router
 app = FastAPI()
 
 app.add_middleware(
@@ -45,3 +45,8 @@ app.include_router(visual_verbal_ml_router)
 app.include_router(assist_question_runner_gaze_router)
 
 app.include_router(learner_profile_router)
+
+if __name__ == "__main__":
+    import uvicorn
+    # Make sure "main:app" matches your filename (main.py) and FastAPI instance name (app)
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

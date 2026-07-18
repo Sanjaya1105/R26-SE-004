@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from models.VisualVerbalCursorModel import SimpleEventCreate, SimpleSessionComplete
+from models.VisualVerbalCursorWithLimitedInputs import CursorSummaryResponse,CursorSummaryCreate
 from services.VisualVerbalCursorService import (
     create_simple_event,
     get_simple_events,
@@ -11,10 +12,15 @@ from services.VisualVerbalCursorService import (
 router = APIRouter(prefix="/simple", tags=["Simple Metrics"])
 
 
-@router.post("/cursor-summary")
-async def add_simple_event(event: SimpleEventCreate):
-    return await create_simple_event(event.model_dump())
+# Previous impl is commenting out bz need to check new les input impl is working
+# @router.post("/cursor-summary")
+# async def add_simple_event(event: SimpleEventCreate):
+#     return await create_simple_event(event.model_dump())
 
+@router.post("/cursor-summary", response_model=CursorSummaryResponse)
+async def add_simple_event(event: CursorSummaryCreate):
+    # Pass the raw dictionary to the service method
+    return await create_simple_event(event.model_dump())
 
 @router.get("/events")
 async def list_simple_events():

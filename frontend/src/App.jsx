@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import StudentLogin from './pages/student/StudentLogin';
 import StudentRegistration from './pages/student/StudentRegistration';
 import AssistQuestionPage from './pages/cognitiveStyleAndLearnerProfile/Learner Profile/AssistQuestionPage';
+import CalibrationPage from './pages/cognitiveStyleAndLearnerProfile/CognitiveStyle/Calibration/Calibration';
 import Module2 from './pages/cognitiveStyleAndLearnerProfile/CognitiveStyle/SplitScreenModule/Module2';
 import QuestionRunner from './pages/cognitiveStyleAndLearnerProfile/CognitiveStyle/GeftModule/QuestionRunner';
 import Login from './pages/Login';
@@ -40,6 +41,7 @@ function App() {
         <Route path="/learner-profile" element={<AssistQuestionPage />} />
         <Route path="/split-screen" element={<Module2 />} />
         <Route path="/geft" element={<QuestionRunner />} />
+        <Route path="/calibration" element={<CalibrationPage />} />
 
 
         <Route path="/dashboard" element={
