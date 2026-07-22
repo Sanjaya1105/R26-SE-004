@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from routes.VisualVerbalCursorRoutes import router as simple_router
 from routes.VisualVerbalGazeRoutes import router as gaze_router
 from routes.VisualVerbalAnalysisRoutes import router as visual_verbal_analysis_router
-from routes.QuestionRunnerGazeRouter import router as question_runner_gaze_router
+from routes.AnalyticWholisticRouter import router as question_runner_gaze_router
 from routes.QuestionRunnerCursorRouter import router as question_runner_cursor_router
 from routes.QuestionRunnerCognitiveStyleRouter import router as question_runner_cognitivestyle_router
 from routes.QuestionRunnerAnswerRouter import router as question_runner_answer_router

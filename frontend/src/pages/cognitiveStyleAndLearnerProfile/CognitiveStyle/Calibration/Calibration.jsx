@@ -1136,57 +1136,164 @@
 // }
 
 
-import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import Webcam from 'react-webcam';
-import { FilesetResolver, FaceLandmarker } from '@mediapipe/tasks-vision';
 
-// --- CONFIGURATIONS ---
 
-// 1. Extreme Corners Typewriter Grid (Left to Right, jump to next row)
-const gridStops = ['3%', '34%', '66%', '97%'];
-const OUTWARD_GRID = [{ top: '50%', left: '50%' }]; // 1st point is Center
 
-gridStops.forEach(y => {
-  gridStops.forEach(x => OUTWARD_GRID.push({ top: y, left: x }));
-});
 
-// 2. Head Pose Positions
-const ARROW_POSITIONS = [
-  { top: '15%', left: '50%', symbol: '⬆️' }, // Up
-  { top: '85%', left: '50%', symbol: '⬇️' }, // Down
-  { top: '50%', left: '15%', symbol: '⬅️' }, // Left
-  { top: '50%', left: '85%', symbol: '➡️' }, // Right
-];
 
-// 3. Enlarged Inner Rectangle Refinement
-const REFINE_POINTS = [
-  { top: '50%', left: '50%' }, // Center Start
-  { top: '25%', left: '25%' }, { top: '25%', left: '75%' },
-  { top: '75%', left: '25%' }, { top: '75%', left: '75%' },
-];
 
-export default function AdvancedCalibrationPage() {
-  const navigate = useNavigate();
-  const webcamRef = useRef(null);
-  const faceLandmarkerRef = useRef(null);
 
-  const [isModelReady, setIsModelReady] = useState(false);
-  const [phase, setPhase] = useState('positioning'); // positioning, iris, head, refine, done
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//THIS IS ALSO THE SAME CODE
+
+
+
+
+
+// import React, { useEffect, useRef, useState } from 'react';
+// import { useNavigate } from 'react-router-dom';
+// import Webcam from 'react-webcam';
+// import { FilesetResolver, FaceLandmarker } from '@mediapipe/tasks-vision';
+
+// // --- CONFIGURATIONS ---
+
+// // 1. Extreme Corners Typewriter Grid (Left to Right, jump to next row)
+// const gridStops = ['3%', '34%', '66%', '97%'];
+// const OUTWARD_GRID = [{ top: '50%', left: '50%' }]; // 1st point is Center
+
+// gridStops.forEach(y => {
+//   gridStops.forEach(x => OUTWARD_GRID.push({ top: y, left: x }));
+// });
+
+// // 2. Head Pose Positions
+// const ARROW_POSITIONS = [
+//   { top: '15%', left: '50%', symbol: '⬆️' }, // Up
+//   { top: '85%', left: '50%', symbol: '⬇️' }, // Down
+//   { top: '50%', left: '15%', symbol: '⬅️' }, // Left
+//   { top: '50%', left: '85%', symbol: '➡️' }, // Right
+// ];
+
+// // 3. Enlarged Inner Rectangle Refinement
+// const REFINE_POINTS = [
+//   { top: '50%', left: '50%' }, // Center Start
+//   { top: '25%', left: '25%' }, { top: '25%', left: '75%' },
+//   { top: '75%', left: '25%' }, { top: '75%', left: '75%' },
+// ];
+
+// export default function AdvancedCalibrationPage() {
+//   const navigate = useNavigate();
+//   const webcamRef = useRef(null);
+//   const faceLandmarkerRef = useRef(null);
+
+//   const [isModelReady, setIsModelReady] = useState(false);
+//   const [phase, setPhase] = useState('positioning'); // positioning, iris, head, refine, done
   
-  const [step, setStep] = useState(0);
-  const [isAtCenter, setIsAtCenter] = useState(true); // Used for arrow bounce
-  const [isCapturing, setIsCapturing] = useState(false);
+//   const [step, setStep] = useState(0);
+//   const [isAtCenter, setIsAtCenter] = useState(true); // Used for arrow bounce
+//   const [isCapturing, setIsCapturing] = useState(false);
   
-  const [isFaceAligned, setIsFaceAligned] = useState(false);
-  const [calibrationData, setCalibrationData] = useState([]);
+//   const [isFaceAligned, setIsFaceAligned] = useState(false);
+//   const [calibrationData, setCalibrationData] = useState([]);
 
 
-    // --- MATH HELPERS ---
-  const average = (points) => {
-    const sum = points.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
-    return { x: sum.x / points.length, y: sum.y / points.length };
-  };
+//     // --- MATH HELPERS ---
+//   const average = (points) => {
+//     const sum = points.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+//     return { x: sum.x / points.length, y: sum.y / points.length };
+//   };
 
   // const getGazeFeatures = (landmarks) => {
 
@@ -1312,8 +1419,466 @@ export default function AdvancedCalibrationPage() {
   //   };
   // };
 
+
+  ///////////////THis is the comment that I put on Saturday 18th of JULY
+
+  // const getGazeFeatures = (landmarks) => {
+
+  //   // 1. Head Pose (Yaw & Pitch)
+  //   const nose = landmarks[1], leftFace = landmarks[234], rightFace = landmarks[454];
+  //   const topFace = landmarks[10], botFace = landmarks[152];
+    
+  //   const faceW = Math.abs(rightFace.x - leftFace.x) || 1;
+  //   const faceH = Math.abs(botFace.y - topFace.y) || 1;
+    
+  //   const yaw = ((nose.x - ((leftFace.x + rightFace.x) / 2)) / faceW) * 80;
+  //   const pitch = ((nose.y - ((topFace.y + botFace.y) / 2)) / faceH) * 80;
+    
+  //   // 2. Iris Centers
+  //   const leftIris = average([468, 469, 470, 471, 472].map(i => landmarks[i]));
+  //   const rightIris = average([473, 474, 475, 476, 477].map(i => landmarks[i]));
+    
+  //   // 3. FIX: True Vertical Eye Centers
+  //   // The corners of the eyes (33/133) don't represent the true vertical middle.
+  //   // We now use the top eyelids (159/386) and bottom eyelids (145/374) to find the exact Y-center.
+  //   const leftEye = {
+  //     x: (landmarks[33].x + landmarks[133].x) / 2,
+  //     y: (landmarks[159].y + landmarks[145].y) / 2
+  //   };
+  //   const rightEye = {
+  //     x: (landmarks[362].x + landmarks[263].x) / 2,
+  //     y: (landmarks[386].y + landmarks[374].y) / 2
+  //   };
+
+  //   // 4. Calculate physical eye boundaries
+  //   const leftEyeWidth = Math.abs(landmarks[133].x - landmarks[33].x) || 0.01;
+  //   const rightEyeWidth = Math.abs(landmarks[263].x - landmarks[362].x) || 0.01;
+    
+  //   const leftEyeHeight = Math.abs(landmarks[145].y - landmarks[159].y) || 0.01;
+  //   const rightEyeHeight = Math.abs(landmarks[374].y - landmarks[386].y) || 0.01;
+
+  //   // 5. Normalize and CLAMP the Iris offset
+  //   const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
+    
+  //   const leftIrisOffsetX = clamp((leftIris.x - leftEye.x) / leftEyeWidth, -0.4, 0.4);
+  //   const rightIrisOffsetX = clamp((rightIris.x - rightEye.x) / rightEyeWidth, -0.4, 0.4);
+  //   const avgIrisOffsetX = (leftIrisOffsetX + rightIrisOffsetX) / 2;
+
+  //   const leftIrisOffsetY = clamp((leftIris.y - leftEye.y) / leftEyeHeight, -0.4, 0.4);
+  //   const rightIrisOffsetY = clamp((rightIris.y - rightEye.y) / rightEyeHeight, -0.4, 0.4);
+  //   const avgIrisOffsetY = (leftIrisOffsetY + rightIrisOffsetY) / 2;
+    
+  //   // 6. Exponential Edge Boosting
+  //   const boostCurve = (val) => Math.sign(val) * Math.pow(Math.abs(val), 1.2);
+
+  //   const eyeSensitivityX = 240; 
+  //   const eyeSensitivityY = 240; 
+
+  //   // 7. FIX: Webcam Angle Compensation
+  //   // Pushes the resting tracking point lower to account for the webcam looking down at you.
+  //   // TWEAK THIS: If the dot is still too high, increase this to 25 or 30. 
+  //   // If it overcorrects and points too low, drop it to 5 or 10.
+  //   const verticalOffset = 15; 
+
+  //   return { 
+  //     gazeX: yaw + (boostCurve(avgIrisOffsetX) * eyeSensitivityX),
+  //     gazeY: pitch + (boostCurve(avgIrisOffsetY) * eyeSensitivityY) + verticalOffset
+  //   };
+  // };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  //I AM COMMENTING THIS OUT BZ I AM CHANGING THIS TO ACCEPT BOTH SPLIT SCREEN AND CSA-WA-E TEST
+
+
+//   const getGazeFeatures = (landmarks) => {
+//   // 1. Head Pose (Yaw & Pitch)
+//   const nose = landmarks[1], leftFace = landmarks[234], rightFace = landmarks[454];
+//   const topFace = landmarks[10], botFace = landmarks[152];
+  
+//   const faceW = Math.abs(rightFace.x - leftFace.x) || 1;
+//   const faceH = Math.abs(botFace.y - topFace.y) || 1;
+  
+//   const yaw = ((nose.x - ((leftFace.x + rightFace.x) / 2)) / faceW) * 80;
+//   const pitch = ((nose.y - ((topFace.y + botFace.y) / 2)) / faceH) * 80;
+  
+//   // 2. Iris Centers
+//   const leftIris = average([468, 469, 470, 471, 472].map(i => landmarks[i]));
+//   const rightIris = average([473, 474, 475, 476, 477].map(i => landmarks[i]));
+  
+//   // 3. Compensated Vertical Eye Centers
+//   // Looking down causes the upper eyelid to drop rapidly. We give slightly more weight 
+//   // to the lower eyelid landmark (145/374) to prevent the vertical center from collapsing downward.
+//   const leftEye = {
+//     x: (landmarks[33].x + landmarks[133].x) / 2,
+//     y: (landmarks[159].y * 0.4) + (landmarks[145].y * 0.6)
+//   };
+//   const rightEye = {
+//     x: (landmarks[362].x + landmarks[263].x) / 2,
+//     y: (landmarks[386].y * 0.4) + (landmarks[374].y * 0.6)
+//   };
+
+//   // 4. Calculate physical eye boundaries
+//   const leftEyeWidth = Math.abs(landmarks[133].x - landmarks[33].x) || 0.01;
+//   const rightEyeWidth = Math.abs(landmarks[263].x - landmarks[362].x) || 0.01;
+  
+//   const leftEyeHeight = Math.abs(landmarks[145].y - landmarks[159].y) || 0.01;
+//   const rightEyeHeight = Math.abs(landmarks[374].y - landmarks[386].y) || 0.01;
+
+//   // 5. Normalize and CLAMP the Iris offset
+//   const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
+  
+//   const leftIrisOffsetX = clamp((leftIris.x - leftEye.x) / leftEyeWidth, -0.4, 0.4);
+//   const rightIrisOffsetX = clamp((rightIris.x - rightEye.x) / rightEyeWidth, -0.4, 0.4);
+//   const avgIrisOffsetX = (leftIrisOffsetX + rightIrisOffsetX) / 2;
+
+//   const leftIrisOffsetY = clamp((leftIris.y - leftEye.y) / leftEyeHeight, -0.4, 0.4);
+//   const rightIrisOffsetY = clamp((rightIris.y - rightEye.y) / rightEyeHeight, -0.4, 0.4);
+//   const avgIrisOffsetY = (leftIrisOffsetY + rightIrisOffsetY) / 2;
+  
+//   // 6. Exponential Edge Boosting
+//   const boostCurve = (val) => Math.sign(val) * Math.pow(Math.abs(val), 1.2);
+
+//   const eyeSensitivityX = 240; 
+//   const eyeSensitivityY = 260; // Slightly bumped vertical sensitivity to cover full height
+
+//   // 7. DYNAMIC Webcam Angle & Eyelid Drop Compensation
+//   // Base offset handles the camera angle looking down at you.
+//   let dynamicVerticalCorrection = 12; 
+
+//   // Progressive push downward: If looking lower than center (avgIrisOffsetY is positive),
+//   // aggressively scale the downward offset to counter the upward drift.
+//   if (avgIrisOffsetY > 0) {
+//     dynamicVerticalCorrection += Math.pow(avgIrisOffsetY, 1.5) * 85;
+//   }
+
+//   return { 
+//     gazeX: yaw + (boostCurve(avgIrisOffsetX) * eyeSensitivityX),
+//     gazeY: pitch + (boostCurve(avgIrisOffsetY) * eyeSensitivityY) + dynamicVerticalCorrection
+//   };
+// };
+
+//   // 1. Initialize MediaPipe
+//   useEffect(() => {
+//     async function setup() {
+//       const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm");
+//       faceLandmarkerRef.current = await FaceLandmarker.createFromOptions(vision, {
+//         baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task", delegate: "GPU" },
+//         runningMode: "VIDEO", numFaces: 1,
+//       });
+//       setIsModelReady(true);
+//     }
+//     setup();
+//   }, []);
+
+//   // 2. Real-time Scope Alignment
+//   useEffect(() => {
+//     let animId;
+//     const checkAlignment = () => {
+//       if (phase !== 'positioning' || !isModelReady) return;
+
+//       const video = webcamRef.current?.video;
+//       if (video && video.readyState >= 2 && faceLandmarkerRef.current) {
+//         const result = faceLandmarkerRef.current.detectForVideo(video, performance.now());
+        
+//         if (result.faceLandmarks && result.faceLandmarks.length > 0) {
+//           const landmarks = result.faceLandmarks[0];
+//           const xs = landmarks.map(l => l.x);
+//           const ys = landmarks.map(l => l.y);
+//           const minX = Math.min(...xs), maxX = Math.max(...xs);
+//           const minY = Math.min(...ys), maxY = Math.max(...ys);
+          
+//           const centerX = (minX + maxX) / 2;
+//           const centerY = (minY + maxY) / 2;
+//           const faceWidth = maxX - minX;
+
+//           const centered = centerX > 0.35 && centerX < 0.65 && centerY > 0.35 && centerY < 0.65;
+//           const goodDistance = faceWidth > 0.25 && faceWidth < 0.55;
+          
+//           setIsFaceAligned(centered && goodDistance);
+//         } else {
+//           setIsFaceAligned(false);
+//         }
+//       }
+//       animId = requestAnimationFrame(checkAlignment);
+//     };
+
+//     if (phase === 'positioning') checkAlignment();
+//     return () => cancelAnimationFrame(animId);
+//   }, [phase, isModelReady]);
+
+//   // 3. MASTER ANIMATION LOOP
+//   useEffect(() => {
+//     if (phase === 'positioning' || phase === 'done') return;
+
+//     let glideTime = 700;
+//     let captureTime = 1200;
+
+//     if (phase === 'head') {
+//       glideTime = 700; 
+//       // If returning to center, don't wait to capture. If at target, wait 2 seconds.
+//       captureTime = isAtCenter ? 0 : 2000; 
+//     }
+
+//     const timer = setTimeout(() => {
+//       const shouldCapture = phase !== 'head' || !isAtCenter;
+
+//       if (shouldCapture) setIsCapturing(true);
+
+//       setTimeout(() => {
+//         // Capture face landmarks
+//         if (shouldCapture) {
+//           const video = webcamRef.current?.video;
+//           if (video && faceLandmarkerRef.current) {
+//             const result = faceLandmarkerRef.current.detectForVideo(video, performance.now());
+//             if (result.faceLandmarks && result.faceLandmarks.length > 0) {
+//               setCalibrationData(prev => [...prev, { phase, step, landmarks: result.faceLandmarks[0] }]);
+//             }
+//           }
+//         }
+        
+//         setIsCapturing(false);
+
+//         // State Machine Routing
+//         if (phase === 'iris') {
+//           if (step < OUTWARD_GRID.length - 1) setStep(s => s + 1);
+//           else { setPhase('head'); setStep(0); setIsAtCenter(true); }
+//         } 
+//         else if (phase === 'head') {
+//           if (isAtCenter) {
+//             setIsAtCenter(false); // Move out to arrow target
+//           } else {
+//             setIsAtCenter(true);  // Return to center
+//             if (step < ARROW_POSITIONS.length - 1) {
+//               setStep(s => s + 1);
+//             } else { 
+//               setPhase('refine'); setStep(0); 
+//             }
+//           }
+//         } 
+//         else if (phase === 'refine') {
+//           if (step < REFINE_POINTS.length - 1) setStep(s => s + 1);
+//           else { setPhase('done'); }
+//         }
+//       }, captureTime);
+//     }, glideTime);
+
+//     return () => clearTimeout(timer);
+//   }, [phase, step, isAtCenter]);
+  
+// // Finish routing and PROCESS DATA
+//   useEffect(() => {
+//     if (phase === 'done') {
+//       console.log("Processing collected datapoints:", calibrationData.length);
+      
+//       if (calibrationData.length > 0) {
+//         // 1. Run all snapshots through our math algorithm
+//         const processedFeatures = calibrationData.map(data => getGazeFeatures(data.landmarks));
+        
+//         // 2. Find the extreme limits (Min/Max X and Y)
+//         const allX = processedFeatures.map(f => f.gazeX);
+//         const allY = processedFeatures.map(f => f.gazeY);
+        
+//         const rules = {
+//           minX: Math.min(...allX),
+//           maxX: Math.max(...allX),
+//           minY: Math.min(...allY),
+//           maxY: Math.max(...allY)
+//         };
+
+//         // 3. Save to localStorage so GazeTracker.jsx can use it!
+//         localStorage.setItem('customGazeRules', JSON.stringify(rules));
+//         console.log("AI Trained! Personal rules saved:", rules);
+//       }
+
+//       setTimeout(() => navigate('/split-screen'), 1800);
+//     }
+//   }, [phase, navigate, calibrationData]);
+
+//   const bgColors = { positioning: '#ffffff', iris: '#808080', head: '#ffffff', refine: '#000000', done: '#0f1117' };
+
+//   return (
+//     <div style={{ width: '100vw', height: '100vh', background: bgColors[phase], transition: 'background 0.5s', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+      
+// <style>{`
+//         @keyframes shrinkRing {
+//           0% { transform: translate(-50%, -50%) scale(3); opacity: 0; border-width: 2px; }
+//           20% { transform: translate(-50%, -50%) scale(2.6); opacity: 1; border-width: 4px; }
+//           100% { transform: translate(-50%, -50%) scale(1); opacity: 1; border-width: 8px; }
+//         }
+//         .animated-dot { transition: top 0.7s cubic-bezier(0.4, 0, 0.2, 1), left 0.7s cubic-bezier(0.4, 0, 0.2, 1); }
+//       `}</style>
+
+//       {/* PHASE 1: POSITIONING CARD */}
+//       {phase === 'positioning' && (
+//         <div style={{ zIndex: 10, textAlign: 'center', background: '#ffffff', padding: '2.5rem', borderRadius: '16px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)', maxWidth: '500px', width: '90%' }}>
+//           <div style={{ width: 340, height: 260, background: '#000', borderRadius: '12px', overflow: 'hidden', position: 'relative', margin: '0 auto 1.5rem' }}>
+//             <Webcam ref={webcamRef} audio={false} mirrored={true} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+//             <div style={{ position: 'absolute', top: '10%', left: '25%', width: '50%', height: '80%', border: `4px dashed ${isFaceAligned ? '#4caf50' : 'rgba(255,255,255,0.6)'}`, borderRadius: '50%', transition: 'border-color 0.3s', pointerEvents: 'none' }} />
+//           </div>
+//           <button 
+//             disabled={!isFaceAligned || !isModelReady}
+//             onClick={() => { setPhase('iris'); setStep(0); }} 
+//             style={{ 
+//               background: isFaceAligned ? '#4caf50' : '#f06a6a', color: 'white', padding: '14px 28px', border: 'none', borderRadius: '8px', fontSize: '1.1rem', fontWeight: 'bold', cursor: isFaceAligned ? 'pointer' : 'not-allowed', transition: 'all 0.3s', margin: '0 auto' 
+//             }}
+//           >
+//             {isFaceAligned ? 'Start Gaze Calibration' : 'Align face in scope...'}
+//           </button>
+//         </div>
+//       )}
+
+//       {/* INVISIBLE WEBCAM FOR BACKGROUND TRACKING */}
+//       {phase !== 'positioning' && (
+//         <Webcam ref={webcamRef} audio={false} mirrored={true} style={{ position: 'absolute', opacity: 0, width: 1, height: 1, pointerEvents: 'none' }} />
+//       )}
+
+//       {/* PHASE 2: IRIS FULL EDGE GRID */}
+//       {phase === 'iris' && (
+//         <>
+//           <h2 style={{ position: 'absolute', top: '8%', color: '#222', fontSize: '1.4rem' }}>Follow the dot. Keep your head still.</h2>
+//           <TargetDot top={OUTWARD_GRID[step].top} left={OUTWARD_GRID[step].left} isCapturing={isCapturing} />
+//         </>
+//       )}
+
+//       {/* PHASE 3: MOVING ARROWS (Center Bounce) */}
+//       {phase === 'head' && (
+//         <>
+//           <h2 style={{ position: 'absolute', top: '10%', color: '#000', fontSize: '1.4rem' }}>Turn your head in the direction of the moving target</h2>
+          
+//           <div 
+//             className="animated-dot"
+//             style={{ 
+//               position: 'absolute', 
+//               top: isAtCenter ? '50%' : ARROW_POSITIONS[step].top, 
+//               left: isAtCenter ? '50%' : ARROW_POSITIONS[step].left, 
+//               transform: 'translate(-50%, -50%)', 
+//               width: 80, height: 80, background: 'black', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', color: 'white', boxShadow: '0 10px 25px rgba(0,0,0,0.3)', zIndex: 100 
+//             }}
+//           >
+//             {isAtCenter ? '🎯' : ARROW_POSITIONS[step].symbol}
+//             {/* Capture ring safely wrapped inside the container */}
+//             {isCapturing && <CaptureRing size={120} invertColors={false} />}
+//           </div>
+//         </>
+//       )}
+
+//       {/* PHASE 4: ENLARGED INNER RECTANGLE */}
+//       {phase === 'refine' && (
+//         <>
+//           <h2 style={{ position: 'absolute', top: '10%', color: '#888', fontSize: '1.4rem' }}>Focus on the dot.</h2>
+//           <TargetDot top={REFINE_POINTS[step].top} left={REFINE_POINTS[step].left} isCapturing={isCapturing} invertColors />
+//         </>
+//       )}
+
+//       {/* PHASE 5: DONE */}
+//       {phase === 'done' && (
+//         <div style={{ textAlign: 'center', color: '#4caf82' }}>
+//           <h1 style={{ fontSize: '3rem', margin: 0 }}>Calibration Complete</h1>
+//           <p style={{ color: '#8b90a8', fontSize: '1.2rem' }}>Launching study...</p>
+//         </div>
+//       )}
+//     </div>
+//   );
+// }
+
+// // --- SUB-COMPONENTS ---
+
+// function TargetDot({ top, left, isCapturing, invertColors = false }) {
+//   return (
+//     <div className="animated-dot" style={{ position: 'absolute', top, left, transform: 'translate(-50%, -50%)', width: 36, height: 36, borderRadius: '50%', background: 'red', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+//       <div style={{ width: '150%', height: 2, background: 'black', position: 'absolute' }} />
+//       <div style={{ width: 2, height: '150%', background: 'black', position: 'absolute' }} />
+//       {/* Capturing ring securely pinned to the center of the dot */}
+//       {isCapturing && <CaptureRing size={36} invertColors={invertColors} />}
+//     </div>
+//   );
+// }
+
+// function CaptureRing({ size, invertColors }) {
+//   return (
+//     <div 
+//       style={{ 
+//         position: 'absolute', 
+//         top: '50%', 
+//         left: '50%', 
+//         // The transform: translate(-50%, -50%) is now handled safely inside the keyframes!
+//         width: size, 
+//         height: size, 
+//         borderRadius: '50%', 
+//         border: `solid ${invertColors ? 'white' : 'black'}`, 
+//         boxSizing: 'border-box', 
+//         animation: 'shrinkRing 1.2s linear forwards', 
+//         zIndex: 90 
+//       }} 
+//     />
+//   );
+// }
+
+
+
+
+import React, { useEffect, useRef, useState } from 'react';
+import Webcam from 'react-webcam';
+import { FilesetResolver, FaceLandmarker } from '@mediapipe/tasks-vision';
+
+// --- CONFIGURATIONS ---
+const gridStops = ['3%', '34%', '66%', '97%'];
+const OUTWARD_GRID = [{ top: '50%', left: '50%' }]; 
+
+gridStops.forEach(y => {
+  gridStops.forEach(x => OUTWARD_GRID.push({ top: y, left: x }));
+});
+
+const ARROW_POSITIONS = [
+  { top: '15%', left: '50%', symbol: '⬆️' }, 
+  { top: '85%', left: '50%', symbol: '⬇️' }, 
+  { top: '50%', left: '15%', symbol: '⬅️' }, 
+  { top: '50%', left: '85%', symbol: '➡️' }, 
+];
+
+const REFINE_POINTS = [
+  { top: '50%', left: '50%' }, 
+  { top: '25%', left: '25%' }, { top: '25%', left: '75%' },
+  { top: '75%', left: '25%' }, { top: '75%', left: '75%' },
+];
+
+export default function CalibrationScreen({ onComplete }) {
+  const webcamRef = useRef(null);
+  const faceLandmarkerRef = useRef(null);
+
+  const [isModelReady, setIsModelReady] = useState(false);
+  const [phase, setPhase] = useState('positioning'); 
+  
+  const [step, setStep] = useState(0);
+  const [isAtCenter, setIsAtCenter] = useState(true); 
+  const [isCapturing, setIsCapturing] = useState(false);
+  
+  const [isFaceAligned, setIsFaceAligned] = useState(false);
+  const [calibrationData, setCalibrationData] = useState([]);
+
+  const average = (points) => {
+    const sum = points.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+    return { x: sum.x / points.length, y: sum.y / points.length };
+  };
+
   const getGazeFeatures = (landmarks) => {
-    // 1. Head Pose (Yaw & Pitch)
     const nose = landmarks[1], leftFace = landmarks[234], rightFace = landmarks[454];
     const topFace = landmarks[10], botFace = landmarks[152];
     
@@ -1323,30 +1888,24 @@ export default function AdvancedCalibrationPage() {
     const yaw = ((nose.x - ((leftFace.x + rightFace.x) / 2)) / faceW) * 80;
     const pitch = ((nose.y - ((topFace.y + botFace.y) / 2)) / faceH) * 80;
     
-    // 2. Iris Centers
     const leftIris = average([468, 469, 470, 471, 472].map(i => landmarks[i]));
     const rightIris = average([473, 474, 475, 476, 477].map(i => landmarks[i]));
     
-    // 3. FIX: True Vertical Eye Centers
-    // The corners of the eyes (33/133) don't represent the true vertical middle.
-    // We now use the top eyelids (159/386) and bottom eyelids (145/374) to find the exact Y-center.
     const leftEye = {
       x: (landmarks[33].x + landmarks[133].x) / 2,
-      y: (landmarks[159].y + landmarks[145].y) / 2
+      y: (landmarks[159].y * 0.4) + (landmarks[145].y * 0.6)
     };
     const rightEye = {
       x: (landmarks[362].x + landmarks[263].x) / 2,
-      y: (landmarks[386].y + landmarks[374].y) / 2
+      y: (landmarks[386].y * 0.4) + (landmarks[374].y * 0.6)
     };
 
-    // 4. Calculate physical eye boundaries
     const leftEyeWidth = Math.abs(landmarks[133].x - landmarks[33].x) || 0.01;
     const rightEyeWidth = Math.abs(landmarks[263].x - landmarks[362].x) || 0.01;
     
     const leftEyeHeight = Math.abs(landmarks[145].y - landmarks[159].y) || 0.01;
     const rightEyeHeight = Math.abs(landmarks[374].y - landmarks[386].y) || 0.01;
 
-    // 5. Normalize and CLAMP the Iris offset
     const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
     
     const leftIrisOffsetX = clamp((leftIris.x - leftEye.x) / leftEyeWidth, -0.4, 0.4);
@@ -1357,26 +1916,23 @@ export default function AdvancedCalibrationPage() {
     const rightIrisOffsetY = clamp((rightIris.y - rightEye.y) / rightEyeHeight, -0.4, 0.4);
     const avgIrisOffsetY = (leftIrisOffsetY + rightIrisOffsetY) / 2;
     
-    // 6. Exponential Edge Boosting
     const boostCurve = (val) => Math.sign(val) * Math.pow(Math.abs(val), 1.2);
 
     const eyeSensitivityX = 240; 
-    const eyeSensitivityY = 240; 
+    const eyeSensitivityY = 260; 
 
-    // 7. FIX: Webcam Angle Compensation
-    // Pushes the resting tracking point lower to account for the webcam looking down at you.
-    // TWEAK THIS: If the dot is still too high, increase this to 25 or 30. 
-    // If it overcorrects and points too low, drop it to 5 or 10.
-    const verticalOffset = 15; 
+    let dynamicVerticalCorrection = 12; 
+
+    if (avgIrisOffsetY > 0) {
+      dynamicVerticalCorrection += Math.pow(avgIrisOffsetY, 1.5) * 85;
+    }
 
     return { 
       gazeX: yaw + (boostCurve(avgIrisOffsetX) * eyeSensitivityX),
-      gazeY: pitch + (boostCurve(avgIrisOffsetY) * eyeSensitivityY) + verticalOffset
+      gazeY: pitch + (boostCurve(avgIrisOffsetY) * eyeSensitivityY) + dynamicVerticalCorrection
     };
   };
 
-
-  // 1. Initialize MediaPipe
   useEffect(() => {
     async function setup() {
       const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm");
@@ -1389,7 +1945,6 @@ export default function AdvancedCalibrationPage() {
     setup();
   }, []);
 
-  // 2. Real-time Scope Alignment
   useEffect(() => {
     let animId;
     const checkAlignment = () => {
@@ -1425,7 +1980,6 @@ export default function AdvancedCalibrationPage() {
     return () => cancelAnimationFrame(animId);
   }, [phase, isModelReady]);
 
-  // 3. MASTER ANIMATION LOOP
   useEffect(() => {
     if (phase === 'positioning' || phase === 'done') return;
 
@@ -1434,7 +1988,6 @@ export default function AdvancedCalibrationPage() {
 
     if (phase === 'head') {
       glideTime = 700; 
-      // If returning to center, don't wait to capture. If at target, wait 2 seconds.
       captureTime = isAtCenter ? 0 : 2000; 
     }
 
@@ -1444,7 +1997,6 @@ export default function AdvancedCalibrationPage() {
       if (shouldCapture) setIsCapturing(true);
 
       setTimeout(() => {
-        // Capture face landmarks
         if (shouldCapture) {
           const video = webcamRef.current?.video;
           if (video && faceLandmarkerRef.current) {
@@ -1457,16 +2009,15 @@ export default function AdvancedCalibrationPage() {
         
         setIsCapturing(false);
 
-        // State Machine Routing
         if (phase === 'iris') {
           if (step < OUTWARD_GRID.length - 1) setStep(s => s + 1);
           else { setPhase('head'); setStep(0); setIsAtCenter(true); }
         } 
         else if (phase === 'head') {
           if (isAtCenter) {
-            setIsAtCenter(false); // Move out to arrow target
+            setIsAtCenter(false);
           } else {
-            setIsAtCenter(true);  // Return to center
+            setIsAtCenter(true);
             if (step < ARROW_POSITIONS.length - 1) {
               setStep(s => s + 1);
             } else { 
@@ -1484,16 +2035,13 @@ export default function AdvancedCalibrationPage() {
     return () => clearTimeout(timer);
   }, [phase, step, isAtCenter]);
   
-// Finish routing and PROCESS DATA
   useEffect(() => {
     if (phase === 'done') {
       console.log("Processing collected datapoints:", calibrationData.length);
       
       if (calibrationData.length > 0) {
-        // 1. Run all snapshots through our math algorithm
         const processedFeatures = calibrationData.map(data => getGazeFeatures(data.landmarks));
         
-        // 2. Find the extreme limits (Min/Max X and Y)
         const allX = processedFeatures.map(f => f.gazeX);
         const allY = processedFeatures.map(f => f.gazeY);
         
@@ -1504,21 +2052,21 @@ export default function AdvancedCalibrationPage() {
           maxY: Math.max(...allY)
         };
 
-        // 3. Save to localStorage so GazeTracker.jsx can use it!
         localStorage.setItem('customGazeRules', JSON.stringify(rules));
         console.log("AI Trained! Personal rules saved:", rules);
       }
 
-      setTimeout(() => navigate('/split-screen'), 1800);
+      // Tell QuestionRunner we are done instead of navigating away
+      setTimeout(() => onComplete(), 1800);
     }
-  }, [phase, navigate, calibrationData]);
+  }, [phase, calibrationData, onComplete]);
 
   const bgColors = { positioning: '#ffffff', iris: '#808080', head: '#ffffff', refine: '#000000', done: '#0f1117' };
 
   return (
     <div style={{ width: '100vw', height: '100vh', background: bgColors[phase], transition: 'background 0.5s', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
       
-<style>{`
+      <style>{`
         @keyframes shrinkRing {
           0% { transform: translate(-50%, -50%) scale(3); opacity: 0; border-width: 2px; }
           20% { transform: translate(-50%, -50%) scale(2.6); opacity: 1; border-width: 4px; }
@@ -1527,7 +2075,6 @@ export default function AdvancedCalibrationPage() {
         .animated-dot { transition: top 0.7s cubic-bezier(0.4, 0, 0.2, 1), left 0.7s cubic-bezier(0.4, 0, 0.2, 1); }
       `}</style>
 
-      {/* PHASE 1: POSITIONING CARD */}
       {phase === 'positioning' && (
         <div style={{ zIndex: 10, textAlign: 'center', background: '#ffffff', padding: '2.5rem', borderRadius: '16px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)', maxWidth: '500px', width: '90%' }}>
           <div style={{ width: 340, height: 260, background: '#000', borderRadius: '12px', overflow: 'hidden', position: 'relative', margin: '0 auto 1.5rem' }}>
@@ -1546,12 +2093,10 @@ export default function AdvancedCalibrationPage() {
         </div>
       )}
 
-      {/* INVISIBLE WEBCAM FOR BACKGROUND TRACKING */}
       {phase !== 'positioning' && (
         <Webcam ref={webcamRef} audio={false} mirrored={true} style={{ position: 'absolute', opacity: 0, width: 1, height: 1, pointerEvents: 'none' }} />
       )}
 
-      {/* PHASE 2: IRIS FULL EDGE GRID */}
       {phase === 'iris' && (
         <>
           <h2 style={{ position: 'absolute', top: '8%', color: '#222', fontSize: '1.4rem' }}>Follow the dot. Keep your head still.</h2>
@@ -1559,29 +2104,16 @@ export default function AdvancedCalibrationPage() {
         </>
       )}
 
-      {/* PHASE 3: MOVING ARROWS (Center Bounce) */}
       {phase === 'head' && (
         <>
           <h2 style={{ position: 'absolute', top: '10%', color: '#000', fontSize: '1.4rem' }}>Turn your head in the direction of the moving target</h2>
-          
-          <div 
-            className="animated-dot"
-            style={{ 
-              position: 'absolute', 
-              top: isAtCenter ? '50%' : ARROW_POSITIONS[step].top, 
-              left: isAtCenter ? '50%' : ARROW_POSITIONS[step].left, 
-              transform: 'translate(-50%, -50%)', 
-              width: 80, height: 80, background: 'black', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', color: 'white', boxShadow: '0 10px 25px rgba(0,0,0,0.3)', zIndex: 100 
-            }}
-          >
+          <div className="animated-dot" style={{ position: 'absolute', top: isAtCenter ? '50%' : ARROW_POSITIONS[step].top, left: isAtCenter ? '50%' : ARROW_POSITIONS[step].left, transform: 'translate(-50%, -50%)', width: 80, height: 80, background: 'black', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', color: 'white', boxShadow: '0 10px 25px rgba(0,0,0,0.3)', zIndex: 100 }}>
             {isAtCenter ? '🎯' : ARROW_POSITIONS[step].symbol}
-            {/* Capture ring safely wrapped inside the container */}
             {isCapturing && <CaptureRing size={120} invertColors={false} />}
           </div>
         </>
       )}
 
-      {/* PHASE 4: ENLARGED INNER RECTANGLE */}
       {phase === 'refine' && (
         <>
           <h2 style={{ position: 'absolute', top: '10%', color: '#888', fontSize: '1.4rem' }}>Focus on the dot.</h2>
@@ -1589,25 +2121,21 @@ export default function AdvancedCalibrationPage() {
         </>
       )}
 
-      {/* PHASE 5: DONE */}
       {phase === 'done' && (
         <div style={{ textAlign: 'center', color: '#4caf82' }}>
           <h1 style={{ fontSize: '3rem', margin: 0 }}>Calibration Complete</h1>
-          <p style={{ color: '#8b90a8', fontSize: '1.2rem' }}>Launching study...</p>
+          <p style={{ color: '#8b90a8', fontSize: '1.2rem' }}>Launching block...</p>
         </div>
       )}
     </div>
   );
 }
 
-// --- SUB-COMPONENTS ---
-
 function TargetDot({ top, left, isCapturing, invertColors = false }) {
   return (
     <div className="animated-dot" style={{ position: 'absolute', top, left, transform: 'translate(-50%, -50%)', width: 36, height: 36, borderRadius: '50%', background: 'red', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
       <div style={{ width: '150%', height: 2, background: 'black', position: 'absolute' }} />
       <div style={{ width: 2, height: '150%', background: 'black', position: 'absolute' }} />
-      {/* Capturing ring securely pinned to the center of the dot */}
       {isCapturing && <CaptureRing size={36} invertColors={invertColors} />}
     </div>
   );
@@ -1615,20 +2143,6 @@ function TargetDot({ top, left, isCapturing, invertColors = false }) {
 
 function CaptureRing({ size, invertColors }) {
   return (
-    <div 
-      style={{ 
-        position: 'absolute', 
-        top: '50%', 
-        left: '50%', 
-        // The transform: translate(-50%, -50%) is now handled safely inside the keyframes!
-        width: size, 
-        height: size, 
-        borderRadius: '50%', 
-        border: `solid ${invertColors ? 'white' : 'black'}`, 
-        boxSizing: 'border-box', 
-        animation: 'shrinkRing 1.2s linear forwards', 
-        zIndex: 90 
-      }} 
-    />
+    <div style={{ position: 'absolute', top: '50%', left: '50%', width: size, height: size, borderRadius: '50%', border: `solid ${invertColors ? 'white' : 'black'}`, boxSizing: 'border-box', animation: 'shrinkRing 1.2s linear forwards', zIndex: 90 }} />
   );
 }

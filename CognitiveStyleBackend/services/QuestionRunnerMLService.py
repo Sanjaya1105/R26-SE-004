@@ -2,7 +2,7 @@ import pickle
 import pandas as pd
 from pathlib import Path
 
-from services.QuestionRunnerGazeService import aggregate_question_runner_gaze
+from services.AnalyticWholisticService import aggregate_question_runner_gaze
 from services.QuestionRunnerCursorService import aggregate_question_runner_cursor
 from database.connection import question_runner_answer_collection
 

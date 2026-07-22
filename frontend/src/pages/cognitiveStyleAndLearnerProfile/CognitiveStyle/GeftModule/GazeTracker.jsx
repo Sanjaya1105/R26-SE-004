@@ -1,13 +1,351 @@
-import React, { useMemo,useEffect, useRef, useState } from "react";
+
+
+
+
+// import React, { useMemo, useEffect, useRef, useState } from "react";
+// import Webcam from "react-webcam";
+// import { FilesetResolver, FaceLandmarker } from "@mediapipe/tasks-vision";
+
+// const BACKEND_URL = ""; // keep empty for now
+
+// export default function GazeTracker({
+//   sessionActive = false,
+//   currentQuestionId = null,
+//   onWindowReady = () => { },
+// }) {
+//   const webcamRef = useRef(null);
+//   const questionIdRef = useRef(currentQuestionId);
+//   const animationRef = useRef(null);
+//   const faceLandmarkerRef = useRef(null);
+//   const lastVideoTimeRef = useRef(-1);
+
+//   const frameBufferRef = useRef([]);
+
+//   const [isModelReady, setIsModelReady] = useState(false);
+//   const [calibrationRules, setCalibrationRules] = useState(null);
+
+//   // 1. Load Calibration Rules on Mount
+//   useEffect(() => {
+//     const rulesStr = localStorage.getItem('customGazeRules');
+//     if (rulesStr) {
+//       try {
+//         setCalibrationRules(JSON.parse(rulesStr));
+//         console.log("Loaded Calibration Rules into GazeTracker:", JSON.parse(rulesStr));
+//       } catch (e) {
+//         console.error("Failed to parse calibration rules");
+//       }
+//     }
+//   }, []);
+
+//   const userPayload = useMemo(() => {
+//     const token = localStorage.getItem("token");
+//     if (!token) return null;
+//     try {
+//       return JSON.parse(atob(token.split(".")[1]));
+//     } catch {
+//       return null;
+//     }
+//   }, []);
+
+//   // 2. CRITICAL FIX: Flush data exactly when the question changes unconditionally!
+//   useEffect(() => {
+//     if (questionIdRef.current !== null && questionIdRef.current !== currentQuestionId) {
+//       flushWindowToBackend(questionIdRef.current);
+//     }
+//     questionIdRef.current = currentQuestionId;
+//   }, [currentQuestionId]);
+
+//   useEffect(() => {
+//     let cancelled = false;
+
+//     async function setupLandmarker() {
+//       try {
+//         const vision = await FilesetResolver.forVisionTasks(
+//           "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+//         );
+
+//         const faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+//           baseOptions: {
+//             modelAssetPath:
+//               "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+//             delegate: "GPU",
+//           },
+//           runningMode: "VIDEO",
+//           numFaces: 1,
+//           outputFaceBlendshapes: false,
+//           outputFacialTransformationMatrixes: true,
+//         });
+
+//         if (!cancelled) {
+//           faceLandmarkerRef.current = faceLandmarker;
+//           setIsModelReady(true);
+//         }
+//       } catch (error) {
+//         console.error("Failed to initialize Face Landmarker:", error);
+//       }
+//     }
+
+//     setupLandmarker();
+//     return () => { cancelled = true; };
+//   }, []);
+
+//   // --- CALIBRATION MATH LOGIC ---
+//   const average = (points) => {
+//     const sum = points.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+//     return { x: sum.x / points.length, y: sum.y / points.length };
+//   };
+
+//   const getGazeFeatures = (landmarks) => {
+//     const nose = landmarks[1], leftFace = landmarks[234], rightFace = landmarks[454];
+//     const topFace = landmarks[10], botFace = landmarks[152];
+
+//     const faceW = Math.abs(rightFace.x - leftFace.x) || 1;
+//     const faceH = Math.abs(botFace.y - topFace.y) || 1;
+
+//     const yaw = ((nose.x - ((leftFace.x + rightFace.x) / 2)) / faceW) * 80;
+//     const pitch = ((nose.y - ((topFace.y + botFace.y) / 2)) / faceH) * 80;
+
+//     const leftIris = average([468, 469, 470, 471, 472].map(i => landmarks[i]));
+//     const rightIris = average([473, 474, 475, 476, 477].map(i => landmarks[i]));
+
+//     const leftEye = {
+//       x: (landmarks[33].x + landmarks[133].x) / 2,
+//       y: (landmarks[159].y * 0.4) + (landmarks[145].y * 0.6)
+//     };
+//     const rightEye = {
+//       x: (landmarks[362].x + landmarks[263].x) / 2,
+//       y: (landmarks[386].y * 0.4) + (landmarks[374].y * 0.6)
+//     };
+
+//     const leftEyeWidth = Math.abs(landmarks[133].x - landmarks[33].x) || 0.01;
+//     const rightEyeWidth = Math.abs(landmarks[263].x - landmarks[362].x) || 0.01;
+//     const leftEyeHeight = Math.abs(landmarks[145].y - landmarks[159].y) || 0.01;
+//     const rightEyeHeight = Math.abs(landmarks[374].y - landmarks[386].y) || 0.01;
+
+//     const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
+
+//     const leftIrisOffsetX = clamp((leftIris.x - leftEye.x) / leftEyeWidth, -0.4, 0.4);
+//     const rightIrisOffsetX = clamp((rightIris.x - rightEye.x) / rightEyeWidth, -0.4, 0.4);
+//     const avgIrisOffsetX = (leftIrisOffsetX + rightIrisOffsetX) / 2;
+
+//     const leftIrisOffsetY = clamp((leftIris.y - leftEye.y) / leftEyeHeight, -0.4, 0.4);
+//     const rightIrisOffsetY = clamp((rightIris.y - rightEye.y) / rightEyeHeight, -0.4, 0.4);
+//     const avgIrisOffsetY = (leftIrisOffsetY + rightIrisOffsetY) / 2;
+
+//     const boostCurve = (val) => Math.sign(val) * Math.pow(Math.abs(val), 1.2);
+
+//     const eyeSensitivityX = 240;
+//     const eyeSensitivityY = 260;
+//     let dynamicVerticalCorrection = 12;
+
+//     if (avgIrisOffsetY > 0) {
+//       dynamicVerticalCorrection += Math.pow(avgIrisOffsetY, 1.5) * 85;
+//     }
+
+//     return {
+//       gazeX: yaw + (boostCurve(avgIrisOffsetX) * eyeSensitivityX),
+//       gazeY: pitch + (boostCurve(avgIrisOffsetY) * eyeSensitivityY) + dynamicVerticalCorrection
+//     };
+//   };
+
+//   // --- DATA FLUSHING LOGIC ---
+//   async function flushWindowToBackend(overrideId = null) {
+//     const qIdToFlush = overrideId || questionIdRef.current;
+//     if (!qIdToFlush) return;
+
+//     const frames = frameBufferRef.current;
+
+//     // FIX 2: ZERO-FRAME FALLBACK (Handles instant 1ms clicks)
+//     if (!frames.length) {
+//       const emptyPayload = {
+//         sessionId: userPayload?.id || "session-test1",
+//         questionId: qIdToFlush,
+//         windowStartTs: Date.now(),
+//         windowEndTs: Date.now(),
+//         durationMs: 0,
+//         frameCount: 0,
+//         transitions: 0,
+//         totalDwellTime: 0,
+//         dwellLeftMs: 0,
+//         dwellRightMs: 0,
+//       };
+//       onWindowReady(emptyPayload);
+//       frameBufferRef.current = [];
+//       return;
+//     }
+
+//     // CALCULATE METRICS
+//     let transitions = 0;
+//     let dwellLeftMs = 0;
+//     let dwellRightMs = 0;
+
+//     for (let i = 1; i < frames.length; i++) {
+//       const prev = frames[i - 1];
+//       const curr = frames[i];
+//       const deltaMs = curr.timestamp - prev.timestamp;
+
+//       if (curr.lookZone === "LEFT") dwellLeftMs += deltaMs;
+//       if (curr.lookZone === "RIGHT") dwellRightMs += deltaMs;
+
+//       // Detect transition across the center
+//       if (
+//         (prev.lookZone === "LEFT" && curr.lookZone === "RIGHT") ||
+//         (prev.lookZone === "RIGHT" && curr.lookZone === "LEFT")
+//       ) {
+//         transitions++;
+//       }
+//     }
+
+//     const durationMs = frames[frames.length - 1].timestamp - frames[0].timestamp || 1;
+
+//     const windowPayload = {
+//       sessionId: userPayload?.id || "session-test1",
+//       questionId: qIdToFlush, // Use the correct mapped ID
+//       windowStartTs: frames[0].timestamp,
+//       windowEndTs: frames[frames.length - 1].timestamp,
+//       durationMs,
+//       frameCount: frames.length,
+//       transitions: transitions,
+//       totalDwellTime: dwellLeftMs + dwellRightMs,
+//       dwellLeftMs: dwellLeftMs,
+//       dwellRightMs: dwellRightMs,
+//     };
+
+//     // Send the packaged data directly to QuestionRunner
+//     onWindowReady(windowPayload);
+
+//     if (BACKEND_URL) {
+//       try {
+//         await fetch(BACKEND_URL, {
+//           method: "POST",
+//           headers: { "Content-Type": "application/json" },
+//           body: JSON.stringify(windowPayload),
+//         });
+//       } catch (error) {
+//         console.error("Failed to POST gaze window:", error);
+//       }
+//     }
+
+//     // Clear the buffer for the next question
+//     frameBufferRef.current = [];
+//   }
+
+//   // --- MAIN TRACKING LOOP ---
+//   useEffect(() => {
+//     let running = true;
+
+//     const loop = () => {
+//       if (!running) return;
+
+//       const video = webcamRef.current?.video;
+//       const faceLandmarker = faceLandmarkerRef.current;
+
+//       if (
+//         sessionActive &&
+//         isModelReady &&
+//         faceLandmarker &&
+//         video &&
+//         video.readyState >= 2
+//       ) {
+//         const nowMs = performance.now();
+
+//         if (lastVideoTimeRef.current !== video.currentTime) {
+//           lastVideoTimeRef.current = video.currentTime;
+
+//           const result = faceLandmarker.detectForVideo(video, nowMs);
+
+//           let payload = {
+//             timestamp: Date.now(),
+//             questionId: questionIdRef.current,
+//             facePresent: false,
+//             lookZone: "CENTER"
+//           };
+
+//           if (result.faceLandmarks && result.faceLandmarks.length > 0) {
+//             const landmarks = result.faceLandmarks[0];
+
+//             // Apply Calibration Math
+//             const features = getGazeFeatures(landmarks);
+//             let lookZone = "CENTER";
+
+//             if (calibrationRules) {
+//               // Convert Raw Gaze to Screen Coordinates
+//               let screenX = ((features.gazeX - calibrationRules.minX) / (calibrationRules.maxX - calibrationRules.minX)) * window.innerWidth;
+//               screenX = window.innerWidth - screenX; // Reverse it because webcam is mirrored
+
+//               // Determine AOI based on screen half
+//               if (screenX < window.innerWidth / 2) {
+//                 lookZone = "LEFT";
+//               } else {
+//                 lookZone = "RIGHT";
+//               }
+//             } else {
+//               // Fallback if rules are missing
+//               if (features.gazeX > 5) lookZone = "LEFT";
+//               else if (features.gazeX < -5) lookZone = "RIGHT";
+//             }
+
+//             payload = {
+//               timestamp: Date.now(),
+//               questionId: questionIdRef.current,
+//               facePresent: true,
+//               lookZone: lookZone,
+//               rawGazeX: features.gazeX,
+//               rawGazeY: features.gazeY
+//             };
+//           }
+
+//           frameBufferRef.current.push(payload);
+//         }
+//       }
+
+//       animationRef.current = requestAnimationFrame(loop);
+//     };
+
+//     animationRef.current = requestAnimationFrame(loop);
+
+//     return () => {
+//       running = false;
+//       if (animationRef.current) cancelAnimationFrame(animationRef.current);
+//     };
+//   }, [isModelReady, sessionActive, calibrationRules]);
+
+//   // FIX 1: THE UNMOUNT FLUSH
+//   useEffect(() => {
+//     return () => {
+//       if (questionIdRef.current !== null) {
+//         flushWindowToBackend(questionIdRef.current);
+//       }
+//     };
+//   }, []);
+
+//   return (
+//     <div style={{ padding: 20, fontFamily: "sans-serif" }}>
+//       <Webcam
+//         ref={webcamRef}
+//         audio={false}
+//         mirrored
+//         screenshotFormat="image/jpeg"
+//         videoConstraints={{ width: 640, height: 480, facingMode: "user" }}
+//         style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 1, height: 1 }}
+//       />
+//     </div>
+//   );
+// }
+
+
+
+
+import React, { useMemo, useEffect, useRef, useState } from "react";
 import Webcam from "react-webcam";
 import { FilesetResolver, FaceLandmarker } from "@mediapipe/tasks-vision";
 
-const BACKEND_URL = "http://localhost:4000/cognitive-style/question-runner/gaze"; // keep empty for now
+const BACKEND_URL = "http://localhost:4000/cognitive-style/anaylticwholistic/savebehavioraldata"; // keep empty for now
 
 export default function GazeTracker({
   sessionActive = false,
   currentQuestionId = null,
-  onWindowReady = () => {},
+  onWindowReady = () => { },
 }) {
   const webcamRef = useRef(null);
   const questionIdRef = useRef(currentQuestionId);
@@ -15,45 +353,41 @@ export default function GazeTracker({
   const faceLandmarkerRef = useRef(null);
   const lastVideoTimeRef = useRef(-1);
 
-    const userPayload = useMemo(() => {
+  const frameBufferRef = useRef([]);
+
+  const [isModelReady, setIsModelReady] = useState(false);
+  const [calibrationRules, setCalibrationRules] = useState(null);
+
+  // 1. Load Calibration Rules on Mount
+  useEffect(() => {
+    const rulesStr = localStorage.getItem('customGazeRules');
+    if (rulesStr) {
+      try {
+        setCalibrationRules(JSON.parse(rulesStr));
+        console.log("Loaded Calibration Rules into GazeTracker:", JSON.parse(rulesStr));
+      } catch (e) {
+        console.error("Failed to parse calibration rules");
+      }
+    }
+  }, []);
+
+  const userPayload = useMemo(() => {
     const token = localStorage.getItem("token");
     if (!token) return null;
-
     try {
-      console.log("Decoded user payload:", JSON.parse(atob(token.split(".")[1])));
       return JSON.parse(atob(token.split(".")[1]));
-
     } catch {
       return null;
     }
   }, []);
 
-
+  // 2. CRITICAL FIX: Flush data exactly when the question changes!
   useEffect(() => {
-  questionIdRef.current = currentQuestionId;
-}, [currentQuestionId]);
-
-  const frameBufferRef = useRef([]);
-  const lastBlinkStateRef = useRef(false);
-
-  const sessionIdRef = useRef(`session-test1`);
-  const prevEyeOffsetRef = useRef({ x: 0, y: 0 });
-
-  const [isModelReady, setIsModelReady] = useState(false);
-  const [liveMetrics, setLiveMetrics] = useState({
-    facePresent: false,
-    gazeDirection: "UNKNOWN",
-    yaw: 0,
-    pitch: 0,
-    eyeOffsetX: 0,
-    eyeOffsetY: 0,
-    avgEyeOpenness: 0,
-    gazeConfidence: 0,
-    blinkDetected: false,
-    eyeMovementMagnitude: 0,
-  });
-
-  const [lastPostedWindow, setLastPostedWindow] = useState(null);
+    if (questionIdRef.current !== null && questionIdRef.current !== currentQuestionId) {
+      flushWindowToBackend(questionIdRef.current);
+    }
+    questionIdRef.current = currentQuestionId;
+  }, [currentQuestionId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,7 +413,6 @@ export default function GazeTracker({
         if (!cancelled) {
           faceLandmarkerRef.current = faceLandmarker;
           setIsModelReady(true);
-          console.log("Face Landmarker ready");
         }
       } catch (error) {
         console.error("Failed to initialize Face Landmarker:", error);
@@ -87,311 +420,150 @@ export default function GazeTracker({
     }
 
     setupLandmarker();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
-  function average(points) {
-    if (!points || points.length === 0) {
-      return { x: 0, y: 0, z: 0 };
-    }
+  // --- CALIBRATION MATH LOGIC ---
+  const average = (points) => {
+    const sum = points.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+    return { x: sum.x / points.length, y: sum.y / points.length };
+  };
 
-    const sum = points.reduce(
-      (acc, p) => ({
-        x: acc.x + p.x,
-        y: acc.y + p.y,
-        z: acc.z + (p.z || 0),
-      }),
-      { x: 0, y: 0, z: 0 }
-    );
+  const getGazeFeatures = (landmarks) => {
+    const nose = landmarks[1], leftFace = landmarks[234], rightFace = landmarks[454];
+    const topFace = landmarks[10], botFace = landmarks[152];
+
+    const faceW = Math.abs(rightFace.x - leftFace.x) || 1;
+    const faceH = Math.abs(botFace.y - topFace.y) || 1;
+
+    const yaw = ((nose.x - ((leftFace.x + rightFace.x) / 2)) / faceW) * 80;
+    const pitch = ((nose.y - ((topFace.y + botFace.y) / 2)) / faceH) * 80;
+
+    const leftIris = average([468, 469, 470, 471, 472].map(i => landmarks[i]));
+    const rightIris = average([473, 474, 475, 476, 477].map(i => landmarks[i]));
+
+    const leftEye = {
+      x: (landmarks[33].x + landmarks[133].x) / 2,
+      y: (landmarks[159].y * 0.4) + (landmarks[145].y * 0.6)
+    };
+    const rightEye = {
+      x: (landmarks[362].x + landmarks[263].x) / 2,
+      y: (landmarks[386].y * 0.4) + (landmarks[374].y * 0.6)
+    };
+
+    const leftEyeWidth = Math.abs(landmarks[133].x - landmarks[33].x) || 0.01;
+    const rightEyeWidth = Math.abs(landmarks[263].x - landmarks[362].x) || 0.01;
+    const leftEyeHeight = Math.abs(landmarks[145].y - landmarks[159].y) || 0.01;
+    const rightEyeHeight = Math.abs(landmarks[374].y - landmarks[386].y) || 0.01;
+
+    const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
+
+    const leftIrisOffsetX = clamp((leftIris.x - leftEye.x) / leftEyeWidth, -0.4, 0.4);
+    const rightIrisOffsetX = clamp((rightIris.x - rightEye.x) / rightEyeWidth, -0.4, 0.4);
+    const avgIrisOffsetX = (leftIrisOffsetX + rightIrisOffsetX) / 2;
+
+    const leftIrisOffsetY = clamp((leftIris.y - leftEye.y) / leftEyeHeight, -0.4, 0.4);
+    const rightIrisOffsetY = clamp((rightIris.y - rightEye.y) / rightEyeHeight, -0.4, 0.4);
+    const avgIrisOffsetY = (leftIrisOffsetY + rightIrisOffsetY) / 2;
+
+    const boostCurve = (val) => Math.sign(val) * Math.pow(Math.abs(val), 1.2);
+
+    const eyeSensitivityX = 240;
+    const eyeSensitivityY = 260;
+    let dynamicVerticalCorrection = 12;
+
+    if (avgIrisOffsetY > 0) {
+      dynamicVerticalCorrection += Math.pow(avgIrisOffsetY, 1.5) * 85;
+    }
 
     return {
-      x: sum.x / points.length,
-      y: sum.y / points.length,
-      z: sum.z / points.length,
+      gazeX: yaw + (boostCurve(avgIrisOffsetX) * eyeSensitivityX),
+      gazeY: pitch + (boostCurve(avgIrisOffsetY) * eyeSensitivityY) + dynamicVerticalCorrection
     };
-  }
+  };
 
-  function estimateHeadPose(landmarks) {
-    const noseTip = landmarks[1];
-    const leftFace = landmarks[234];
-    const rightFace = landmarks[454];
-    const forehead = landmarks[10];
-    const chin = landmarks[152];
+  // --- DATA FLUSHING LOGIC ---
+  async function flushWindowToBackend(overrideId = null) {
+    const qIdToFlush = overrideId || questionIdRef.current;
+    if (!qIdToFlush) return;
 
-    if (!noseTip || !leftFace || !rightFace || !forehead || !chin) {
-      return { yaw: 0, pitch: 0 };
-    }
-
-    const faceCenterX = (leftFace.x + rightFace.x) / 2;
-    const faceCenterY = (forehead.y + chin.y) / 2;
-
-    const faceWidth = Math.abs(rightFace.x - leftFace.x) || 1e-6;
-    const faceHeight = Math.abs(chin.y - forehead.y) || 1e-6;
-
-    const yaw = ((noseTip.x - faceCenterX) / faceWidth) * 120;
-    const pitch = ((noseTip.y - faceCenterY) / faceHeight) * 120;
-
-    return { yaw, pitch };
-  }
-
-  function estimateEyeOpenness(landmarks) {
-    const leftUpper = landmarks[159];
-    const leftLower = landmarks[145];
-    const leftOuter = landmarks[33];
-    const leftInner = landmarks[133];
-
-    const rightUpper = landmarks[386];
-    const rightLower = landmarks[374];
-    const rightOuter = landmarks[362];
-    const rightInner = landmarks[263];
-
-    if (
-      !leftUpper ||
-      !leftLower ||
-      !leftOuter ||
-      !leftInner ||
-      !rightUpper ||
-      !rightLower ||
-      !rightOuter ||
-      !rightInner
-    ) {
-      return {
-        leftEyeOpenness: 0,
-        rightEyeOpenness: 0,
-        avgEyeOpenness: 0,
-      };
-    }
-
-    const leftHeight = Math.abs(leftLower.y - leftUpper.y);
-    const rightHeight = Math.abs(rightLower.y - rightUpper.y);
-
-    const leftWidth = Math.abs(leftInner.x - leftOuter.x) || 1e-6;
-    const rightWidth = Math.abs(rightInner.x - rightOuter.x) || 1e-6;
-
-    const leftEyeOpenness = leftHeight / leftWidth;
-    const rightEyeOpenness = rightHeight / rightWidth;
-    const avgEyeOpenness = (leftEyeOpenness + rightEyeOpenness) / 2;
-
-    return {
-      leftEyeOpenness: Number(leftEyeOpenness.toFixed(4)),
-      rightEyeOpenness: Number(rightEyeOpenness.toFixed(4)),
-      avgEyeOpenness: Number(avgEyeOpenness.toFixed(4)),
-    };
-  }
-
-  function estimateEyeOffsets(landmarks) {
-    const leftIris = [468, 469, 470, 471, 472]
-      .map((i) => landmarks[i])
-      .filter(Boolean);
-    const rightIris = [473, 474, 475, 476, 477]
-      .map((i) => landmarks[i])
-      .filter(Boolean);
-
-    const leftEyeCorners = [33, 133].map((i) => landmarks[i]).filter(Boolean);
-    const rightEyeCorners = [362, 263].map((i) => landmarks[i]).filter(Boolean);
-
-    const leftUpperLower = [159, 145].map((i) => landmarks[i]).filter(Boolean);
-    const rightUpperLower = [386, 374].map((i) => landmarks[i]).filter(Boolean);
-
-    if (
-      leftIris.length === 0 ||
-      rightIris.length === 0 ||
-      leftEyeCorners.length < 2 ||
-      rightEyeCorners.length < 2 ||
-      leftUpperLower.length < 2 ||
-      rightUpperLower.length < 2
-    ) {
-      return {
-        eyeOffsetX: 0,
-        eyeOffsetY: 0,
-      };
-    }
-
-    const leftIrisCenter = average(leftIris);
-    const rightIrisCenter = average(rightIris);
-
-    const leftEyeCenter = average(leftEyeCorners);
-    const rightEyeCenter = average(rightEyeCorners);
-
-    const leftEyeWidth =
-      Math.abs(leftEyeCorners[1].x - leftEyeCorners[0].x) || 1e-6;
-    const rightEyeWidth =
-      Math.abs(rightEyeCorners[1].x - rightEyeCorners[0].x) || 1e-6;
-
-    const leftEyeHeight =
-      Math.abs(leftUpperLower[1].y - leftUpperLower[0].y) || 1e-6;
-    const rightEyeHeight =
-      Math.abs(rightUpperLower[1].y - rightUpperLower[0].y) || 1e-6;
-
-    const leftOffsetX = (leftIrisCenter.x - leftEyeCenter.x) / leftEyeWidth;
-    const rightOffsetX =
-      (rightIrisCenter.x - rightEyeCenter.x) / rightEyeWidth;
-
-    const leftOffsetY =
-      (leftIrisCenter.y - average(leftUpperLower).y) / leftEyeHeight;
-    const rightOffsetY =
-      (rightIrisCenter.y - average(rightUpperLower).y) / rightEyeHeight;
-
-    return {
-      eyeOffsetX: Number((((leftOffsetX + rightOffsetX) / 2)).toFixed(4)),
-      eyeOffsetY: Number((((leftOffsetY + rightOffsetY) / 2)).toFixed(4)),
-    };
-  }
-
-  function classifyGaze(yaw, pitch, eyeOffsetX, eyeOffsetY) {
-    const horizontal = yaw + eyeOffsetX * 40;
-    const vertical = pitch + eyeOffsetY * 40;
-
-    if (horizontal < -12) return "LEFT";
-    if (horizontal > 12) return "RIGHT";
-    if (vertical < -10) return "UP";
-    if (vertical > 10) return "DOWN";
-    return "CENTER";
-  }
-
-  function computeGazeConfidence(eyeOffsetX, eyeOffsetY) {
-    return Math.max(
-      0,
-      Math.min(
-        1,
-        1 - (Math.abs(eyeOffsetX) * 0.8 + Math.abs(eyeOffsetY) * 0.8) / 2
-      )
-    );
-  }
-
-  function mean(values) {
-    if (!values.length) return 0;
-    return values.reduce((a, b) => a + b, 0) / values.length;
-  }
-
-  function std(values) {
-    if (!values.length) return 0;
-    const m = mean(values);
-    const variance =
-      values.reduce((acc, v) => acc + (v - m) * (v - m), 0) / values.length;
-    return Math.sqrt(variance);
-  }
-
-  function countDirectionChanges(directions) {
-    if (!directions.length) return 0;
-
-    let changes = 0;
-    for (let i = 1; i < directions.length; i++) {
-      if (directions[i] !== directions[i - 1]) {
-        changes += 1;
-      }
-    }
-    return changes;
-  }
-
-  async function flushWindowToBackend() {
     const frames = frameBufferRef.current;
 
-    if (!frames.length) return;
+    // ZERO-FRAME FALLBACK (Handles instant <1ms clicks)
+    if (!frames.length) {
+      const emptyPayload = {
+        sessionId: userPayload?.id || "session-test1",
+        questionId: qIdToFlush,
+        windowStartTs: Date.now(),
+        windowEndTs: Date.now(),
+        durationMs: 0,
+        frameCount: 0,
+        transitions: 0,
+        totalDwellTime: 0,
+        dwellLeftMs: 0,
+        dwellRightMs: 0,
+      };
+      onWindowReady(emptyPayload);
+      frameBufferRef.current = [];
+      return;
+    }
 
-    const totalFrames = frames.length;
-    const durationMs =
-      frames[frames.length - 1].timestamp - frames[0].timestamp || 1;
+    // CALCULATE METRICS
+    let transitions = 0;
+    let dwellLeftMs = 0;
+    let dwellRightMs = 0;
 
-    const presentFrames = frames.filter((f) => f.facePresent);
-    const centerFrames = frames.filter((f) => f.gazeDirection === "CENTER");
-    const eyesOpenFrames = frames.filter((f) => f.avgEyeOpenness > 0.18);
+    for (let i = 1; i < frames.length; i++) {
+      const prev = frames[i - 1];
+      const curr = frames[i];
+      const deltaMs = curr.timestamp - prev.timestamp;
 
-    const yaws = presentFrames.map((f) => f.yaw);
-    const pitches = presentFrames.map((f) => f.pitch);
-    const eyeOffsetXs = presentFrames.map((f) => f.eyeOffsetX);
-    const eyeOffsetYs = presentFrames.map((f) => f.eyeOffsetY);
-    const eyeOpenness = presentFrames.map((f) => f.avgEyeOpenness);
-    const gazeConfidenceVals = presentFrames.map((f) => f.gazeConfidence);
-    const eyeMovementVals = presentFrames.map((f) => f.eyeMovementMagnitude);
+      if (curr.lookZone === "LEFT") dwellLeftMs += deltaMs;
+      if (curr.lookZone === "RIGHT") dwellRightMs += deltaMs;
 
-    const blinkCount = frames.filter((f) => f.blinkStart === true).length;
+      // Detect transition across the center
+      if (
+        (prev.lookZone === "LEFT" && curr.lookZone === "RIGHT") ||
+        (prev.lookZone === "RIGHT" && curr.lookZone === "LEFT")
+      ) {
+        transitions++;
+      }
+    }
+
+    const durationMs = frames[frames.length - 1].timestamp - frames[0].timestamp || 1;
 
     const windowPayload = {
-      sessionId: userPayload?.id ||sessionIdRef.current,
-      questionId: questionIdRef.current,
+      sessionId: userPayload?.id || "session-test1",
+      questionId: qIdToFlush,
       windowStartTs: frames[0].timestamp,
       windowEndTs: frames[frames.length - 1].timestamp,
       durationMs,
-      frameCount: totalFrames,
-
-      facePresentRatio: Number((presentFrames.length / totalFrames).toFixed(4)),
-      centerRatio: Number((centerFrames.length / totalFrames).toFixed(4)),
-      eyesOpenRatio: Number((eyesOpenFrames.length / totalFrames).toFixed(4)),
-
-      yawMean: Number(mean(yaws).toFixed(4)),
-      yawStd: Number(std(yaws).toFixed(4)),
-
-      pitchMean: Number(mean(pitches).toFixed(4)),
-      pitchStd: Number(std(pitches).toFixed(4)),
-
-      eyeOffsetXMean: Number(mean(eyeOffsetXs).toFixed(4)),
-      eyeOffsetXStd: Number(std(eyeOffsetXs).toFixed(4)),
-
-      eyeOffsetYMean: Number(mean(eyeOffsetYs).toFixed(4)),
-      eyeOffsetYStd: Number(std(eyeOffsetYs).toFixed(4)),
-
-      avgEyeOpennessMean: Number(mean(eyeOpenness).toFixed(4)),
-      avgEyeOpennessStd: Number(std(eyeOpenness).toFixed(4)),
-
-      gazeConfidenceMean: Number(mean(gazeConfidenceVals).toFixed(4)),
-
-      eyeMovementMagnitudeMean: Number(mean(eyeMovementVals).toFixed(4)),
-      eyeMovementMagnitudeStd: Number(std(eyeMovementVals).toFixed(4)),
-
-      blinkCount,
-      blinkRatePerMin: Number(((blinkCount * 60000) / durationMs).toFixed(4)),
-
-      directionChangeCount: countDirectionChanges(
-        frames.map((f) => f.gazeDirection)
-      ),
-
-      attentionScore: Number(
-        (
-          0.35 * (presentFrames.length / totalFrames) +
-          0.35 * (centerFrames.length / totalFrames) +
-          0.2 * mean(gazeConfidenceVals) +
-          0.1 * (1 - Math.min(mean(eyeMovementVals) * 5, 1))
-        ).toFixed(4)
-      ),
+      frameCount: frames.length,
+      transitions: transitions,
+      totalDwellTime: dwellLeftMs + dwellRightMs,
+      dwellLeftMs: dwellLeftMs,
+      dwellRightMs: dwellRightMs,
     };
 
-    setLastPostedWindow(windowPayload);
     onWindowReady(windowPayload);
 
-    if (BACKEND_URL) {
-      try {
-        await fetch(BACKEND_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(windowPayload),
-        });
-        console.log("Posted 5s gaze window:", windowPayload);
-      } catch (error) {
-        console.error("Failed to POST gaze window:", error);
-      }
-    } else {
-      console.log("BACKEND_URL is empty. Gaze window not posted.", windowPayload);
-    }
+    // if (BACKEND_URL) {
+    //   try {
+    //     await fetch(BACKEND_URL, {
+    //       method: "POST",
+    //       headers: { "Content-Type": "application/json" },
+    //       body: JSON.stringify(windowPayload),
+    //     });
+    //   } catch (error) {
+    //     console.error("Failed to POST gaze window:", error);
+    //   }
+    // }
 
+    // Clear the buffer for the next question
     frameBufferRef.current = [];
   }
 
-  useEffect(() => {
-    if (!isModelReady || !sessionActive) return;
-
-    const interval = setInterval(() => {
-      flushWindowToBackend();
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [isModelReady, sessionActive, currentQuestionId]);
-
+  // --- MAIN TRACKING LOOP ---
   useEffect(() => {
     let running = true;
 
@@ -406,9 +578,7 @@ export default function GazeTracker({
         isModelReady &&
         faceLandmarker &&
         video &&
-        video.readyState >= 2 &&
-        video.videoWidth > 0 &&
-        video.videoHeight > 0
+        video.readyState >= 2
       ) {
         const nowMs = performance.now();
 
@@ -421,84 +591,40 @@ export default function GazeTracker({
             timestamp: Date.now(),
             questionId: questionIdRef.current,
             facePresent: false,
-            yaw: 0,
-            pitch: 0,
-            eyeOffsetX: 0,
-            eyeOffsetY: 0,
-            avgEyeOpenness: 0,
-            blinkDetected: false,
-            blinkStart: false,
-            gazeConfidence: 0,
-            gazeDirection: "AWAY",
-            eyeMovementMagnitude: 0,
+            lookZone: "CENTER"
           };
 
           if (result.faceLandmarks && result.faceLandmarks.length > 0) {
             const landmarks = result.faceLandmarks[0];
 
-            const { yaw, pitch } = estimateHeadPose(landmarks);
-            const { eyeOffsetX, eyeOffsetY } = estimateEyeOffsets(landmarks);
-            const { avgEyeOpenness } = estimateEyeOpenness(landmarks);
+            const features = getGazeFeatures(landmarks);
+            let lookZone = "CENTER";
 
-            const gazeDirection = classifyGaze(
-              yaw,
-              pitch,
-              eyeOffsetX,
-              eyeOffsetY
-            );
+            if (calibrationRules) {
+              let screenX = ((features.gazeX - calibrationRules.minX) / (calibrationRules.maxX - calibrationRules.minX)) * window.innerWidth;
+              screenX = window.innerWidth - screenX; // Reverse for mirrored webcam
 
-            const blinkDetected = avgEyeOpenness < 0.18;
-            const blinkStart = blinkDetected && !lastBlinkStateRef.current;
-            lastBlinkStateRef.current = blinkDetected;
-
-            const gazeConfidence = computeGazeConfidence(
-              eyeOffsetX,
-              eyeOffsetY
-            );
-
-            const eyeMovementMagnitude = Math.sqrt(
-              Math.pow(eyeOffsetX - prevEyeOffsetRef.current.x, 2) +
-                Math.pow(eyeOffsetY - prevEyeOffsetRef.current.y, 2)
-            );
-
-            prevEyeOffsetRef.current = {
-              x: eyeOffsetX,
-              y: eyeOffsetY,
-            };
+              if (screenX < window.innerWidth / 2) {
+                lookZone = "LEFT";
+              } else {
+                lookZone = "RIGHT";
+              }
+            } else {
+              if (features.gazeX > 5) lookZone = "LEFT";
+              else if (features.gazeX < -5) lookZone = "RIGHT";
+            }
 
             payload = {
               timestamp: Date.now(),
               questionId: questionIdRef.current,
               facePresent: true,
-              yaw: Number(yaw.toFixed(2)),
-              pitch: Number(pitch.toFixed(2)),
-              eyeOffsetX,
-              eyeOffsetY,
-              avgEyeOpenness,
-              blinkDetected,
-              blinkStart,
-              gazeConfidence: Number(gazeConfidence.toFixed(3)),
-              gazeDirection,
-              eyeMovementMagnitude: Number(eyeMovementMagnitude.toFixed(4)),
+              lookZone: lookZone,
+              rawGazeX: features.gazeX,
+              rawGazeY: features.gazeY
             };
-          } else {
-            lastBlinkStateRef.current = false;
           }
 
           frameBufferRef.current.push(payload);
-
-          setLiveMetrics({
-            facePresent: payload.facePresent,
-            gazeDirection: payload.gazeDirection,
-            yaw: payload.yaw,
-            pitch: payload.pitch,
-            eyeOffsetX: payload.eyeOffsetX,
-            eyeOffsetY: payload.eyeOffsetY,
-            avgEyeOpenness: payload.avgEyeOpenness,
-            gazeConfidence: payload.gazeConfidence,
-            blinkDetected: payload.blinkDetected,
-            eyeMovementMagnitude: payload.eyeMovementMagnitude,
-          });
         }
       }
 
@@ -511,50 +637,27 @@ export default function GazeTracker({
       running = false;
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
     };
-  }, [isModelReady, sessionActive, currentQuestionId]);
+  }, [isModelReady, sessionActive, calibrationRules]);
 
-  useEffect(() => {
-    if (!sessionActive) {
-      frameBufferRef.current = [];
-      lastBlinkStateRef.current = false;
-      prevEyeOffsetRef.current = { x: 0, y: 0 };
-    }
-  }, [sessionActive]);
-
+  // UNMOUNT FLUSH FIX: Only flush on unmount if frames were ACTUALLY recorded!
   useEffect(() => {
     return () => {
-      flushWindowToBackend();
+      if (questionIdRef.current !== null && frameBufferRef.current.length > 0) {
+        flushWindowToBackend(questionIdRef.current);
+      }
     };
   }, []);
 
   return (
     <div style={{ padding: 20, fontFamily: "sans-serif" }}>
-
       <Webcam
         ref={webcamRef}
         audio={false}
         mirrored
         screenshotFormat="image/jpeg"
-        videoConstraints={{
-          width: 640,
-          height: 480,
-          facingMode: "user",
-        }}
-        style={{
-          position: "absolute",
-    opacity: 0,
-    pointerEvents: "none",
-    width: 1,
-    height: 1,
-        }}
+        videoConstraints={{ width: 640, height: 480, facingMode: "user" }}
+        style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 1, height: 1 }}
       />
     </div>
   );
 }
-
-//Gaze tracker after implementing Calibration
-
-
-
-
-

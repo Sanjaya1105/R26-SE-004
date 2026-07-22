@@ -833,68 +833,138 @@ export default function GazeTracker({ sessionActive = true }) {
   //   };
   // };
 
+  // const getGazeFeatures = (landmarks) => {
+  //   // 1. Head Pose (Yaw & Pitch)
+  //   const nose = landmarks[1], leftFace = landmarks[234], rightFace = landmarks[454];
+  //   const topFace = landmarks[10], botFace = landmarks[152];
+    
+  //   const faceW = Math.abs(rightFace.x - leftFace.x) || 1;
+  //   const faceH = Math.abs(botFace.y - topFace.y) || 1;
+    
+  //   const yaw = ((nose.x - ((leftFace.x + rightFace.x) / 2)) / faceW) * 80;
+  //   const pitch = ((nose.y - ((topFace.y + botFace.y) / 2)) / faceH) * 80;
+    
+  //   // 2. Iris Centers
+  //   const leftIris = average([468, 469, 470, 471, 472].map(i => landmarks[i]));
+  //   const rightIris = average([473, 474, 475, 476, 477].map(i => landmarks[i]));
+    
+  //   // 3. FIX: True Vertical Eye Centers
+  //   // The corners of the eyes (33/133) don't represent the true vertical middle.
+  //   // We now use the top eyelids (159/386) and bottom eyelids (145/374) to find the exact Y-center.
+  //   const leftEye = {
+  //     x: (landmarks[33].x + landmarks[133].x) / 2,
+  //     y: (landmarks[159].y + landmarks[145].y) / 2
+  //   };
+  //   const rightEye = {
+  //     x: (landmarks[362].x + landmarks[263].x) / 2,
+  //     y: (landmarks[386].y + landmarks[374].y) / 2
+  //   };
+
+  //   // 4. Calculate physical eye boundaries
+  //   const leftEyeWidth = Math.abs(landmarks[133].x - landmarks[33].x) || 0.01;
+  //   const rightEyeWidth = Math.abs(landmarks[263].x - landmarks[362].x) || 0.01;
+    
+  //   const leftEyeHeight = Math.abs(landmarks[145].y - landmarks[159].y) || 0.01;
+  //   const rightEyeHeight = Math.abs(landmarks[374].y - landmarks[386].y) || 0.01;
+
+  //   // 5. Normalize and CLAMP the Iris offset
+  //   const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
+    
+  //   const leftIrisOffsetX = clamp((leftIris.x - leftEye.x) / leftEyeWidth, -0.4, 0.4);
+  //   const rightIrisOffsetX = clamp((rightIris.x - rightEye.x) / rightEyeWidth, -0.4, 0.4);
+  //   const avgIrisOffsetX = (leftIrisOffsetX + rightIrisOffsetX) / 2;
+
+  //   const leftIrisOffsetY = clamp((leftIris.y - leftEye.y) / leftEyeHeight, -0.4, 0.4);
+  //   const rightIrisOffsetY = clamp((rightIris.y - rightEye.y) / rightEyeHeight, -0.4, 0.4);
+  //   const avgIrisOffsetY = (leftIrisOffsetY + rightIrisOffsetY) / 2;
+    
+  //   // 6. Exponential Edge Boosting
+  //   const boostCurve = (val) => Math.sign(val) * Math.pow(Math.abs(val), 1.2);
+
+  //   const eyeSensitivityX = 240; 
+  //   const eyeSensitivityY = 240; 
+
+  //   // 7. FIX: Webcam Angle Compensation
+  //   // Pushes the resting tracking point lower to account for the webcam looking down at you.
+  //   // TWEAK THIS: If the dot is still too high, increase this to 25 or 30. 
+  //   // If it overcorrects and points too low, drop it to 5 or 10.
+  //   const verticalOffset = 15; 
+
+  //   return { 
+  //     gazeX: yaw + (boostCurve(avgIrisOffsetX) * eyeSensitivityX),
+  //     gazeY: pitch + (boostCurve(avgIrisOffsetY) * eyeSensitivityY) + verticalOffset
+  //   };
+  // };
+
+
   const getGazeFeatures = (landmarks) => {
-    // 1. Head Pose (Yaw & Pitch)
-    const nose = landmarks[1], leftFace = landmarks[234], rightFace = landmarks[454];
-    const topFace = landmarks[10], botFace = landmarks[152];
-    
-    const faceW = Math.abs(rightFace.x - leftFace.x) || 1;
-    const faceH = Math.abs(botFace.y - topFace.y) || 1;
-    
-    const yaw = ((nose.x - ((leftFace.x + rightFace.x) / 2)) / faceW) * 80;
-    const pitch = ((nose.y - ((topFace.y + botFace.y) / 2)) / faceH) * 80;
-    
-    // 2. Iris Centers
-    const leftIris = average([468, 469, 470, 471, 472].map(i => landmarks[i]));
-    const rightIris = average([473, 474, 475, 476, 477].map(i => landmarks[i]));
-    
-    // 3. FIX: True Vertical Eye Centers
-    // The corners of the eyes (33/133) don't represent the true vertical middle.
-    // We now use the top eyelids (159/386) and bottom eyelids (145/374) to find the exact Y-center.
-    const leftEye = {
-      x: (landmarks[33].x + landmarks[133].x) / 2,
-      y: (landmarks[159].y + landmarks[145].y) / 2
-    };
-    const rightEye = {
-      x: (landmarks[362].x + landmarks[263].x) / 2,
-      y: (landmarks[386].y + landmarks[374].y) / 2
-    };
-
-    // 4. Calculate physical eye boundaries
-    const leftEyeWidth = Math.abs(landmarks[133].x - landmarks[33].x) || 0.01;
-    const rightEyeWidth = Math.abs(landmarks[263].x - landmarks[362].x) || 0.01;
-    
-    const leftEyeHeight = Math.abs(landmarks[145].y - landmarks[159].y) || 0.01;
-    const rightEyeHeight = Math.abs(landmarks[374].y - landmarks[386].y) || 0.01;
-
-    // 5. Normalize and CLAMP the Iris offset
-    const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
-    
-    const leftIrisOffsetX = clamp((leftIris.x - leftEye.x) / leftEyeWidth, -0.4, 0.4);
-    const rightIrisOffsetX = clamp((rightIris.x - rightEye.x) / rightEyeWidth, -0.4, 0.4);
-    const avgIrisOffsetX = (leftIrisOffsetX + rightIrisOffsetX) / 2;
-
-    const leftIrisOffsetY = clamp((leftIris.y - leftEye.y) / leftEyeHeight, -0.4, 0.4);
-    const rightIrisOffsetY = clamp((rightIris.y - rightEye.y) / rightEyeHeight, -0.4, 0.4);
-    const avgIrisOffsetY = (leftIrisOffsetY + rightIrisOffsetY) / 2;
-    
-    // 6. Exponential Edge Boosting
-    const boostCurve = (val) => Math.sign(val) * Math.pow(Math.abs(val), 1.2);
-
-    const eyeSensitivityX = 240; 
-    const eyeSensitivityY = 240; 
-
-    // 7. FIX: Webcam Angle Compensation
-    // Pushes the resting tracking point lower to account for the webcam looking down at you.
-    // TWEAK THIS: If the dot is still too high, increase this to 25 or 30. 
-    // If it overcorrects and points too low, drop it to 5 or 10.
-    const verticalOffset = 15; 
-
-    return { 
-      gazeX: yaw + (boostCurve(avgIrisOffsetX) * eyeSensitivityX),
-      gazeY: pitch + (boostCurve(avgIrisOffsetY) * eyeSensitivityY) + verticalOffset
-    };
+  // 1. Head Pose (Yaw & Pitch)
+  const nose = landmarks[1], leftFace = landmarks[234], rightFace = landmarks[454];
+  const topFace = landmarks[10], botFace = landmarks[152];
+  
+  const faceW = Math.abs(rightFace.x - leftFace.x) || 1;
+  const faceH = Math.abs(botFace.y - topFace.y) || 1;
+  
+  const yaw = ((nose.x - ((leftFace.x + rightFace.x) / 2)) / faceW) * 80;
+  const pitch = ((nose.y - ((topFace.y + botFace.y) / 2)) / faceH) * 80;
+  
+  // 2. Iris Centers
+  const leftIris = average([468, 469, 470, 471, 472].map(i => landmarks[i]));
+  const rightIris = average([473, 474, 475, 476, 477].map(i => landmarks[i]));
+  
+  // 3. Compensated Vertical Eye Centers
+  // Looking down causes the upper eyelid to drop rapidly. We give slightly more weight 
+  // to the lower eyelid landmark (145/374) to prevent the vertical center from collapsing downward.
+  const leftEye = {
+    x: (landmarks[33].x + landmarks[133].x) / 2,
+    y: (landmarks[159].y * 0.4) + (landmarks[145].y * 0.6)
   };
+  const rightEye = {
+    x: (landmarks[362].x + landmarks[263].x) / 2,
+    y: (landmarks[386].y * 0.4) + (landmarks[374].y * 0.6)
+  };
+
+  // 4. Calculate physical eye boundaries
+  const leftEyeWidth = Math.abs(landmarks[133].x - landmarks[33].x) || 0.01;
+  const rightEyeWidth = Math.abs(landmarks[263].x - landmarks[362].x) || 0.01;
+  
+  const leftEyeHeight = Math.abs(landmarks[145].y - landmarks[159].y) || 0.01;
+  const rightEyeHeight = Math.abs(landmarks[374].y - landmarks[386].y) || 0.01;
+
+  // 5. Normalize and CLAMP the Iris offset
+  const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
+  
+  const leftIrisOffsetX = clamp((leftIris.x - leftEye.x) / leftEyeWidth, -0.4, 0.4);
+  const rightIrisOffsetX = clamp((rightIris.x - rightEye.x) / rightEyeWidth, -0.4, 0.4);
+  const avgIrisOffsetX = (leftIrisOffsetX + rightIrisOffsetX) / 2;
+
+  const leftIrisOffsetY = clamp((leftIris.y - leftEye.y) / leftEyeHeight, -0.4, 0.4);
+  const rightIrisOffsetY = clamp((rightIris.y - rightEye.y) / rightEyeHeight, -0.4, 0.4);
+  const avgIrisOffsetY = (leftIrisOffsetY + rightIrisOffsetY) / 2;
+  
+  // 6. Exponential Edge Boosting
+  const boostCurve = (val) => Math.sign(val) * Math.pow(Math.abs(val), 1.2);
+
+  const eyeSensitivityX = 240; 
+  const eyeSensitivityY = 260; // Slightly bumped vertical sensitivity to cover full height
+
+  // 7. DYNAMIC Webcam Angle & Eyelid Drop Compensation
+  // Base offset handles the camera angle looking down at you.
+  let dynamicVerticalCorrection = 12; 
+
+  // Progressive push downward: If looking lower than center (avgIrisOffsetY is positive),
+  // aggressively scale the downward offset to counter the upward drift.
+  if (avgIrisOffsetY > 0) {
+    dynamicVerticalCorrection += Math.pow(avgIrisOffsetY, 1.5) * 85;
+  }
+
+  return { 
+    gazeX: yaw + (boostCurve(avgIrisOffsetX) * eyeSensitivityX),
+    gazeY: pitch + (boostCurve(avgIrisOffsetY) * eyeSensitivityY) + dynamicVerticalCorrection
+  };
+};
+
+
   useEffect(() => {
     if (!isReady || !sessionActive || !rules) return;
     let running = true;

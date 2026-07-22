@@ -1,24 +1,27 @@
-# routes/QuestionRunnerGazeRouter.py
+# routes/AnalyticWholisticRouter.py
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from models.QuestionRunnerGazeModel import (
     QuestionRunnerGazeEventCreate,
     QuestionRunnerGazeSessionComplete,
 )
-from services.QuestionRunnerGazeService import (
+from models.AnalyticWholisticModel import SessionDataIncoming
+from services.AnalyticWholisticService import (
     create_question_runner_gaze_event,
     get_question_runner_gaze_events,
     get_question_runner_gaze_events_by_session,
     complete_question_runner_gaze_session,
     get_question_runner_gaze_sessions,
+process_csa_session
 )
 
-router = APIRouter(prefix="/question-runner", tags=["QuestionRunner Gaze"])
+router = APIRouter(prefix="/anaylticwholistic", tags=["QuestionRunner Gaze"])
 
 
-@router.post("/gaze")
-async def add_question_runner_gaze_event(event: QuestionRunnerGazeEventCreate):
-    return await create_question_runner_gaze_event(event.model_dump())
+@router.post("/savebehavioraldata")
+async def save_csa_session(session_data: SessionDataIncoming):
+        return await process_csa_session(session_data)
+
 
 
 @router.get("/gaze")

@@ -4,7 +4,7 @@ from database.connection import (
     question_runner_gaze_event_collection,
     question_runner_cursor_event_collection, question_runner_answer_collection,
 )
-from services.QuestionRunnerGazeService import aggregate_question_runner_gaze
+from services.AnalyticWholisticService import aggregate_question_runner_gaze
 from services.QuestionRunnerCursorService import aggregate_question_runner_cursor
 
 #

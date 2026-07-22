@@ -1,52 +1,176 @@
-import React from "react";
+// import React, { useEffect, useState, useRef } from "react";
+
+// export default function QuestionView({
+//   question,
+//   onAnswerSubmit,
+// }) {
+//   const [imagesLoadedCount, setImagesLoadedCount] = useState(0);
+//   const startTimeRef = useRef(null);
+
+//   // Reset loaded count when the question changes
+//   useEffect(() => {
+//     setImagesLoadedCount(0);
+//     startTimeRef.current = null;
+//   }, [question.id]);
+
+//   const handleImageLoad = () => {
+//     setImagesLoadedCount((prev) => prev + 1);
+//   };
+
+//   useEffect(() => {
+//     // Only start the timer and listen for keys AFTER both images are fully rendered
+//     if (imagesLoadedCount === 2) {
+//       startTimeRef.current = performance.now();
+
+//       const handleKeyDown = (e) => {
+//         const key = e.key.toUpperCase();
+        
+//         if (key === "L" || key === "A") {
+//           const endTime = performance.now();
+//           const responseTimeMs = endTime - startTimeRef.current;
+          
+//           const selectedAnswer = key === "L" ? "Yes" : "No";
+//           onAnswerSubmit(selectedAnswer, responseTimeMs);
+//         }
+//       };
+
+//       window.addEventListener("keydown", handleKeyDown);
+//       return () => window.removeEventListener("keydown", handleKeyDown);
+//     }
+//   }, [imagesLoadedCount, onAnswerSubmit]);
+
+//   if (!question) return null;
+
+//   return (
+//     <div style={styles.container}>
+//       {/* Left Image (Simple Shape) */}
+//       <img
+//         src={question.leftImage}
+//         alt="Left Shape"
+//         onLoad={handleImageLoad}
+//         style={styles.imageLeft}
+//       />
+
+//       {/* Center Text (Strictly isolated) */}
+//       <div style={styles.centerText}>
+//         <p style={{ margin: 0 }}>Is the left shape inside the right shape?</p>
+//         <p style={{ fontSize: "16px", fontWeight: "normal", margin: "8px 0 0 0", color: "#475569" }}>
+//           (Press 'L' for Yes, 'A' for No)
+//         </p>
+//       </div>
+
+//       {/* Right Image (Complex Shape) */}
+//       <img
+//         src={question.rightImage}
+//         alt="Right Shape"
+//         onLoad={handleImageLoad}
+//         style={styles.imageRight}
+//       />
+//     </div>
+//   );
+// }
+
+// const styles = {
+//   container: {
+//     display: "flex",
+//     justifyContent: "space-between",
+//     alignItems: "center",
+//     width: "100vw",
+//     height: "100vh",
+//     backgroundColor: "#ffffff",
+//     position: "relative",
+//     overflow: "hidden", 
+//     boxSizing: "border-box",
+//     padding: "0 3px", // Exactly 3px space from the edge as requested
+//   },
+//   imageLeft: {
+//     maxWidth: "35vw",
+//     maxHeight: "80vh",
+//     objectFit: "contain",
+//   },
+//   imageRight: {
+//     maxWidth: "35vw",
+//     maxHeight: "80vh",
+//     objectFit: "contain",
+//   },
+//   centerText: {
+//     position: "absolute",
+//     left: "50%",
+//     top: "50%",
+//     transform: "translate(-50%, -50%)",
+//     fontSize: "28px",
+//     fontWeight: "bold",
+//     color: "#0f172a",
+//     textAlign: "center",
+//     zIndex: 10,
+//   },
+// };
+
+import React, { useEffect, useState, useRef } from "react";
 
 export default function QuestionView({
   question,
-  selectedAnswer,
-  onSelect,
+  onAnswerSubmit,
 }) {
+  const [imagesLoadedCount, setImagesLoadedCount] = useState(0);
+  const startTimeRef = useRef(null);
+
+  // Reset loaded count when the question changes
+  useEffect(() => {
+    setImagesLoadedCount(0);
+    startTimeRef.current = null;
+  }, [question.id]);
+
+  const handleImageLoad = () => {
+    setImagesLoadedCount((prev) => prev + 1);
+  };
+
+  useEffect(() => {
+    // Only start the timer and listen for keys AFTER both images are fully rendered
+    if (imagesLoadedCount === 2) {
+      startTimeRef.current = performance.now();
+
+      const handleKeyDown = (e) => {
+        const key = e.key.toUpperCase();
+        
+        if (key === "L" || key === "A") {
+          const endTime = performance.now();
+          const responseTimeMs = endTime - startTimeRef.current;
+          
+          const selectedAnswer = key === "L" ? "Yes" : "No";
+          onAnswerSubmit(selectedAnswer, responseTimeMs);
+        }
+      };
+
+      window.addEventListener("keydown", handleKeyDown);
+      return () => window.removeEventListener("keydown", handleKeyDown);
+    }
+  }, [imagesLoadedCount, onAnswerSubmit]);
+
   if (!question) return null;
 
   return (
     <div style={styles.container}>
-      {/* Complex Figure */}
-      <div style={styles.section}>
-        <img
-          src={question.complexImage}
-          alt="complex"
-          style={styles.complexImage}
-        />
-        <p style={styles.prompt}>
-          Find Simple Form "{question.target}"
-        </p>
+      {/* Left Image (Simple Shape) */}
+      <img
+        src={question.leftImage}
+        alt="Left Shape"
+        onLoad={handleImageLoad}
+        style={styles.imageLeft}
+      />
+
+      {/* Center Text (Strictly isolated) */}
+      <div style={styles.centerText}>
+        <p style={{ margin: 0 }}>Is the left shape inside the right shape?</p>
       </div>
 
-      {/* Options */}
-      <div style={styles.optionsContainer}>
-        {question.options.map((opt) => (
-          <div
-            key={opt.id}
-            onClick={() => onSelect(opt.id)}
-            style={{
-  ...styles.optionCard,
-  border:
-    selectedAnswer === opt.id
-      ? "2px solid #2563eb"
-      : "1px solid #e2e8f0",
-  background:
-    selectedAnswer === opt.id ? "#eff6ff" : "#ffffff",
-}}
-          >
-            <p style={styles.optionLabel}>{opt.id}</p>
-
-            <img
-              src={opt.image}
-              alt={opt.id}
-              style={styles.optionImage}
-            />
-          </div>
-        ))}
-      </div>
+      {/* Right Image (Complex Shape) */}
+      <img
+        src={question.rightImage}
+        alt="Right Shape"
+        onLoad={handleImageLoad}
+        style={styles.imageRight}
+      />
     </div>
   );
 }
@@ -54,63 +178,38 @@ export default function QuestionView({
 const styles = {
   container: {
     display: "flex",
-    flexDirection: "column",
+    justifyContent: "space-between",
     alignItems: "center",
-    gap: "30px",
+    width: "100vw",
+    height: "100vh",
+    backgroundColor: "#ffffff",
+    position: "relative",
+    overflow: "hidden", 
+    boxSizing: "border-box",
+    padding: "0 60px",
   },
-
-  section: {
-    width: "100%",
-    maxWidth: "600px",
-    textAlign: "center",
-  },
-
-  complexImage: {
-    width: "100%",
-    maxHeight: "300px",
+  imageLeft: {
+height: "55vh", // Forces the image to scale up to 65% of the screen height
+    width: "auto",  // Keeps the proportions correct
+    maxWidth: "30vw", // Prevents it from getting too wide and hitting the text
     objectFit: "contain",
-    border: "1px solid #e2e8f0",
-    borderRadius: "12px",
-    padding: "10px",
-    background: "#f9fafb",
   },
-
-  prompt: {
-    marginTop: "14px",
-    fontSize: "18px",
-    fontWeight: "600",
-    color: "#1e293b",
+  imageRight: {
+height: "55vh", // Forces the image to scale up to 65% of the screen height
+    width: "auto",  // Keeps the proportions correct
+    maxWidth: "30vw", // Prevents it from getting too wide and hitting the text
+    objectFit: "contain",
   },
-
-  optionsContainer: {
-    display: "flex",
-    justifyContent: "center",
-    flexWrap: "wrap",
-    gap: "24px",
-    width: "100%",
-  },
-
-  optionCard: {
-    width: "140px",
-    cursor: "pointer",
-    padding: "14px",
-    borderRadius: "14px",
-    background: "#ffffff",
-    textAlign: "center",
-    transition: "all 0.2s ease",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-  },
-
-  optionLabel: {
-    fontWeight: "600",
-    fontSize: "16px",
-    marginBottom: "8px",
+  centerText: {
+    position: "absolute",
+    left: "50%",
+    top: "50%",
+    transform: "translate(-50%, -50%)",
+    fontSize: "28px",
+    fontWeight: "bold",
     color: "#0f172a",
-  },
-
-  optionImage: {
-    width: "100%",
-    height: "90px",
-    objectFit: "contain",
+    textAlign: "center",
+    zIndex: 10,
+    width: "30vw", // Added width so the text wraps neatly in the center if needed
   },
 };

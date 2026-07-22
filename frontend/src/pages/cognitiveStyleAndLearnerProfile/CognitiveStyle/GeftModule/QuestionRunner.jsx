@@ -1,412 +1,1034 @@
-import React, { useMemo, useRef, useState } from "react";
+
+
+// // import React, { useMemo, useState, useEffect } from "react";
+// // import GazeTracker from "./GazeTracker";
+// // import QuestionView from "./QuestionView";
+// // import CalibrationScreen from "../Calibration/Calibration"; // IMPORT THE NEW CALIBRATION COMPONENT
+// // import { useNavigate } from "react-router-dom";
+
+// // // --- Math Helpers ---
+// // const calculateMedian = (arr) => {
+// //     if (arr.length === 0) return 0;
+// //     const sorted = [...arr].sort((a, b) => a - b);
+// //     const mid = Math.floor(sorted.length / 2);
+// //     return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+// // };
+
+// // const calculateAverage = (arr) => {
+// //     if (arr.length === 0) return 0;
+// //     return arr.reduce((a, b) => a + b, 0) / arr.length;
+// // };
+
+// // export default function QuestionRunner() {
+// //     const ANSWER_BACKEND_URL = "";
+// //     const navigate = useNavigate();
+
+// //     const userPayload = useMemo(() => {
+// //         const token = localStorage.getItem("token");
+// //         if (!token) return null;
+// //         try {
+// //             return JSON.parse(atob(token.split(".")[1]));
+// //         } catch {
+// //             return null;
+// //         }
+// //     }, []);
+
+// //     // --- TEST ANSWERS (3 Global, 3 Local) ---
+// //     const ACTUAL_CORRECT_ANSWERS = [
+// //         "Yes", "No", "Yes", // Global Answers (IDs 1, 2, 3)
+// //         "Yes", "No", "Yes"  // Local Answers (IDs 4, 5, 6)
+// //     ];
+
+// //     const questions = useMemo(() => {
+// //         const generatedQuestions = [];
+// //         // Loop only 6 times
+// //         for (let i = 1; i <= 6; i++) {
+// //             // IDs 1-3 are global, 4-6 are local
+// //             const type = i <= 3 ? "global" : "local";
+// //             // ID 1 (Global Trial) and ID 4 (Local Trial)
+// //             const isTrial = i === 1 || i === 4;
+// //             const mappedAnswer = ACTUAL_CORRECT_ANSWERS[i - 1] || (i % 2 === 0 ? "Yes" : "No");
+
+// //             generatedQuestions.push({
+// //                 id: i,
+// //                 type: type,
+// //                 isTrial: isTrial,
+// //                 leftImage: `/images/Question_${i}/q${i}_left.png`,
+// //                 rightImage: `/images/Question_${i}/q${i}_right.png`,
+// //                 correctAnswer: mappedAnswer,
+// //             });
+// //         }
+// //         return generatedQuestions;
+// //     }, []);
+
+// //     // STATE MACHINE: INTRO -> CALIBRATE_1 -> TEST_GLOBAL -> INTERMISSION -> CALIBRATE_2 -> TEST_LOCAL -> DONE
+// //     const [appPhase, setAppPhase] = useState("INTRO");
+// //     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+
+// //     const [answers, setAnswers] = useState({});
+// //     const [gazeWindows, setGazeWindows] = useState([]);
+// //     const [blocksSent, setBlocksSent] = useState({ global: false, local: false });
+
+// //     const [sessionStartTime, setSessionStartTime] = useState(null);
+// //     const [sessionEndTime, setSessionEndTime] = useState(null);
+
+// //     const totalQuestions = questions.length;
+// //     const currentQuestion = questions[currentQuestionIndex] || null;
+
+// //     const handleStartSession = () => {
+// //         setSessionStartTime(Date.now());
+// //         setAppPhase("CALIBRATE_1"); // Start first calibration instead of skipping straight to test
+// //     };
+
+// //     const handleGazeWindow = (windowData) => {
+// //         setGazeWindows((prev) => [...prev, windowData]);
+// //     };
+
+// //     const handleAnswerSubmit = (selectedAnswer, responseTimeMs) => {
+// //         const isCorrect = selectedAnswer === currentQuestion.correctAnswer;
+
+// //         setAnswers((prev) => ({
+// //             ...prev,
+// //             [currentQuestion.id]: { selectedAnswer, isCorrect, responseTimeMs },
+// //         }));
+        
+// //         // Question 3 (Index 2) is the end of the Global block
+// //         if (currentQuestionIndex === 2) {
+// //             setAppPhase("INTERMISSION");
+// //             setCurrentQuestionIndex(3); // Prime the index for the local block (ID 4)
+// //         }
+// //         // Question 84 (Index 83) is the end of the Local block
+// //         else if (currentQuestionIndex === totalQuestions - 1) {
+// //             setAppPhase("DONE");
+// //             setSessionEndTime(Date.now());
+// //         }
+// //         // Otherwise, just move to the next question
+// //         else {
+// //             setCurrentQuestionIndex((prev) => prev + 1);
+// //         }
+// //     };
+
+// //     const processAndSendMetrics = async (type, currentAnswers, currentGaze) => {
+// //         const validQuestions = questions.filter((q) => q.type === type && !q.isTrial);
+// //         const validIds = validQuestions.map((q) => q.id);
+
+// //         const rts = [];
+// //         let correctCount = 0;
+// //         const transitionsList = [];
+// //         const dwellTimesList = [];
+
+// //         validIds.forEach((id) => {
+// //             const ans = currentAnswers[id];
+// //             if (ans) {
+// //                 rts.push(ans.responseTimeMs);
+// //                 if (ans.isCorrect) correctCount++;
+// //             }
+
+// //             const gaze = currentGaze.find((g) => g.questionId === id);
+// //             if (gaze) {
+// //                 transitionsList.push(gaze.transitions || 0);
+// //                 dwellTimesList.push(gaze.totalDwellTime || 0);
+// //             }
+// //         });
+
+// //         const medianRT = calculateMedian(rts);
+// //         const avgTransitions = calculateAverage(transitionsList);
+// //         const avgDwellTime = calculateAverage(dwellTimesList);
+// //         const totalAccuracy = validQuestions.length > 0 ? (correctCount / validQuestions.length) * 100 : 0;
+
+// //         const payload =
+// //             type === "global"
+// //                 ? {
+// //                     Median_RT_Global: Number(medianRT.toFixed(2)),
+// //                     Avg_Transitions_Global: Number(avgTransitions.toFixed(2)),
+// //                     Avg_Dwell_Time_Global: Number(avgDwellTime.toFixed(2)),
+// //                     Total_Accuracy_Global: Number(totalAccuracy.toFixed(2)),
+// //                 }
+// //                 : {
+// //                     Median_RT_Local: Number(medianRT.toFixed(2)),
+// //                     Avg_Transitions_Local: Number(avgTransitions.toFixed(2)),
+// //                     Avg_Dwell_Time_Local: Number(avgDwellTime.toFixed(2)),
+// //                     Total_Accuracy_Local: Number(totalAccuracy.toFixed(2)),
+// //                 };
+
+// //         console.log(`[${type.toUpperCase()}] Ready to send block metrics:`, payload);
+
+// //         if (ANSWER_BACKEND_URL) {
+// //             try {
+// //                 await fetch(`${ANSWER_BACKEND_URL}/metrics-${type}`, {
+// //                     method: "POST",
+// //                     headers: { "Content-Type": "application/json" },
+// //                     body: JSON.stringify({
+// //                         sessionId: userPayload?.id || "session-test1",
+// //                         ...payload,
+// //                     }),
+// //                 });
+// //             } catch (error) {
+// //                 console.error(`Failed to post ${type} metrics:`, error);
+// //             }
+// //         }
+// //     };
+
+// //     useEffect(() => {
+// //         // We can evaluate if a block is complete regardless of the current phase
+// //         const checkBlockCompletion = (type) => {
+// //             const targetQuestions = questions.filter((q) => q.type === type && !q.isTrial);
+// //             const targetIds = targetQuestions.map((q) => q.id);
+
+// //             const hasAllAnswers = targetIds.every((id) => answers[id] !== undefined);
+// //             const hasAllGaze = targetIds.every((id) => gazeWindows.find((g) => g.questionId === id) !== undefined);
+
+// //             if (hasAllAnswers && hasAllGaze && !blocksSent[type]) {
+// //                 setBlocksSent((prev) => ({ ...prev, [type]: true }));
+// //                 processAndSendMetrics(type, answers, gazeWindows);
+// //             }
+// //         };
+
+// //         checkBlockCompletion("global");
+// //         checkBlockCompletion("local");
+// //     }, [answers, gazeWindows, blocksSent, questions]);
+
+// //     const finalSessionData = {
+// //         sessionStartTime,
+// //         sessionEndTime,
+// //         totalQuestions,
+// //         answers,
+// //         gazeWindows,
+// //     };
+
+// //     // Evaluate which background to show depending on the active phase
+// //     const isFullScreenPhase = appPhase === "TEST_GLOBAL" || appPhase === "TEST_LOCAL" || appPhase === "CALIBRATE_1" || appPhase === "CALIBRATE_2";
+
+// //     return (
+// //         <div style={isFullScreenPhase ? styles.fullScreenPage : styles.page}>
+
+// //             {/* 1. INTRO PHASE */}
+// //             {appPhase === "INTRO" && (
+// //                 <div style={styles.overlayContainer}>
+// //                     <div style={styles.consentBox}>
+// //                         <h2 style={styles.title}>Cognitive Style Assessment</h2>
+// //                         <p style={styles.text}>
+// //                             In this module, we will analyze your learning preference and cognitive style based on your interaction with visual materials.
+// //                         </p>
+// //                         <div style={styles.guidelineBox}>
+// //                             <p style={{ margin: "0 0 10px 0", fontWeight: "bold", color: "#333", fontSize: "16px" }}>
+// //                                 Please read the following guidelines carefully:
+// //                             </p>
+// //                             <ul style={styles.guidelineList}>
+// //                                 <li>You will be shown two images. A simple shape on the left, and a complex shape on the right.</li>
+// //                                 <li>Press <strong>"L"</strong> if the left shape IS hidden inside the right shape (YES).</li>
+// //                                 <li>Press <strong>"A"</strong> if the left shape IS NOT inside the right shape (NO).</li>
+// //                                 <li>Your gaze and attention behavior will be captured using your web camera. Keep your face visible.</li>
+// //                                 <li>Answer as quickly and accurately as possible.</li>
+// //                             </ul>
+// //                         </div>
+// //                         <p style={{ color: "#666", fontSize: "14px", textAlign: "center", marginBottom: "24px" }}>
+// //                             By continuing, you acknowledge that you understand the purpose of this module.
+// //                         </p>
+// //                         <div style={{ display: "flex", justifyContent: "center" }}>
+// //                             <button style={styles.primaryButton} onClick={handleStartSession}>
+// //                                 I Understand and Continue
+// //                             </button>
+// //                         </div>
+// //                     </div>
+// //                 </div>
+// //             )}
+
+// //             {/* 2. CALIBRATION PHASES */}
+// //             {(appPhase === "CALIBRATE_1" || appPhase === "CALIBRATE_2") && (
+// //                 <CalibrationScreen
+// //                     onComplete={() => {
+// //                         if (appPhase === "CALIBRATE_1") setAppPhase("TEST_GLOBAL");
+// //                         if (appPhase === "CALIBRATE_2") setAppPhase("TEST_LOCAL");
+// //                     }}
+// //                 />
+// //             )}
+
+// //             {/* 3. TEST PHASES */}
+// //             {(appPhase === "TEST_GLOBAL" || appPhase === "TEST_LOCAL") && (
+// //                 <>
+// //                     <GazeTracker
+// //                         sessionActive={true}
+// //                         currentQuestionId={currentQuestion?.id ?? null}
+// //                         onWindowReady={handleGazeWindow}
+// //                     />
+// //                     <QuestionView
+// //                         question={currentQuestion}
+// //                         onAnswerSubmit={handleAnswerSubmit}
+// //                     />
+// //                 </>
+// //             )}
+
+// //             {/* 4. INTERMISSION PHASE */}
+// //             {appPhase === "INTERMISSION" && (
+// //                 <div style={styles.overlayContainer}>
+// //                     <div style={styles.consentBox}>
+// //                         <h2 style={styles.title}>Halfway There!</h2>
+// //                         <p style={styles.text}>
+// //                             You have successfully completed the first half of the assessment.
+// //                         </p>
+// //                         <div style={styles.guidelineBox}>
+// //                             <p style={{ margin: "0", color: "#555", fontSize: "15px", lineHeight: "1.8" }}>
+// //                                 Before we begin the second half of the questions, we need to quickly recalibrate your eye-tracker to ensure the data remains highly accurate.
+// //                             </p>
+// //                         </div>
+// //                         <div style={{ display: "flex", justifyContent: "center", marginTop: "20px" }}>
+// //                             <button style={styles.primaryButton} onClick={() => setAppPhase("CALIBRATE_2")}>
+// //                                 Start Recalibration
+// //                             </button>
+// //                         </div>
+// //                     </div>
+// //                 </div>
+// //             )}
+
+// //             {/* 5. DONE PHASE */}
+// //             {appPhase === "DONE" && (
+// //                 <div style={styles.overlayContainer}>
+// //                     <div style={styles.consentBox}>
+// //                         <h2 style={styles.title}>Session Finished</h2>
+// //                         <p style={styles.text}>Below is the collected session data structure.</p>
+// //                         <pre style={styles.pre}>
+// //                             {JSON.stringify(finalSessionData, null, 2)}
+// //                         </pre>
+// //                         <div style={{ display: "flex", justifyContent: "center" }}>
+// //                             <button style={styles.primaryButton} onClick={() => navigate("/course")}>
+// //                                 Return to Course
+// //                             </button>
+// //                         </div>
+// //                     </div>
+// //                 </div>
+// //             )}
+
+// //         </div>
+// //     );
+// // }
+
+// // const styles = {
+// //     page: {
+// //         minHeight: "100vh",
+// //         display: "flex",
+// //         alignItems: "center",
+// //         justifyContent: "center",
+// //         background: "#f8fafc",
+// //         fontFamily: "sans-serif",
+// //     },
+// //     fullScreenPage: {
+// //         height: "100vh",
+// //         width: "100vw",
+// //         margin: 0,
+// //         padding: 0,
+// //         overflow: "hidden",
+// //         backgroundColor: "#ffffff",
+// //     },
+// //     overlayContainer: {
+// //         position: "fixed",
+// //         top: 0,
+// //         left: 0,
+// //         width: "100%",
+// //         height: "100%",
+// //         backgroundColor: "rgba(0, 0, 0, 0.55)",
+// //         display: "flex",
+// //         alignItems: "center",
+// //         justifyContent: "center",
+// //         zIndex: 9999,
+// //     },
+// //     consentBox: {
+// //         backgroundColor: "#ffffff",
+// //         width: "620px",
+// //         maxWidth: "92%",
+// //         borderRadius: "18px",
+// //         padding: "30px",
+// //         boxShadow: "0 12px 35px rgba(0,0,0,0.28)",
+// //         fontFamily: "sans-serif",
+// //     },
+// //     title: {
+// //         marginTop: 0,
+// //         marginBottom: "12px",
+// //         color: "#222",
+// //         fontSize: "25px",
+// //         textAlign: "center",
+// //     },
+// //     text: {
+// //         color: "#444",
+// //         fontSize: "16px",
+// //         lineHeight: "1.7",
+// //         textAlign: "center",
+// //         marginBottom: "22px",
+// //     },
+// //     guidelineBox: {
+// //         backgroundColor: "#f4f6f8",
+// //         border: "1px solid #e0e0e0",
+// //         borderRadius: "12px",
+// //         padding: "18px",
+// //         marginBottom: "20px",
+// //     },
+// //     guidelineList: {
+// //         margin: 0,
+// //         paddingLeft: "22px",
+// //         color: "#555",
+// //         fontSize: "15px",
+// //         lineHeight: "1.8",
+// //     },
+// //     primaryButton: {
+// //         padding: "12px 28px",
+// //         border: "none",
+// //         borderRadius: "10px",
+// //         backgroundColor: "#2563eb",
+// //         color: "#fff",
+// //         fontSize: "16px",
+// //         fontWeight: "bold",
+// //         cursor: "pointer",
+// //         boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+// //     },
+// //     pre: {
+// //         background: "#0f172a",
+// //         color: "#e2e8f0",
+// //         padding: "16px",
+// //         borderRadius: "12px",
+// //         overflowX: "auto",
+// //         fontSize: "12px",
+// //         marginBottom: "16px",
+// //         maxHeight: "300px",
+// //     },
+// // };
+
+
+// import React, { useMemo, useState, useEffect } from "react";
+// import GazeTracker from "./GazeTracker";
+// import QuestionView from "./QuestionView";
+// import CalibrationScreen from "../Calibration/Calibration";
+// import { useNavigate } from "react-router-dom";
+
+// // --- Math Helpers ---
+// const calculateMedian = (arr) => {
+//     if (arr.length === 0) return 0;
+//     const sorted = [...arr].sort((a, b) => a - b);
+//     const mid = Math.floor(sorted.length / 2);
+//     return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+// };
+
+// const calculateAverage = (arr) => {
+//     if (arr.length === 0) return 0;
+//     return arr.reduce((a, b) => a + b, 0) / arr.length;
+// };
+
+// export default function QuestionRunner() {
+//     const ANSWER_BACKEND_URL = "";
+//     const navigate = useNavigate();
+
+//     const userPayload = useMemo(() => {
+//         const token = localStorage.getItem("token");
+//         if (!token) return null;
+//         try {
+//             return JSON.parse(atob(token.split(".")[1]));
+//         } catch {
+//             return null;
+//         }
+//     }, []);
+
+//     // --- TEST ANSWERS (3 Global, 3 Local) ---
+//     const ACTUAL_CORRECT_ANSWERS = [
+//         "Yes", "No", "Yes", // Global Answers (IDs 1, 2, 3)
+//         "Yes", "No", "Yes"  // Local Answers (IDs 4, 5, 6)
+//     ];
+
+//     const questions = useMemo(() => {
+//         const generatedQuestions = [];
+//         for (let i = 1; i <= 6; i++) {
+//             const type = i <= 3 ? "global" : "local";
+//             const isTrial = i === 1 || i === 4;
+//             const mappedAnswer = ACTUAL_CORRECT_ANSWERS[i - 1] || (i % 2 === 0 ? "Yes" : "No");
+
+//             generatedQuestions.push({
+//                 id: i,
+//                 type: type,
+//                 isTrial: isTrial,
+//                 leftImage: `/images/Question_${i}/q${i}_left.png`,
+//                 rightImage: `/images/Question_${i}/q${i}_right.png`,
+//                 correctAnswer: mappedAnswer,
+//             });
+//         }
+//         return generatedQuestions;
+//     }, []);
+
+//     const [appPhase, setAppPhase] = useState("INTRO");
+//     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+
+//     const [answers, setAnswers] = useState({});
+//     const [gazeWindows, setGazeWindows] = useState([]);
+//     const [blocksSent, setBlocksSent] = useState({ global: false, local: false });
+
+//     const [sessionStartTime, setSessionStartTime] = useState(null);
+//     const [sessionEndTime, setSessionEndTime] = useState(null);
+
+//     const totalQuestions = questions.length;
+//     const currentQuestion = questions[currentQuestionIndex] || null;
+
+//     const handleStartSession = () => {
+//         setSessionStartTime(Date.now());
+//         setAppPhase("CALIBRATE_1"); 
+//     };
+
+//     // SMART UPDATE FIX: Overwrite older window entries with newer/better data for the same questionId
+//     const handleGazeWindow = (windowData) => {
+//         setGazeWindows((prev) => {
+//             const existingIndex = prev.findIndex((g) => g.questionId === windowData.questionId);
+//             if (existingIndex !== -1) {
+//                 const existing = prev[existingIndex];
+//                 if (windowData.frameCount >= existing.frameCount) {
+//                     const updated = [...prev];
+//                     updated[existingIndex] = windowData;
+//                     return updated;
+//                 }
+//                 return prev;
+//             }
+//             return [...prev, windowData];
+//         });
+//     };
+
+//     const handleAnswerSubmit = (selectedAnswer, responseTimeMs) => {
+//         const isCorrect = selectedAnswer === currentQuestion.correctAnswer;
+
+//         setAnswers((prev) => ({
+//             ...prev,
+//             [currentQuestion.id]: { selectedAnswer, isCorrect, responseTimeMs },
+//         }));
+        
+//         if (currentQuestionIndex === 2) {
+//             setAppPhase("INTERMISSION");
+//             setCurrentQuestionIndex(3);
+//         }
+//         else if (currentQuestionIndex === totalQuestions - 1) {
+//             setAppPhase("DONE");
+//             setSessionEndTime(Date.now());
+//         }
+//         else {
+//             setCurrentQuestionIndex((prev) => prev + 1);
+//         }
+//     };
+
+//     const processAndSendMetrics = async (type, currentAnswers, currentGaze) => {
+//         const validQuestions = questions.filter((q) => q.type === type && !q.isTrial);
+//         const validIds = validQuestions.map((q) => q.id);
+
+//         const rts = [];
+//         let correctCount = 0;
+//         const transitionsList = [];
+//         const dwellTimesList = [];
+
+//         validIds.forEach((id) => {
+//             const ans = currentAnswers[id];
+//             if (ans) {
+//                 rts.push(ans.responseTimeMs);
+//                 if (ans.isCorrect) correctCount++;
+//             }
+
+//             const gaze = currentGaze.find((g) => g.questionId === id);
+//             if (gaze) {
+//                 transitionsList.push(gaze.transitions || 0);
+//                 dwellTimesList.push(gaze.totalDwellTime || 0);
+//             }
+//         });
+
+//         const medianRT = calculateMedian(rts);
+//         const avgTransitions = calculateAverage(transitionsList);
+//         const avgDwellTime = calculateAverage(dwellTimesList);
+//         const totalAccuracy = validQuestions.length > 0 ? (correctCount / validQuestions.length) * 100 : 0;
+
+//         const payload =
+//             type === "global"
+//                 ? {
+//                     Median_RT_Global: Number(medianRT.toFixed(2)),
+//                     Avg_Transitions_Global: Number(avgTransitions.toFixed(2)),
+//                     Avg_Dwell_Time_Global: Number(avgDwellTime.toFixed(2)),
+//                     Total_Accuracy_Global: Number(totalAccuracy.toFixed(2)),
+//                 }
+//                 : {
+//                     Median_RT_Local: Number(medianRT.toFixed(2)),
+//                     Avg_Transitions_Local: Number(avgTransitions.toFixed(2)),
+//                     Avg_Dwell_Time_Local: Number(avgDwellTime.toFixed(2)),
+//                     Total_Accuracy_Local: Number(totalAccuracy.toFixed(2)),
+//                 };
+
+//         console.log(`[${type.toUpperCase()}] Ready to send block metrics:`, payload);
+
+//         if (ANSWER_BACKEND_URL) {
+//             try {
+//                 await fetch(`${ANSWER_BACKEND_URL}/metrics-${type}`, {
+//                     method: "POST",
+//                     headers: { "Content-Type": "application/json" },
+//                     body: JSON.stringify({
+//                         sessionId: userPayload?.id || "session-test1",
+//                         ...payload,
+//                     }),
+//                 });
+//             } catch (error) {
+//                 console.error(`Failed to post ${type} metrics:`, error);
+//             }
+//         }
+//     };
+
+//     useEffect(() => {
+//         const checkBlockCompletion = (type) => {
+//             const targetQuestions = questions.filter((q) => q.type === type && !q.isTrial);
+//             const targetIds = targetQuestions.map((q) => q.id);
+
+//             const hasAllAnswers = targetIds.every((id) => answers[id] !== undefined);
+//             const hasAllGaze = targetIds.every((id) => gazeWindows.find((g) => g.questionId === id) !== undefined);
+
+//             if (hasAllAnswers && hasAllGaze && !blocksSent[type]) {
+//                 setBlocksSent((prev) => ({ ...prev, [type]: true }));
+//                 processAndSendMetrics(type, answers, gazeWindows);
+//             }
+//         };
+
+//         checkBlockCompletion("global");
+//         checkBlockCompletion("local");
+//     }, [answers, gazeWindows, blocksSent, questions]);
+
+//     const finalSessionData = {
+//         sessionStartTime,
+//         sessionEndTime,
+//         totalQuestions,
+//         answers,
+//         gazeWindows,
+//     };
+
+//     const isFullScreenPhase = appPhase === "TEST_GLOBAL" || appPhase === "TEST_LOCAL" || appPhase === "CALIBRATE_1" || appPhase === "CALIBRATE_2";
+
+//     return (
+//         <div style={isFullScreenPhase ? styles.fullScreenPage : styles.page}>
+
+//             {/* 1. INTRO PHASE */}
+//             {appPhase === "INTRO" && (
+//                 <div style={styles.overlayContainer}>
+//                     <div style={styles.consentBox}>
+//                         <h2 style={styles.title}>Cognitive Style Assessment</h2>
+//                         <p style={styles.text}>
+//                             In this module, we will analyze your learning preference and cognitive style based on your interaction with visual materials.
+//                         </p>
+//                         <div style={styles.guidelineBox}>
+//                             <p style={{ margin: "0 0 10px 0", fontWeight: "bold", color: "#333", fontSize: "16px" }}>
+//                                 Please read the following guidelines carefully:
+//                             </p>
+//                             <ul style={styles.guidelineList}>
+//                                 <li>You will be shown two images. A simple shape on the left, and a complex shape on the right.</li>
+//                                 <li>Press <strong>"L"</strong> if the left shape IS hidden inside the right shape (YES).</li>
+//                                 <li>Press <strong>"A"</strong> if the left shape IS NOT inside the right shape (NO).</li>
+//                                 <li>Your gaze and attention behavior will be captured using your web camera. Keep your face visible.</li>
+//                                 <li>Answer as quickly and accurately as possible.</li>
+//                             </ul>
+//                         </div>
+//                         <p style={{ color: "#666", fontSize: "14px", textAlign: "center", marginBottom: "24px" }}>
+//                             By continuing, you acknowledge that you understand the purpose of this module.
+//                         </p>
+//                         <div style={{ display: "flex", justifyContent: "center" }}>
+//                             <button style={styles.primaryButton} onClick={handleStartSession}>
+//                                 I Understand and Continue
+//                             </button>
+//                         </div>
+//                     </div>
+//                 </div>
+//             )}
+
+//             {/* 2. CALIBRATION PHASES */}
+//             {(appPhase === "CALIBRATE_1" || appPhase === "CALIBRATE_2") && (
+//                 <CalibrationScreen
+//                     onComplete={() => {
+//                         if (appPhase === "CALIBRATE_1") setAppPhase("TEST_GLOBAL");
+//                         if (appPhase === "CALIBRATE_2") setAppPhase("TEST_LOCAL");
+//                     }}
+//                 />
+//             )}
+
+//             {/* 3. TEST PHASES */}
+//             {(appPhase === "TEST_GLOBAL" || appPhase === "TEST_LOCAL") && (
+//                 <>
+//                     <GazeTracker
+//                         sessionActive={true}
+//                         currentQuestionId={currentQuestion?.id ?? null}
+//                         onWindowReady={handleGazeWindow}
+//                     />
+//                     <QuestionView
+//                         question={currentQuestion}
+//                         onAnswerSubmit={handleAnswerSubmit}
+//                     />
+//                 </>
+//             )}
+
+//             {/* 4. INTERMISSION PHASE */}
+//             {appPhase === "INTERMISSION" && (
+//                 <div style={styles.overlayContainer}>
+//                     <div style={styles.consentBox}>
+//                         <h2 style={styles.title}>Halfway There!</h2>
+//                         <p style={styles.text}>
+//                             You have successfully completed the first half of the assessment.
+//                         </p>
+//                         <div style={styles.guidelineBox}>
+//                             <p style={{ margin: "0", color: "#555", fontSize: "15px", lineHeight: "1.8" }}>
+//                                 Before we begin the second half of the questions, we need to quickly recalibrate your eye-tracker to ensure the data remains highly accurate.
+//                             </p>
+//                         </div>
+//                         <div style={{ display: "flex", justifyContent: "center", marginTop: "20px" }}>
+//                             <button style={styles.primaryButton} onClick={() => setAppPhase("CALIBRATE_2")}>
+//                                 Start Recalibration
+//                             </button>
+//                         </div>
+//                     </div>
+//                 </div>
+//             )}
+
+//             {/* 5. DONE PHASE */}
+//             {appPhase === "DONE" && (
+//                 <div style={styles.overlayContainer}>
+//                     <div style={styles.consentBox}>
+//                         <h2 style={styles.title}>Session Finished</h2>
+//                         <p style={styles.text}>Below is the collected session data structure.</p>
+//                         <pre style={styles.pre}>
+//                             {JSON.stringify(finalSessionData, null, 2)}
+//                         </pre>
+//                         <div style={{ display: "flex", justifyContent: "center" }}>
+//                             <button style={styles.primaryButton} onClick={() => navigate("/course")}>
+//                                 Return to Course
+//                             </button>
+//                         </div>
+//                     </div>
+//                 </div>
+//             )}
+
+//         </div>
+//     );
+// }
+
+// const styles = {
+//     page: {
+//         minHeight: "100vh",
+//         display: "flex",
+//         alignItems: "center",
+//         justifyContent: "center",
+//         background: "#f8fafc",
+//         fontFamily: "sans-serif",
+//     },
+//     fullScreenPage: {
+//         height: "100vh",
+//         width: "100vw",
+//         margin: 0,
+//         padding: 0,
+//         overflow: "hidden",
+//         backgroundColor: "#ffffff",
+//     },
+//     overlayContainer: {
+//         position: "fixed",
+//         top: 0,
+//         left: 0,
+//         width: "100%",
+//         height: "100%",
+//         backgroundColor: "rgba(0, 0, 0, 0.55)",
+//         display: "flex",
+//         alignItems: "center",
+//         justifyContent: "center",
+//         zIndex: 9999,
+//     },
+//     consentBox: {
+//         backgroundColor: "#ffffff",
+//         width: "620px",
+//         maxWidth: "92%",
+//         borderRadius: "18px",
+//         padding: "30px",
+//         boxShadow: "0 12px 35px rgba(0,0,0,0.28)",
+//         fontFamily: "sans-serif",
+//     },
+//     title: {
+//         marginTop: 0,
+//         marginBottom: "12px",
+//         color: "#222",
+//         fontSize: "25px",
+//         textAlign: "center",
+//     },
+//     text: {
+//         color: "#444",
+//         fontSize: "16px",
+//         lineHeight: "1.7",
+//         textAlign: "center",
+//         marginBottom: "22px",
+//     },
+//     guidelineBox: {
+//         backgroundColor: "#f4f6f8",
+//         border: "1px solid #e0e0e0",
+//         borderRadius: "12px",
+//         padding: "18px",
+//         marginBottom: "20px",
+//     },
+//     guidelineList: {
+//         margin: 0,
+//         paddingLeft: "22px",
+//         color: "#555",
+//         fontSize: "15px",
+//         lineHeight: "1.8",
+//     },
+//     primaryButton: {
+//         padding: "12px 28px",
+//         border: "none",
+//         borderRadius: "10px",
+//         backgroundColor: "#2563eb",
+//         color: "#fff",
+//         fontSize: "16px",
+//         fontWeight: "bold",
+//         cursor: "pointer",
+//         boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+//     },
+//     pre: {
+//         background: "#0f172a",
+//         color: "#e2e8f0",
+//         padding: "16px",
+//         borderRadius: "12px",
+//         overflowX: "auto",
+//         fontSize: "12px",
+//         marginBottom: "16px",
+//         maxHeight: "300px",
+//     },
+// };
+
+import React, { useMemo, useState, useEffect } from "react";
 import GazeTracker from "./GazeTracker";
-import CursorTracker from "./CursorTrackerForQuestionTracker";
 import QuestionView from "./QuestionView";
+import CalibrationScreen from "../Calibration/Calibration";
 import { useNavigate } from "react-router-dom";
 
 export default function QuestionRunner() {
-
-    const ANSWER_BACKEND_URL = "http://localhost:4000/cognitive-style/question-runner/answers";
+    // Put your FastAPI endpoint here to receive the entire session payload
+    const BACKEND_URL = "http://localhost:4000/cognitive-style/anaylticwholistic/savebehavioraldata";
     const navigate = useNavigate();
 
     const userPayload = useMemo(() => {
         const token = localStorage.getItem("token");
         if (!token) return null;
-
         try {
-            console.log("Decoded user payload:", JSON.parse(atob(token.split(".")[1])));
             return JSON.parse(atob(token.split(".")[1]));
-
         } catch {
             return null;
         }
     }, []);
 
-    const cursorTrackerRef = useRef(null);
-    // Keep questions blank for now. You can fill these later.
-    const postAnswer = async (question) => {
-        const selectedAnswer = answers[question.id];
-        if (!selectedAnswer) return;
-
-        const payload = {
-            sessionId: userPayload?.id || "session-test1",
-            questionId: question.id,
-            selectedAnswer,
-            correctAnswer: question.correctAnswer,
-            isCorrect: selectedAnswer === question.correctAnswer,
-        };
-
-        if (ANSWER_BACKEND_URL) {
-            try {
-                await fetch(ANSWER_BACKEND_URL, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload),
-                });
-                console.log("Posted answer:", payload);
-            } catch (error) {
-                console.error("Failed to post answer:", error);
-            }
-        } else {
-            console.log("ANSWER_BACKEND_URL is empty. Answer not posted.", payload);
-        }
-    };
+    // --- TEST ANSWERS (3 Global, 3 Local) ---
+    const ACTUAL_CORRECT_ANSWERS = [
+        "Yes", "No", "Yes", // Global Answers (IDs 1, 2, 3)
+        "Yes", "No", "Yes"  // Local Answers (IDs 4, 5, 6)
+    ];
 
     const questions = useMemo(() => {
-        return [
-            {
-                id: 1,
-                target: "C",
-                complexImage: "/images/Question_1/q1_complex.png",
-                options: [
-                    { id: "A", image: "/images/Question_1/q1_A.png" },
-                    { id: "B", image: "/images/Question_1/q1_B.png" },
-                    { id: "C", image: "/images/Question_1/q1_C.png" },
-                    { id: "D", image: "/images/Question_1/q1_D.png" }, // optional if you add D
-                ],
-                correctAnswer: "C",
-            },
-            {
-                id: 2,
-                target: "A",
-                complexImage: "/images/Question_2/q2_complex.png",
-                options: [
-                    { id: "A", image: "/images/Question_2/q2_A.png" },
-                    { id: "B", image: "/images/Question_2/q2_B.png" },
-                    { id: "C", image: "/images/Question_2/q2_C.png" },
-                    { id: "D", image: "/images/Question_2/q2_D.png" }, // optional if you add D
-                ],
-                correctAnswer: "A",
-            },
-            {
-                id: 3,
-                target: "D",
-                complexImage: "/images/Question_3/q3_complex.png",
-                options: [
-                    { id: "A", image: "/images/Question_3/q3_A.png" },
-                    { id: "B", image: "/images/Question_3/q3_B.png" },
-                    { id: "C", image: "/images/Question_3/q3_C.png" },
-                    { id: "D", image: "/images/Question_3/q3_D.png" }, // optional if you add D
-                ],
-                correctAnswer: "D",
-            },
-            {
-                id: 4,
-                target: "D",
-                complexImage: "/images/Question_4/q4_complex.png",
-                options: [
-                    { id: "A", image: "/images/Question_4/q4_A.png" },
-                    { id: "B", image: "/images/Question_4/q4_B.png" },
-                    { id: "C", image: "/images/Question_4/q4_C.png" },
-                    { id: "D", image: "/images/Question_4/q4_D.png" }, // optional if you add D
-                ],
-                correctAnswer: "D",
-            },
-            {
-                id: 5,
-                target: "D",
-                complexImage: "/images/Question_5/q5_complex.png",
-                options: [
-                    { id: "A", image: "/images/Question_5/q5_A.png" },
-                    { id: "B", image: "/images/Question_5/q5_B.png" },
-                    { id: "C", image: "/images/Question_5/q5_C.png" },
-                    { id: "D", image: "/images/Question_5/q5_D.png" }, // optional if you add D
-                ],
-                correctAnswer: "C",
-            },
-            {
-                id: 6,
-                target: "D",
-                complexImage: "/images/Question_6/q6_complex.png",
-                options: [
-                    { id: "A", image: "/images/Question_6/q6_A.png" },
-                    { id: "B", image: "/images/Question_6/q6_B.png" },
-                    { id: "C", image: "/images/Question_6/q6_C.png" },
-                    { id: "D", image: "/images/Question_6/q6_D.png" }, // optional if you add D
-                ],
-                correctAnswer: "C",
-            },
-            {
-                id: 7,
-                target: "A",
-                complexImage: "/images/Question_7/q7_complex.png",
-                options: [
-                    { id: "A", image: "/images/Question_7/q7_A.png" },
-                    { id: "B", image: "/images/Question_7/q7_B.png" },
-                    { id: "C", image: "/images/Question_7/q7_C.png" },
-                    { id: "D", image: "/images/Question_7/q7_D.png" }, // optional if you add D
-                ],
-                correctAnswer: "A",
-            },
-            {
-                id: 8,
-                target: "G",
-                complexImage: "/images/Question_8/q8_complex.png",
-                options: [
-                    { id: "A", image: "/images/Question_8/q8_A.png" },
-                    { id: "B", image: "/images/Question_8/q8_B.png" },
-                    { id: "C", image: "/images/Question_8/q8_C.png" },
-                    { id: "D", image: "/images/Question_8/q8_D.png" }, // optional if you add D
-                ],
-                correctAnswer: "G",
-            }
-        ];
+        const generatedQuestions = [];
+        for (let i = 1; i <= 6; i++) {
+            const type = i <= 3 ? "global" : "local";
+            const isTrial = i === 1 || i === 4;
+            const mappedAnswer = ACTUAL_CORRECT_ANSWERS[i - 1] || (i % 2 === 0 ? "Yes" : "No");
+
+            generatedQuestions.push({
+                id: i,
+                type: type,
+                isTrial: isTrial,
+                leftImage: `/images/Question_${i}/q${i}_left.png`,
+                rightImage: `/images/Question_${i}/q${i}_right.png`,
+                correctAnswer: mappedAnswer,
+            });
+        }
+        return generatedQuestions;
     }, []);
 
-    const [sessionStarted, setSessionStarted] = useState(false);
-    const [sessionEnded, setSessionEnded] = useState(false);
-
+    const [appPhase, setAppPhase] = useState("INTRO");
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
 
-
-    // Store selected answers by questionId
     const [answers, setAnswers] = useState({});
-
-    // Store cursor summaries by questionId
-    const [cursorSummaries, setCursorSummaries] = useState({});
-
-    // Store gaze windows for whole session
     const [gazeWindows, setGazeWindows] = useState([]);
+    
+    // Prevent duplicate sending
+    const [dataSent, setDataSent] = useState(false);
 
-    // Optional session timestamps
     const [sessionStartTime, setSessionStartTime] = useState(null);
     const [sessionEndTime, setSessionEndTime] = useState(null);
 
     const totalQuestions = questions.length;
     const currentQuestion = questions[currentQuestionIndex] || null;
-    const hasSelectedAnswer =
-        currentQuestion && answers[currentQuestion.id];
 
     const handleStartSession = () => {
-        setSessionStarted(true);
-        setSessionEnded(false);
-        setCurrentQuestionIndex(0);
-        setAnswers({});
-        setCursorSummaries({});
-        setGazeWindows([]);
         setSessionStartTime(Date.now());
-        setSessionEndTime(null);
+        setAppPhase("CALIBRATE_1"); 
     };
 
-    const handleAnswerChange = (questionId, value) => {
+    // SMART UPDATE FIX: Overwrite older window entries with newer/better data for the same questionId
+    const handleGazeWindow = (windowData) => {
+        setGazeWindows((prev) => {
+            const existingIndex = prev.findIndex((g) => g.questionId === windowData.questionId);
+            if (existingIndex !== -1) {
+                const existing = prev[existingIndex];
+                if (windowData.frameCount >= existing.frameCount) {
+                    const updated = [...prev];
+                    updated[existingIndex] = windowData;
+                    return updated;
+                }
+                return prev;
+            }
+            return [...prev, windowData];
+        });
+    };
+
+    const handleAnswerSubmit = (selectedAnswer, responseTimeMs) => {
+        const isCorrect = selectedAnswer === currentQuestion.correctAnswer;
+
         setAnswers((prev) => ({
             ...prev,
-            [questionId]: value,
+            [currentQuestion.id]: { selectedAnswer, isCorrect, responseTimeMs },
         }));
-    };
-
-    const handleCursorSummary = (summary) => {
-        if (!summary?.questionId) return;
-
-        setCursorSummaries((prev) => ({
-            ...prev,
-            [summary.questionId]: summary,
-        }));
-    };
-
-    const handleGazeWindow = (windowData) => {
-        setGazeWindows((prev) => [...prev, windowData]);
-    };
-
-    const handleNextQuestion = async () => {
-        if (cursorTrackerRef.current) {
-            await cursorTrackerRef.current.finalizeQuestion();
+        
+        if (currentQuestionIndex === 2) {
+            setAppPhase("INTERMISSION");
+            setCurrentQuestionIndex(3);
         }
-
-        if (currentQuestion) {
-            await postAnswer(currentQuestion);
+        else if (currentQuestionIndex === totalQuestions - 1) {
+            setAppPhase("DONE");
+            setSessionEndTime(Date.now());
         }
-
-        if (currentQuestionIndex < totalQuestions - 1) {
+        else {
             setCurrentQuestionIndex((prev) => prev + 1);
-            return;
-        }
-
-        setSessionEnded(true);
-        setSessionStarted(false);
-        setSessionEndTime(Date.now());
-    };
-
-    const handlePreviousQuestion = () => {
-        if (currentQuestionIndex > 0) {
-            setCurrentQuestionIndex((prev) => prev - 1);
         }
     };
-
-   const handleFinishSession = async () => {
-    if (cursorTrackerRef.current) {
-        await cursorTrackerRef.current.finalizeQuestion();
-    }
-
-    if (currentQuestion) {
-        await postAnswer(currentQuestion);
-    }
-
-    setSessionEnded(true);
-    setSessionStarted(false);
-    setSessionEndTime(Date.now());
-
-    navigate("/course");
-};
 
     const finalSessionData = {
         sessionStartTime,
         sessionEndTime,
         totalQuestions,
         answers,
-        cursorSummaries,
         gazeWindows,
     };
+// --- SEND DATA TO BACKEND WHEN SESSION IS DONE ---
+    useEffect(() => {
+        if (appPhase === "DONE" && sessionEndTime && !dataSent) {
+            
+            // 1. SET THE LOCK IMMEDIATELY (Synchronous)
+            setDataSent(true); 
+            
+            console.log("Sending entire session data to backend:", finalSessionData);
+            
+            // 2. FIRE THE FETCH REQUEST
+            fetch(BACKEND_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(finalSessionData),
+            })
+            .then(res => res.json())
+            .then(data => {
+                console.log("Backend successfully processed the session:", data);
+            })
+            .catch(error => {
+                console.error("Failed to save session data:", error);
+                // Optional: Unlock it if the request fails so it can be retried
+                setDataSent(false); 
+            });
+        }
+    }, [appPhase, sessionEndTime, dataSent, finalSessionData]);
+
+    const isFullScreenPhase = appPhase === "TEST_GLOBAL" || appPhase === "TEST_LOCAL" || appPhase === "CALIBRATE_1" || appPhase === "CALIBRATE_2";
 
     return (
-        <div style={styles.page}>
-            <h1 style={styles.title}>GEFT Question Runner</h1>
+        <div style={isFullScreenPhase ? styles.fullScreenPage : styles.page}>
 
-           {!sessionStarted && !sessionEnded && (
-    <div style={styles.card}>
-        <h2 style={styles.subtitle}>Before You Begin</h2>
-
-        <p style={styles.text}>
-            You are about to start the <strong>Group Embedded Figures Test</strong>,
-            commonly known as <strong>GEFT</strong>.
-        </p>
-
-        <p style={styles.text}>
-            GEFT is a cognitive-style activity used to understand how a person
-            identifies simple shapes hidden inside more complex figures. It helps
-            analyze whether a learner tends to process information more independently
-            from surrounding details or more dependently within the overall context.
-        </p>
-
-        <div style={styles.infoBox}>
-            <p style={styles.infoTitle}>What you need to do:</p>
-
-            <ul style={styles.guidelineList}>
-                <li>
-                    For each question, carefully observe the complex image shown on
-                    the screen.
-                </li>
-                <li>
-                    Identify which answer option matches the target simple figure
-                    hidden inside the complex image.
-                </li>
-                <li>
-                    Select the answer that you think is correct before moving to the
-                    next question.
-                </li>
-                <li>
-                    Try to answer naturally and avoid random guessing.
-                </li>
-                <li>
-                    Keep your face visible to the camera during the session.
-                </li>
-                <li>
-                    Your gaze behavior, cursor movement, answer selection, and
-                    interaction patterns may be collected for learning-behavior
-                    analysis.
-                </li>
-            </ul>
-        </div>
-
-        <p style={styles.noteText}>
-            The session will begin only after you click the button below.
-        </p>
-
-        <button style={styles.primaryButton} onClick={handleStartSession}>
-            I Understand — Start GEFT Session
-        </button>
-    </div>
-)}
-
-            {sessionStarted && (
-                <div style={styles.layout}>
-                    
-                        <GazeTracker
-                            sessionActive={sessionStarted}
-                            currentQuestionId={currentQuestion?.id ?? null}
-                            onWindowReady={handleGazeWindow}
-                        />
-               
-
-                    <div style={styles.rightPanel}>
-                        <CursorTracker
-                            ref={cursorTrackerRef}
-                            questionId={currentQuestion?.id ?? null}
-                            isActive={sessionStarted && !!currentQuestion}
-                            onQuestionSummary={handleCursorSummary}
-                        >
-                            <div style={styles.card}>
-                                <h2 style={styles.subtitle}>
-                                    Question {currentQuestionIndex + 1}
-                                </h2>
-
-                                {currentQuestion ? (
-                                    <>
-                                        <QuestionView
-                                            question={currentQuestion}
-                                            selectedAnswer={answers[currentQuestion.id]}
-                                            onSelect={(value) =>
-                                                handleAnswerChange(currentQuestion.id, value)
-                                            }
-                                        />
-
-                                        <div style={styles.navigationRow}>
-                                            <button
-                                                style={styles.secondaryButton}
-                                                onClick={handlePreviousQuestion}
-                                                disabled={currentQuestionIndex === 0}
-                                            >
-                                                Previous
-                                            </button>
-
-                                            {currentQuestionIndex < totalQuestions - 1 ? (
-                                                <button
-                                                    style={styles.primaryButton}
-                                                    onClick={handleNextQuestion}
-                                                    disabled={!hasSelectedAnswer}
-                                                >
-                                                    Next
-                                                </button>
-                                            ) : (
-                                                <button
-                                                    style={styles.primaryButton}
-                                                    onClick={handleFinishSession}
-                                                    disabled={!hasSelectedAnswer}
-                                                >
-                                                    Finish
-                                                </button>
-                                            )}
-                                        </div>
-                                    </>
-                                ) : (
-                                    <div style={styles.questionBox}>
-                                        <p style={styles.text}>
-                                            No questions added yet. Add your question structure later.
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
-                        </CursorTracker>
+            {/* 1. INTRO PHASE */}
+            {appPhase === "INTRO" && (
+                <div style={styles.overlayContainer}>
+                    <div style={styles.consentBox}>
+                        <h2 style={styles.title}>Cognitive Style Assessment</h2>
+                        <p style={styles.text}>
+                            In this module, we will analyze your learning preference and cognitive style based on your interaction with visual materials.
+                        </p>
+                        <div style={styles.guidelineBox}>
+                            <p style={{ margin: "0 0 10px 0", fontWeight: "bold", color: "#333", fontSize: "16px" }}>
+                                Please read the following guidelines carefully:
+                            </p>
+                            <ul style={styles.guidelineList}>
+                                <li>You will be shown two images. A simple shape on the left, and a complex shape on the right.</li>
+                                <li>Press <strong>"L"</strong> if the left shape IS hidden inside the right shape (YES).</li>
+                                <li>Press <strong>"A"</strong> if the left shape IS NOT inside the right shape (NO).</li>
+                                <li>Your gaze and attention behavior will be captured using your web camera. Keep your face visible.</li>
+                                <li>Answer as quickly and accurately as possible.</li>
+                            </ul>
+                        </div>
+                        <p style={{ color: "#666", fontSize: "14px", textAlign: "center", marginBottom: "24px" }}>
+                            By continuing, you acknowledge that you understand the purpose of this module.
+                        </p>
+                        <div style={{ display: "flex", justifyContent: "center" }}>
+                            <button style={styles.primaryButton} onClick={handleStartSession}>
+                                I Understand and Continue
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
 
-            {sessionEnded && (
-                <div style={styles.card}>
-                    <h2 style={styles.subtitle}>Session Finished</h2>
-                    <p style={styles.text}>
-                        Below is the collected session data structure.
-                    </p>
+            {/* 2. CALIBRATION PHASES */}
+            {(appPhase === "CALIBRATE_1" || appPhase === "CALIBRATE_2") && (
+                <CalibrationScreen
+                    onComplete={() => {
+                        if (appPhase === "CALIBRATE_1") setAppPhase("TEST_GLOBAL");
+                        if (appPhase === "CALIBRATE_2") setAppPhase("TEST_LOCAL");
+                    }}
+                />
+            )}
 
-                    <pre style={styles.pre}>
-                        {JSON.stringify(finalSessionData, null, 2)}
-                    </pre>
+            {/* 3. TEST PHASES */}
+            {(appPhase === "TEST_GLOBAL" || appPhase === "TEST_LOCAL") && (
+                <>
+                    <GazeTracker
+                        sessionActive={true}
+                        currentQuestionId={currentQuestion?.id ?? null}
+                        onWindowReady={handleGazeWindow}
+                    />
+                    <QuestionView
+                        question={currentQuestion}
+                        onAnswerSubmit={handleAnswerSubmit}
+                    />
+                </>
+            )}
 
-                    <button style={styles.primaryButton} onClick={handleStartSession}>
-                        Restart Session
-                    </button>
+            {/* 4. INTERMISSION PHASE */}
+            {appPhase === "INTERMISSION" && (
+                <div style={styles.overlayContainer}>
+                    <div style={styles.consentBox}>
+                        <h2 style={styles.title}>Halfway There!</h2>
+                        <p style={styles.text}>
+                            You have successfully completed the first half of the assessment.
+                        </p>
+                        <div style={styles.guidelineBox}>
+                            <p style={{ margin: "0", color: "#555", fontSize: "15px", lineHeight: "1.8" }}>
+                                Before we begin the second half of the questions, we need to quickly recalibrate your eye-tracker to ensure the data remains highly accurate.
+                            </p>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "center", marginTop: "20px" }}>
+                            <button style={styles.primaryButton} onClick={() => setAppPhase("CALIBRATE_2")}>
+                                Start Recalibration
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
+
+            {/* 5. DONE PHASE */}
+            {appPhase === "DONE" && (
+                <div style={styles.overlayContainer}>
+                    <div style={styles.consentBox}>
+                        <h2 style={styles.title}>Session Finished</h2>
+                        <p style={styles.text}>Below is the collected session data structure sent to the backend.</p>
+                        <pre style={styles.pre}>
+                            {JSON.stringify(finalSessionData, null, 2)}
+                        </pre>
+                        <div style={{ display: "flex", justifyContent: "center" }}>
+                            <button style={styles.primaryButton} onClick={() => navigate("/course")}>
+                                Return to Course
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
         </div>
     );
 }
@@ -414,89 +1036,79 @@ export default function QuestionRunner() {
 const styles = {
     page: {
         minHeight: "100vh",
-        padding: "24px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
         background: "#f8fafc",
-        fontFamily: "Arial, sans-serif",
+        fontFamily: "sans-serif",
+    },
+    fullScreenPage: {
+        height: "100vh",
+        width: "100vw",
+        margin: 0,
+        padding: 0,
+        overflow: "hidden",
+        backgroundColor: "#ffffff",
+    },
+    overlayContainer: {
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        backgroundColor: "rgba(0, 0, 0, 0.55)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 9999,
+    },
+    consentBox: {
+        backgroundColor: "#ffffff",
+        width: "620px",
+        maxWidth: "92%",
+        borderRadius: "18px",
+        padding: "30px",
+        boxShadow: "0 12px 35px rgba(0,0,0,0.28)",
+        fontFamily: "sans-serif",
     },
     title: {
-        marginBottom: "20px",
-        fontSize: "28px",
-        fontWeight: "700",
-    },
-    subtitle: {
-        marginBottom: "16px",
-        fontSize: "22px",
-        fontWeight: "600",
+        marginTop: 0,
+        marginBottom: "12px",
+        color: "#222",
+        fontSize: "25px",
+        textAlign: "center",
     },
     text: {
-        fontSize: "15px",
-        lineHeight: 1.6,
-        marginBottom: "12px",
+        color: "#444",
+        fontSize: "16px",
+        lineHeight: "1.7",
+        textAlign: "center",
+        marginBottom: "22px",
     },
-layout: {
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "flex-start",
-},
-rightPanel: {
-    width: "100%",
-    maxWidth: "1100px",
-},
-    card: {
-        background: "#ffffff",
-        border: "1px solid #e2e8f0",
-        borderRadius: "16px",
-        padding: "20px",
-        boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
-    },
-    questionBox: {
-        minHeight: "180px",
-        border: "1px dashed #cbd5e1",
+    guidelineBox: {
+        backgroundColor: "#f4f6f8",
+        border: "1px solid #e0e0e0",
         borderRadius: "12px",
-        padding: "16px",
-        marginBottom: "16px",
-        background: "#f8fafc",
+        padding: "18px",
+        marginBottom: "20px",
     },
-    answerBox: {
-        marginBottom: "16px",
-    },
-    label: {
-        fontSize: "14px",
-        fontWeight: "600",
-        marginBottom: "8px",
-    },
-    input: {
-        width: "100%",
-        padding: "10px 12px",
-        borderRadius: "10px",
-        border: "1px solid #cbd5e1",
-        fontSize: "14px",
-        outline: "none",
-    },
-    navigationRow: {
-        display: "flex",
-        justifyContent: "space-between",
-        gap: "12px",
+    guidelineList: {
+        margin: 0,
+        paddingLeft: "22px",
+        color: "#555",
+        fontSize: "15px",
+        lineHeight: "1.8",
     },
     primaryButton: {
-        padding: "10px 16px",
+        padding: "12px 28px",
         border: "none",
         borderRadius: "10px",
-        background: "#2563eb",
-        color: "#ffffff",
-        fontSize: "14px",
-        fontWeight: "600",
+        backgroundColor: "#2563eb",
+        color: "#fff",
+        fontSize: "16px",
+        fontWeight: "bold",
         cursor: "pointer",
-    },
-    secondaryButton: {
-        padding: "10px 16px",
-        border: "1px solid #cbd5e1",
-        borderRadius: "10px",
-        background: "#ffffff",
-        color: "#0f172a",
-        fontSize: "14px",
-        fontWeight: "600",
-        cursor: "pointer",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
     },
     pre: {
         background: "#0f172a",
@@ -506,36 +1118,6 @@ rightPanel: {
         overflowX: "auto",
         fontSize: "12px",
         marginBottom: "16px",
+        maxHeight: "300px",
     },
-    infoBox: {
-    background: "#f1f5f9",
-    border: "1px solid #e2e8f0",
-    borderRadius: "12px",
-    padding: "16px",
-    marginTop: "16px",
-    marginBottom: "16px",
-},
-
-infoTitle: {
-    fontSize: "15px",
-    fontWeight: "700",
-    marginTop: 0,
-    marginBottom: "10px",
-    color: "#0f172a",
-},
-
-guidelineList: {
-    margin: 0,
-    paddingLeft: "22px",
-    fontSize: "15px",
-    lineHeight: 1.8,
-    color: "#334155",
-},
-
-noteText: {
-    fontSize: "14px",
-    lineHeight: 1.6,
-    color: "#64748b",
-    marginBottom: "16px",
-},
 };
