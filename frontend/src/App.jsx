@@ -44,7 +44,7 @@ function App() {
         <Route path="/split-screen" element={<Module2 />} />
         <Route path="/geft" element={<QuestionRunner />} />
         <Route path="/calibration" element={<CalibrationPage />} />
-        <Route path="/ahs-questionnaire" element={<AHSQuestionnaire />} /
+        <Route path="/ahs-questionnaire" element={<AHSQuestionnaire />} />
 
         <Route path="/dashboard" element={
           <PrivateRoute>
