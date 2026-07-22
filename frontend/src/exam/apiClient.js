@@ -1,0 +1,45 @@
+import { getGatewayBaseUrl } from '../config/gateway';
+
+const API_BASE = `${getGatewayBaseUrl()}/api/exam`;
+
+function authHeaders() {
+  const token = localStorage.getItem('token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function parseResponse(response) {
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.message || 'Exam service request failed.');
+  return payload;
+}
+
+export async function uploadExamMaterial({ lessonName, unitNo, document }) {
+  const body = new FormData();
+  body.append('lessonName', lessonName);
+  body.append('unitNo', unitNo);
+  body.append('document', document);
+  return parseResponse(await fetch(`${API_BASE}/materials`, {
+    method: 'POST', headers: authHeaders(), body,
+  }));
+}
+
+export async function fetchExamMaterials() {
+  const payload = await parseResponse(await fetch(`${API_BASE}/materials`, { headers: authHeaders() }));
+  return payload.materials ?? [];
+}
+
+export async function downloadExamMaterial(material) {
+  const response = await fetch(`${API_BASE}/materials/${material.id}/file`, { headers: authHeaders() });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.message || 'Document download failed.');
+  }
+  const url = URL.createObjectURL(await response.blob());
+  const anchor = window.document.createElement('a');
+  anchor.href = url;
+  anchor.download = material.originalFileName;
+  window.document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}

@@ -19,6 +19,7 @@ import EditCourse from './pages/EditCourse';
 import Gpt from './pages/Gpt';
 import LessonSummary from './pages/LessonSummary';
 import StudentAnalyse from './pages/StudentAnalyse';
+import ExamMaterialUpload from './pages/ExamMaterialUpload';
 import './index.css';
 
 // Simple PrivateRoute component
@@ -92,6 +93,11 @@ function App() {
         <Route path="/student-analyse" element={
           <PrivateRoute>
             <StudentAnalyse />
+          </PrivateRoute>
+        } />
+        <Route path="/exam-materials" element={
+          <PrivateRoute>
+            <ExamMaterialUpload />
           </PrivateRoute>
         } />
       </Routes>

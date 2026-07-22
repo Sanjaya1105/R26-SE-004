@@ -204,6 +204,15 @@ app.use(
 );
 
 app.use(
+  "/api/exam",
+  createProxyMiddleware({
+    target: BACKEND_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: (path) => `/api/exam${path}`,
+  })
+);
+
+app.use(
   "/cognitive-style",
   createProxyMiddleware({
     target: "http://localhost:8003",

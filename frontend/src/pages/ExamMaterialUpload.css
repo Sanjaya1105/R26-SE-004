@@ -1,0 +1,26 @@
+.exam-page { min-height: 100vh; background: #f3f6fa; color: #172033; }
+.exam-header { padding: 30px clamp(20px, 5vw, 70px); background: #fff; border-bottom: 1px solid #d8e0e9; display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+.exam-header p { margin: 0; color: #176b55; font-size: 12px; font-weight: 800; text-transform: uppercase; }
+.exam-header h1 { margin: 5px 0 0; font-size: clamp(28px, 4vw, 40px); letter-spacing: 0; }
+.exam-main { width: min(1160px, calc(100% - 40px)); margin: 30px auto; display: grid; gap: 24px; }
+.exam-section { padding: 24px; background: #fff; border: 1px solid #d8e0e9; border-radius: 8px; }
+.exam-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding-bottom: 15px; margin-bottom: 20px; border-bottom: 1px solid #e5eaf0; }
+.exam-heading h2 { margin: 0; font-size: 21px; }
+.exam-heading span { color: #657287; font-size: 14px; }
+.exam-form { display: grid; grid-template-columns: 2fr 1fr; gap: 18px; }
+.exam-form label { display: grid; gap: 7px; font-size: 14px; font-weight: 700; }
+.exam-form input { min-height: 44px; padding: 10px 12px; border: 1px solid #aebac8; border-radius: 6px; }
+.exam-file { grid-column: 1 / -1; }
+.exam-file small, .exam-section td small { display: block; margin-top: 4px; color: #68758a; font-weight: 400; }
+.exam-button { min-height: 40px; padding: 9px 15px; border-radius: 6px; font-weight: 750; cursor: pointer; }
+.exam-button.primary { justify-self: start; color: #fff; background: #176b55; border: 1px solid #176b55; }
+.exam-button.secondary { color: #274f7d; background: #fff; border: 1px solid #9aabbe; }
+.exam-button:disabled { opacity: .6; cursor: wait; }
+.exam-message { margin: 18px 0 0; padding: 11px 13px; border-radius: 6px; }
+.exam-message.success { color: #155844; background: #eaf7f1; border: 1px solid #a8d8c7; }
+.exam-message.error { color: #9c2632; background: #fff0f1; border: 1px solid #edb6bc; }
+.exam-table-wrap { overflow-x: auto; }
+.exam-section table { width: 100%; min-width: 760px; border-collapse: collapse; table-layout: fixed; }
+.exam-section th, .exam-section td { padding: 12px; text-align: left; border-bottom: 1px solid #e5eaf0; overflow-wrap: anywhere; }
+.exam-section th { color: #58667a; font-size: 12px; text-transform: uppercase; }
+@media (max-width: 680px) { .exam-header, .exam-heading { align-items: flex-start; flex-direction: column; } .exam-form { grid-template-columns: 1fr; } .exam-file { grid-column: auto; } }
