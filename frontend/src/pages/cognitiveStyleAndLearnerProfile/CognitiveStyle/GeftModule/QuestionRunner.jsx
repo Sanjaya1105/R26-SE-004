@@ -872,26 +872,65 @@ export default function QuestionRunner() {
         });
     };
 
-    const handleAnswerSubmit = (selectedAnswer, responseTimeMs) => {
-        const isCorrect = selectedAnswer === currentQuestion.correctAnswer;
+    // const handleAnswerSubmit = (selectedAnswer, responseTimeMs) => {
+    //     const isCorrect = selectedAnswer === currentQuestion.correctAnswer;
 
-        setAnswers((prev) => ({
-            ...prev,
-            [currentQuestion.id]: { selectedAnswer, isCorrect, responseTimeMs },
-        }));
+    //     setAnswers((prev) => ({
+    //         ...prev,
+    //         [currentQuestion.id]: { selectedAnswer, isCorrect, responseTimeMs },
+    //     }));
         
-        if (currentQuestionIndex === 2) {
-            setAppPhase("INTERMISSION");
-            setCurrentQuestionIndex(3);
-        }
-        else if (currentQuestionIndex === totalQuestions - 1) {
-            setAppPhase("DONE");
-            setSessionEndTime(Date.now());
-        }
-        else {
-            setCurrentQuestionIndex((prev) => prev + 1);
-        }
-    };
+    //     if (currentQuestionIndex === 2) {
+    //         setAppPhase("INTERMISSION");
+    //         setCurrentQuestionIndex(3);
+    //     }
+    //     else if (currentQuestionIndex === totalQuestions - 1) {
+    //         setAppPhase("DONE");
+    //         setSessionEndTime(Date.now());
+    //     }
+    //     else {
+    //         setCurrentQuestionIndex((prev) => prev + 1);
+    //     }
+    // };
+
+    const handleAnswerSubmit = (selectedAnswer, responseTimeMs) => {
+    const isCorrect = selectedAnswer === currentQuestion.correctAnswer;
+
+    // 1. Update the state as usual (this happens in the background)
+    setAnswers((prev) => ({
+        ...prev,
+        [currentQuestion.id]: { selectedAnswer, isCorrect, responseTimeMs },
+    }));
+    
+    if (currentQuestionIndex === 2) {
+        setAppPhase("INTERMISSION");
+        setCurrentQuestionIndex(3);
+    }
+    else if (currentQuestionIndex === totalQuestions - 1) {
+        // 2. We are on the last question! 
+        const endTime = Date.now();
+        setSessionEndTime(endTime);
+
+        // 3. Manually bundle the data because the state hasn't updated yet!
+        const partialSessionData = {
+            sessionStartTime,
+            sessionEndTime: endTime,
+            totalQuestions,
+            gazeWindows,
+            visualTaskAnswers: {
+                ...answers, // all previous answers
+                [currentQuestion.id]: { selectedAnswer, isCorrect, responseTimeMs } // + this final answer
+            }
+        };
+
+        // 4. Pass the baton to the new page
+        navigate("/ahs-questionnaire", { state: { visualTaskData: partialSessionData } });
+    }
+    else {
+        setCurrentQuestionIndex((prev) => prev + 1);
+    }
+};
+
 
     const finalSessionData = {
         sessionStartTime,

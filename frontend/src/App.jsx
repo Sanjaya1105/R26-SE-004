@@ -5,6 +5,7 @@ import AssistQuestionPage from './pages/cognitiveStyleAndLearnerProfile/Learner 
 import CalibrationPage from './pages/cognitiveStyleAndLearnerProfile/CognitiveStyle/Calibration/Calibration';
 import Module2 from './pages/cognitiveStyleAndLearnerProfile/CognitiveStyle/SplitScreenModule/Module2';
 import QuestionRunner from './pages/cognitiveStyleAndLearnerProfile/CognitiveStyle/GeftModule/QuestionRunner';
+import AHSQuestionnaire from './pages/cognitiveStyleAndLearnerProfile/CognitiveStyle/GeftModule/AHS_Questionnaire/AHSQuestionnaire';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
@@ -43,7 +44,7 @@ function App() {
         <Route path="/split-screen" element={<Module2 />} />
         <Route path="/geft" element={<QuestionRunner />} />
         <Route path="/calibration" element={<CalibrationPage />} />
-
+        <Route path="/ahs-questionnaire" element={<AHSQuestionnaire />} /
 
         <Route path="/dashboard" element={
           <PrivateRoute>
