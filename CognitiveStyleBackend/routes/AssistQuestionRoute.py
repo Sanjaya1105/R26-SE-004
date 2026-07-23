@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from models.AssistQuestionModel import AssistQuestionCreate
+from models.AssistQuestionModel import (AssistQuestionCreate,AssistQuestionResponse)
 from services.AssistQuestionService import (
     create_assist_question,
     get_all_assist_questions,
@@ -10,10 +10,12 @@ from services.AssistQuestionService import (
 router = APIRouter(prefix="/assist-questions", tags=["Assist Questions"])
 
 
-@router.post("/")
+@router.post("/", response_model=AssistQuestionResponse)
 async def submit_assist_questions(payload: AssistQuestionCreate):
-    return await create_assist_question(payload.model_dump())
-
+    try:
+        return await create_assist_question(payload.model_dump())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/")
 async def list_all_assist_questions():
