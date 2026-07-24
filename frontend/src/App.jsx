@@ -21,6 +21,7 @@ import Gpt from './pages/Gpt';
 import LessonSummary from './pages/LessonSummary';
 import StudentAnalyse from './pages/StudentAnalyse';
 import ExamMaterialUpload from './pages/ExamMaterialUpload';
+import ObjectSpacialVerbalQuestionnaire from './pages/cognitiveStyleAndLearnerProfile/CognitiveStyle/SplitScreenModule/ObjectSpacialVerbalQuestionnaire/ObjectSpacialVerbalQuestionnaire';
 import './index.css';
 
 // Simple PrivateRoute component
@@ -45,6 +46,7 @@ function App() {
         <Route path="/geft" element={<QuestionRunner />} />
         <Route path="/calibration" element={<CalibrationPage />} />
         <Route path="/ahs-questionnaire" element={<AHSQuestionnaire />} />
+        <Route path="/visualverbalquestionnaire" element={<ObjectSpacialVerbalQuestionnaire />} />
 
         <Route path="/dashboard" element={
           <PrivateRoute>
