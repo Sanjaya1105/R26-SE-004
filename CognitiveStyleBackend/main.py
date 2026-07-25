@@ -13,6 +13,7 @@ from routes.AssistQuestionRoute import router as assist_question_runner_gaze_rou
 from routes.LearnerProfileRoute import router as learner_profile_router
 from routes.aiModelRoutes.VisualVerbalRoute import router as visual_verbal_ml_router
 from routes.AhsQuestionnaireRouter import router as ahs_questionnaire_router
+from routes.OSVQuestionnaireRouter import router as osv_questionnaire_router
 
 app = FastAPI()
 
@@ -50,6 +51,7 @@ app.include_router(learner_profile_router)
 
 app.include_router(ahs_questionnaire_router)
 
+app.include_router(osv_questionnaire_router)
 if __name__ == "__main__":
     import uvicorn
     # Make sure "main:app" matches your filename (main.py) and FastAPI instance name (app)

@@ -54,7 +54,7 @@ const OSIVQ_QUESTIONS = [
 const scaleOptions = [1, 2, 3, 4, 5];
 
 export default function ObjectSpacialVerbalQuestionnaire() {
-  const BACKEND_URL = ""; 
+  const BACKEND_URL = "http://localhost:4000/cognitive-style/osv-questions/create"; 
   const location = useLocation();
   const navigate = useNavigate();
 
