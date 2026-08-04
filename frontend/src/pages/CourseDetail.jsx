@@ -1397,7 +1397,7 @@ const CourseDetail = () => {
                                               <a
                                                 href={sub.videoUrl}
                                                 rel="noopener noreferrer"
-                                                style={{ color: '#93c5fd' }}
+                                                style={{ color: '#758292' }}
                                                 onClick={(e) => {
                                                   if (
                                                     e.metaKey ||
