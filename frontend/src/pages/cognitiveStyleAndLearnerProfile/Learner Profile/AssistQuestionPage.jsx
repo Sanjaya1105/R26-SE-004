@@ -281,21 +281,30 @@
 // );
 // }
 
+
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+// These are the exact 18 items from the short ASSIST scale
 const questions = [
-  "I usually try to understand the meaning of what I learn rather than just memorising it.",
-  "I try to relate new ideas to concepts I already know.",
-  "When learning a new topic, I try to see how all the ideas fit together.",
-  "I organise my study time carefully to make the best use of it.",
-  "I follow a clear step-by-step approach when studying.",
-  "I usually plan my work in advance rather than leaving it to the last minute.",
-  "I focus mainly on memorising information rather than understanding it.",
-  "I study only what is necessary to pass exams.",
-  "Sometimes the material I study feels like unrelated pieces of information.",
-  "I often feel overwhelmed by the amount of material I need to learn.",
-  "I worry about whether I can manage my academic work effectively."
+  "I often have trouble in making sense of the things I have to remember.",
+  "When I'm reading an article or a book, I try to find out for myself exactly what the author means.",
+  "I organize my study time carefully to make the best use of it.",
+  "There's not much of the work here that I find interesting or relevant.",
+  "I work steadily through the term or semester, rather than leave it all until the last minute.",
+  "Before tackling a problem or assignment, I first try to work out what lies behind it.",
+  "I'm pretty good at getting down to work whenever I need to.",
+  "Much of what I'm studying makes little sense: it's like unrelated bits and pieces.",
+  "I put a lot of effort into studying because I'm determined to do well.",
+  "When I'm working on a new topic, I try to see in my own mind how all the ideas fit together.",
+  "I don't find it at all difficult to motivate myself.",
+  "Often I find myself questioning things I hear in lectures or read in books.",
+  "I think I'm quite systematic and organised when it comes to revising for exams.",
+  "Often I feel I'm drowning in the sheer amount of material we're having to cope with.",
+  "Ideas in course books or articles often set me off on long chains of thought of my own.",
+  "I'm not really sure what's important in lectures, so I try to get down all I can.",
+  "When I read, I examine the details carefully to see how they fit in with what's being said.",
+  "I often worry about whether I'll be able to cope with the work properly."
 ];
 
 const scaleOptions = [1, 2, 3, 4, 5];
@@ -362,7 +371,7 @@ export default function AssistQuestionPage() {
 
       setSuccess("Responses collected successfully.");
       console.log("Submitted payload:", payload);
-      navigate("/calibration");
+      navigate("/split-screen");
     } catch (submitError) {
       setError("Submission failed. Add your backend URL and try again.");
       console.error(submitError);
@@ -409,12 +418,43 @@ export default function AssistQuestionPage() {
               color: "var(--text-muted)",
               fontSize: "0.95rem",
               lineHeight: 1.6,
+              marginBottom: "1.5rem",
             }}
           >
-            Answer each question from 1 to 5. These responses can later be used
-            to predict the learner profile: Organized Deep, Unorganized Deep,
-            Unreflective, or Dissonant.
+            Answer each question based on your actual ways of studying. 
+            These responses will be used to calculate your dominant learner profile: 
+            Deep Approach, Strategic Approach, or Surface Approach.
           </p>
+
+          {/* New Scale Description Box */}
+          <div 
+            style={{
+              backgroundColor: "rgba(37, 99, 235, 0.05)",
+              borderLeft: "4px solid var(--primary)",
+              padding: "1.25rem",
+              borderRadius: "0 8px 8px 0",
+            }}
+          >
+            <strong style={{ display: "block", marginBottom: "0.5rem", color: "var(--text)", fontSize: "1rem" }}>
+              Rating Scale Guide:
+            </strong>
+            <ul style={{ 
+              margin: 0, 
+              paddingLeft: "1.25rem", 
+              color: "var(--text-muted)", 
+              fontSize: "0.95rem", 
+              lineHeight: 1.6,
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+              gap: "0.5rem"
+            }}>
+              <li><strong>1</strong> = Disagree</li>
+              <li><strong>2</strong> = Disagree somewhat</li>
+              <li><strong>3</strong> = Unsure</li>
+              <li><strong>4</strong> = Agree somewhat</li>
+              <li><strong>5</strong> = Agree</li>
+            </ul>
+          </div>
         </div>
 
         <form
@@ -527,22 +567,12 @@ export default function AssistQuestionPage() {
           <div
             style={{
               display: "flex",
-              justifyContent: "space-between",
+              justifyContent: "flex-end",
               alignItems: "center",
               gap: "1rem",
               paddingTop: "0.5rem",
-              flexWrap: "wrap",
             }}
           >
-            <p
-              style={{
-                color: "var(--text-muted)",
-                fontSize: "0.875rem",
-              }}
-            >
-              Scale: 1 = strongly disagree, 5 = strongly agree
-            </p>
-
             <button
               type="submit"
               disabled={loading}
