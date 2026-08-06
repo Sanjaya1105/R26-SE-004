@@ -28,6 +28,30 @@ export async function fetchExamMaterials() {
   return payload.materials ?? [];
 }
 
+export async function fetchExamLessons() {
+  const payload = await parseResponse(await fetch(`${API_BASE}/materials/lessons`, {
+    headers: authHeaders(),
+  }));
+  return payload.lessons ?? [];
+}
+
+export async function generateExamQuiz({ lessonName, unitNo }) {
+  const payload = await parseResponse(await fetch(`${API_BASE}/quizzes/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ lessonName, unitNo }),
+  }));
+  return payload.quiz;
+}
+
+export async function checkExamAnswers(quizId, answers) {
+  return parseResponse(await fetch(`${API_BASE}/quizzes/${quizId}/check`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ answers }),
+  }));
+}
+
 export async function downloadExamMaterial(material) {
   const response = await fetch(`${API_BASE}/materials/${material.id}/file`, { headers: authHeaders() });
   if (!response.ok) {

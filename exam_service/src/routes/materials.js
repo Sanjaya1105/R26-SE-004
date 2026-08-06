@@ -130,6 +130,21 @@ router.get('/', requireTeacher, async (req, res) => {
   }
 });
 
+router.get('/lessons', requireTeacher, async (_req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT lesson_name AS lessonName, unit_no AS unitNo, COUNT(*) AS materialCount
+       FROM exam_materials
+       GROUP BY lesson_name, unit_no
+       ORDER BY lesson_name ASC, unit_no ASC`
+    );
+    return res.json({ lessons: rows });
+  } catch (error) {
+    console.error('Exam lessons list failed:', error);
+    return res.status(500).json({ message: 'Failed to load exam lessons.' });
+  }
+});
+
 router.get('/:id/content', requireTeacher, async (req, res) => {
   try {
     const [materials] = await pool.execute(

@@ -73,40 +73,70 @@ def _signal_to_teacher_phrase(signal: str) -> str:
 
 
 
+def _canonical_feature_name(signal: str) -> str:
+    normalized_signal = signal.strip().lower()
+    for feature_name in sorted(RAW_FEATURE_FIELDS, key=len, reverse=True):
+        if feature_name.lower() in normalized_signal:
+            return feature_name
+    return normalized_signal
+
+
 def _top_aggregate_signals(
     *,
     lime_factors: list[dict[str, Any]],
     shap_values: list[dict[str, Any]],
     limit: int = 3,
 ) -> list[dict[str, Any]]:
-    combined: list[dict[str, Any]] = []
+    # Negative and neutral contributions reduce or do not affect cognitive load,
+    # so they must not appear among teacher-facing load-increasing factors.
+    positive_lime_factors = [
+        (factor, float(factor.get("weight", 0.0)))
+        for factor in lime_factors
+        if float(factor.get("weight", 0.0)) > 0
+    ]
+    positive_shap_values = [
+        (item, float(item.get("shap_value", 0.0)))
+        for item in shap_values
+        if float(item.get("shap_value", 0.0)) > 0
+    ]
 
-    for factor in lime_factors:
-        weight = float(factor.get("weight", 0.0))
-        combined.append(
-            {
-                "source": "lime",
-                "signal": str(factor.get("rule", "unknown")),
-                "raw_value": weight,
-                "strength": abs(weight),
-                "impact": "positive" if weight > 0 else "negative" if weight < 0 else "neutral",
-            }
-        )
+    # Max normalization puts each explainer on a stable 0-1 scale before their
+    # scores are combined. Empty inputs retain a zero maximum and skip division.
+    max_lime_weight = max((weight for _, weight in positive_lime_factors), default=0.0)
+    max_shap_value = max((shap_value for _, shap_value in positive_shap_values), default=0.0)
+    combined_by_feature: dict[str, float] = {}
 
-    for item in shap_values:
-        shap_value = float(item.get("shap_value", 0.0))
-        combined.append(
-            {
-                "source": "shap",
-                "signal": str(item.get("feature", "unknown")),
-                "raw_value": shap_value,
-                "strength": abs(shap_value),
-                "impact": "positive" if shap_value > 0 else "negative" if shap_value < 0 else "neutral",
-            }
-        )
+    for factor, weight in positive_lime_factors:
+        feature_name = _canonical_feature_name(str(factor.get("rule", "unknown")))
+        normalized_weight = weight / max_lime_weight if max_lime_weight else 0.0
+        combined_by_feature[feature_name] = combined_by_feature.get(feature_name, 0.0) + normalized_weight
 
-    ranked = sorted(combined, key=lambda entry: entry["strength"], reverse=True)
-    return ranked[: max(1, limit)]
+    for item, shap_value in positive_shap_values:
+        feature_name = _canonical_feature_name(str(item.get("feature", "unknown")))
+        normalized_shap_value = shap_value / max_shap_value if max_shap_value else 0.0
+        combined_by_feature[feature_name] = combined_by_feature.get(feature_name, 0.0) + normalized_shap_value
+
+    max_combined_importance = max(combined_by_feature.values(), default=0.0)
+
+    # Rank by combined importance, using the canonical name as a deterministic
+    # tie-breaker, and slice the strongest three load-increasing features.
+    ranked_features = sorted(
+        combined_by_feature.items(),
+        key=lambda item: (-item[1], item[0]),
+    )
+
+    return [
+        {
+            "source": "combined",
+            "signal": feature_name,
+            "raw_value": combined_importance,
+            "strength": combined_importance,
+            "normalized_value": combined_importance / max_combined_importance if max_combined_importance else 0.0,
+            "normalized_strength": combined_importance / max_combined_importance if max_combined_importance else 0.0,
+            "impact": "positive",
+        }
+        for feature_name, combined_importance in ranked_features[: max(1, limit)]
+    ]
 
 
 

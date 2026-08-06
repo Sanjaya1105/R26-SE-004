@@ -86,6 +86,39 @@ async function initializeDatabase() {
         REFERENCES exam_materials(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
+
+  await pool.execute(`
+    CREATE TABLE IF NOT EXISTS exam_quizzes (
+      id CHAR(36) NOT NULL,
+      teacher_id VARCHAR(64) NOT NULL,
+      lesson_name VARCHAR(255) NOT NULL,
+      unit_no VARCHAR(50) NOT NULL,
+      model_name VARCHAR(100) NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      INDEX idx_quizzes_teacher_created (teacher_id, created_at),
+      INDEX idx_quizzes_lesson_unit (lesson_name, unit_no)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await pool.execute(`
+    CREATE TABLE IF NOT EXISTS exam_quiz_questions (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      quiz_id CHAR(36) NOT NULL,
+      question_index TINYINT UNSIGNED NOT NULL,
+      question_text TEXT NOT NULL,
+      option_a TEXT NOT NULL,
+      option_b TEXT NOT NULL,
+      option_c TEXT NOT NULL,
+      option_d TEXT NOT NULL,
+      correct_option ENUM('A', 'B', 'C', 'D') NOT NULL,
+      explanation TEXT NOT NULL,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_quiz_question (quiz_id, question_index),
+      CONSTRAINT fk_questions_quiz FOREIGN KEY (quiz_id)
+        REFERENCES exam_quizzes(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
 }
 
 module.exports = { pool, initializeDatabase };

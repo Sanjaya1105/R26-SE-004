@@ -30,6 +30,17 @@ router.get('/materials', verifyToken, async (req, res) => {
   }
 });
 
+router.get('/materials/lessons', verifyToken, async (req, res) => {
+  try {
+    const upstream = await axios.get(`${examServiceUrl}/materials/lessons`, {
+      headers: teacherHeaders(req),
+    });
+    return res.status(upstream.status).json(upstream.data);
+  } catch (error) {
+    return upstreamError(res, error);
+  }
+});
+
 router.post('/materials', verifyToken, (req, res, next) => {
   upload.single('document')(req, res, (error) => {
     if (!error) return next();
@@ -95,6 +106,31 @@ router.get('/materials/:id/images/:imageId', verifyToken, async (req, res) => {
     if (upstream.headers['content-type']) res.set('Content-Type', upstream.headers['content-type']);
     if (upstream.headers['cache-control']) res.set('Cache-Control', upstream.headers['cache-control']);
     return res.status(upstream.status).send(upstream.data);
+  } catch (error) {
+    return upstreamError(res, error);
+  }
+});
+
+router.post('/quizzes/generate', verifyToken, async (req, res) => {
+  try {
+    const upstream = await axios.post(`${examServiceUrl}/quizzes/generate`, req.body, {
+      headers: teacherHeaders(req),
+      timeout: Number(process.env.EXAM_GENERATION_TIMEOUT_MS || 620000),
+    });
+    return res.status(upstream.status).json(upstream.data);
+  } catch (error) {
+    return upstreamError(res, error);
+  }
+});
+
+router.post('/quizzes/:id/check', verifyToken, async (req, res) => {
+  try {
+    const upstream = await axios.post(
+      `${examServiceUrl}/quizzes/${req.params.id}/check`,
+      req.body,
+      { headers: teacherHeaders(req) }
+    );
+    return res.status(upstream.status).json(upstream.data);
   } catch (error) {
     return upstreamError(res, error);
   }
