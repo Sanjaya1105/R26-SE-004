@@ -51,6 +51,11 @@ uvicorn main:app --host 0.0.0.0 --port 8110
 
 On startup, the service creates the `lime-data` database if it does not exist and then creates the `cognitive-load` table automatically.
 
+Successful aggregate analysis also creates or updates one
+`student-lesson-top-signals` row per student and lesson. The row stores the
+three strongest combined LIME/SHAP signal names, their raw values, normalized
+values, and the summary prediction ID that produced them.
+
 If you prefer manual setup, you can still run [db/init.sql](db/init.sql).
 
 ## API

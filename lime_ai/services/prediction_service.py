@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from models.prediction import CognitiveLoadPrediction
 from models.student_lesson_summary import StudentLessonSummary
+from models.student_lesson_top_signals import StudentLessonTopSignals
 from schemas.prediction import AggregateExplanationRequest, CognitiveLoadInput
 from services.human_explanation_service import generate_human_explanation
 from services.lecture_support_service import generate_lecture_support
@@ -140,7 +141,48 @@ def _top_aggregate_signals(
 
 
 
-def generate_aggregate_explanation(payload: AggregateExplanationRequest) -> dict[str, Any]:
+def _save_top_aggregate_signals(
+    db: Session,
+    payload: AggregateExplanationRequest,
+    top_signals: list[dict[str, Any]],
+) -> StudentLessonTopSignals:
+    saved = (
+        db.query(StudentLessonTopSignals)
+        .filter(
+            StudentLessonTopSignals.student_id == payload.student_id,
+            StudentLessonTopSignals.lesson_id == payload.lesson_id,
+        )
+        .one_or_none()
+    )
+
+    if saved is None:
+        saved = StudentLessonTopSignals(
+            student_id=payload.student_id,
+            lesson_id=payload.lesson_id,
+            prediction_id=payload.prediction_id,
+        )
+        db.add(saved)
+
+    saved.prediction_id = payload.prediction_id
+    for rank in range(1, 4):
+        signal = top_signals[rank - 1] if rank <= len(top_signals) else None
+        setattr(saved, f"top_{rank}_signal", signal["signal"] if signal else None)
+        setattr(saved, f"top_{rank}_value", float(signal["raw_value"]) if signal else None)
+        setattr(
+            saved,
+            f"top_{rank}_normalized_value",
+            float(signal["normalized_value"]) if signal else None,
+        )
+
+    db.commit()
+    db.refresh(saved)
+    return saved
+
+
+def generate_aggregate_explanation(
+    db: Session,
+    payload: AggregateExplanationRequest,
+) -> dict[str, Any]:
     lime_factors = [factor.model_dump(mode="json") for factor in payload.lime_factors]
     shap_values = [item.model_dump(mode="json") for item in payload.shap_values]
     top_signals = _top_aggregate_signals(
@@ -188,6 +230,8 @@ def generate_aggregate_explanation(payload: AggregateExplanationRequest) -> dict
             },
         ) from exc
 
+    saved_signals = _save_top_aggregate_signals(db, payload, top_signals)
+
     return {
         "success": True,
         "message": "Aggregate explanation generated successfully.",
@@ -199,6 +243,7 @@ def generate_aggregate_explanation(payload: AggregateExplanationRequest) -> dict
             "predicted_score": payload.predicted_score,
             "confidence": payload.confidence,
             "top_signals": top_signals,
+            "top_signals_record_id": saved_signals.id,
             "human_explanation": explanation_text,
             "explanation_source": "ollama",
             "study_technique": study_technique,

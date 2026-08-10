@@ -94,5 +94,8 @@ def get_prediction_lime_explanation(
 
 
 @router.post("/aggregate-explanation")
-def create_aggregate_explanation(payload: AggregateExplanationRequest):
-    return generate_aggregate_explanation(payload)
+def create_aggregate_explanation(
+    payload: AggregateExplanationRequest,
+    db: Session = Depends(get_db),
+):
+    return generate_aggregate_explanation(db, payload)

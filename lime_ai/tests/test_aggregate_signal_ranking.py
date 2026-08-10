@@ -1,6 +1,12 @@
 import unittest
 
-from services.prediction_service import _top_aggregate_signals
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from config.database import Base
+from models.student_lesson_top_signals import StudentLessonTopSignals
+from schemas.prediction import AggregateExplanationRequest
+from services.prediction_service import _save_top_aggregate_signals, _top_aggregate_signals
 
 
 class AggregateSignalRankingTests(unittest.TestCase):
@@ -70,6 +76,53 @@ class AggregateSignalRankingTests(unittest.TestCase):
         )
 
         self.assertEqual(first, second)
+
+
+class AggregateSignalPersistenceTests(unittest.TestCase):
+    def setUp(self):
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        self.db = sessionmaker(bind=engine)()
+        self.payload = AggregateExplanationRequest(
+            lesson_id="lesson-7",
+            prediction_id=42,
+            student_id="student-9",
+            predicted_cognitive_load="High",
+            predicted_score=4,
+            confidence=0.91,
+            lime_factors=[],
+            shap_values=[],
+        )
+
+    def tearDown(self):
+        self.db.close()
+
+    def test_saves_top_three_and_updates_same_student_lesson(self):
+        initial = [
+            {"signal": "pause_frequency", "raw_value": 2.0, "normalized_value": 1.0},
+            {"signal": "rewatch_segments", "raw_value": 1.2, "normalized_value": 0.6},
+            {"signal": "time_on_content", "raw_value": 0.8, "normalized_value": 0.4},
+        ]
+        first = _save_top_aggregate_signals(self.db, self.payload, initial)
+
+        self.assertEqual(first.student_id, "student-9")
+        self.assertEqual(first.lesson_id, "lesson-7")
+        self.assertEqual(first.top_1_signal, "pause_frequency")
+        self.assertEqual(first.top_3_value, 0.8)
+
+        self.payload.prediction_id = 43
+        updated = _save_top_aggregate_signals(
+            self.db,
+            self.payload,
+            [{"signal": "idle_duration_video", "raw_value": 1.0, "normalized_value": 1.0}],
+        )
+
+        self.assertEqual(updated.id, first.id)
+        self.assertEqual(updated.prediction_id, 43)
+        self.assertEqual(updated.top_1_signal, "idle_duration_video")
+        self.assertIsNone(updated.top_2_signal)
+        self.assertIsNone(updated.top_3_value)
+        self.assertEqual(self.db.query(StudentLessonTopSignals).count(), 1)
 
 
 if __name__ == "__main__":

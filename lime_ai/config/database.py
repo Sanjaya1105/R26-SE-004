@@ -42,6 +42,7 @@ def get_engine():
 def init_db() -> None:
     from models.prediction import CognitiveLoadPrediction  # noqa: F401
     from models.student_lesson_summary import StudentLessonSummary  # noqa: F401
+    from models.student_lesson_top_signals import StudentLessonTopSignals  # noqa: F401
 
     db_engine = get_engine()
     Base.metadata.create_all(bind=db_engine)

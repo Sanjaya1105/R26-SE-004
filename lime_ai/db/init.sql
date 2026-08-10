@@ -58,3 +58,24 @@ CREATE TABLE IF NOT EXISTS `student-lesson-summary` (
     UNIQUE KEY uq_student_lesson (student_id, lesson_id),
     INDEX idx_summary_student_lesson (student_id, lesson_id)
 );
+
+CREATE TABLE IF NOT EXISTS `student-lesson-top-signals` (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    student_id VARCHAR(50) NOT NULL,
+    lesson_id VARCHAR(50) NOT NULL,
+    prediction_id BIGINT NOT NULL,
+    top_1_signal VARCHAR(255) DEFAULT NULL,
+    top_1_value FLOAT DEFAULT NULL,
+    top_1_normalized_value FLOAT DEFAULT NULL,
+    top_2_signal VARCHAR(255) DEFAULT NULL,
+    top_2_value FLOAT DEFAULT NULL,
+    top_2_normalized_value FLOAT DEFAULT NULL,
+    top_3_signal VARCHAR(255) DEFAULT NULL,
+    top_3_value FLOAT DEFAULT NULL,
+    top_3_normalized_value FLOAT DEFAULT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_top_signals_student_lesson (student_id, lesson_id),
+    INDEX idx_top_signals_prediction (prediction_id)
+);
