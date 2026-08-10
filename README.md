@@ -43,6 +43,7 @@ The root README was prepared after reviewing the current `main` branch and the a
 | `sharp_ai/` | FastAPI SHAP explanation service for saved cognitive-load predictions. |
 | `explanable_ai/` | FastAPI explainability backend for class, lesson, student summaries, SHAP/LIME explanations, and GPT-generated explanation text. |
 | `CognitiveStyleBackend/` | FastAPI backend for visual-verbal, analytic-wholistic, gaze, cursor, question-runner, assist-question, and learner-profile features. |
+| `cognitive_style_ai/` | Combined LIME + SHAP service for persisted student cognitive-style explanations and top-three feature aggregation. |
 | `report_assets/` | Project report/supporting assets. |
 | `_pdf_extracts/` | Local extracted PDF output/artifacts. |
 
@@ -60,6 +61,7 @@ API Gateway :4000
   |-- /api/cognitive-load -> COGNITIVE-LOAD-API
   |-- /api/lime-ai -> lime_ai :8110
   |-- /api/shap-ai -> sharp_ai :8011
+  |-- /api/cognitive-style-ai -> cognitive_style_ai :8112
   |-- /api/explainable -> explanable_ai :8000
   |-- /api/recommendation -> recommendation_ai
   |-- /cognitive-style -> CognitiveStyleBackend :8003
@@ -88,6 +90,7 @@ API Gateway :4000
 | LIME AI service | `http://localhost:8110` |
 | SHAP AI service | `http://localhost:8011` |
 | Cognitive style backend | `http://localhost:8003` |
+| Cognitive style explainability | `http://localhost:8112` |
 
 Note: both `gpt-service` and `recommendation_ai` default to port `5002`. Run one of them with a custom `PORT`, then update `GPT_SERVICE_URL` or `RECOMMENDATION_AI_URL` in `api-gateway/.env`.
 
@@ -125,6 +128,7 @@ SHAP_AI_SERVICE_URL=http://localhost:8011
 RECOMMENDATION_AI_URL=http://localhost:5003
 COGNITIVE_LOAD_SERVICE_URL=http://127.0.0.1:8021
 COGNITIVE_STYLE_SERVICE_URL=http://localhost:8003
+COGNITIVE_STYLE_AI_URL=http://localhost:8112
 GATEWAY_SHARED_SECRET=change_this_secret
 ```
 

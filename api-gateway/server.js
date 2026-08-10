@@ -27,6 +27,8 @@ const COGNITIVE_LOAD_SERVICE_URL =
   process.env.COGNITIVE_LOAD_SERVICE_URL || "http://localhost:8000";
 const COGNITIVE_STYLE_SERVICE_URL = 
   process.env.COGNITIVE_STYLE_SERVICE_URL || "http://localhost:8003";
+const COGNITIVE_STYLE_AI_URL =
+  process.env.COGNITIVE_STYLE_AI_URL || "http://localhost:8112";
 
 const allowedOrigins = [
   FRONTEND_URL,
@@ -189,6 +191,15 @@ app.use(
   "/api/shap-ai",
   createProxyMiddleware({
     target: SHAP_AI_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: (path) => `/api${path}`,
+  })
+);
+
+app.use(
+  "/api/cognitive-style-ai",
+  createProxyMiddleware({
+    target: COGNITIVE_STYLE_AI_URL,
     changeOrigin: true,
     pathRewrite: (path) => `/api${path}`,
   })

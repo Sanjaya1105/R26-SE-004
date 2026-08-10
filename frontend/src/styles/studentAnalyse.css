@@ -568,6 +568,87 @@
   border-color: #86efac;
 }
 
+.student-analyse-toolbar .analyse-style-btn {
+  background: linear-gradient(135deg, #7c3aed, #4f46e5);
+  border-color: #7c3aed;
+}
+
+.cognitive-style-panel {
+  border-top: 4px solid #7c3aed;
+}
+
+.style-summary-row {
+  display: flex;
+  gap: 2rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border-radius: 10px;
+  background: #f5f3ff;
+}
+
+.style-summary-row > div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.style-summary-label {
+  color: #64748b;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+.style-name {
+  color: #6d28d9;
+  text-transform: capitalize;
+}
+
+.style-feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.style-feature-card {
+  position: relative;
+  padding: 1rem;
+  border: 1px solid #ddd6fe;
+  border-radius: 12px;
+  background: #faf5ff;
+}
+
+.style-feature-card h4 {
+  margin: 0.25rem 0 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.style-feature-card p {
+  margin: 0.35rem 0;
+  color: #475569;
+}
+
+.feature-rank {
+  color: #7c3aed;
+  font-weight: 800;
+}
+
+.style-raw-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.style-raw-grid details {
+  min-width: 0;
+}
+
+.style-raw-grid summary {
+  cursor: pointer;
+  color: #5b21b6;
+  font-weight: 700;
+  padding: 0.75rem 0;
+}
+
 @media (max-width: 768px) {
   .student-analyse-shell {
     padding: 1rem;
@@ -575,5 +656,10 @@
 
   .student-analyse-header h1 {
     font-size: 1.45rem;
+  }
+
+  .style-feature-grid,
+  .style-raw-grid {
+    grid-template-columns: 1fr;
   }
 }
