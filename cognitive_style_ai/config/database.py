@@ -43,7 +43,7 @@ def init_db() -> None:
             connection.execute(
                 text(
                     "ALTER TABLE `cognitive-style-analysis` "
-                    "ADD COLUMN `analysis_status` VARCHAR(20) NOT NULL DEFAULT 'pending'"
+                    "ADD COLUMN `analysis_status` ENUM('pending','completed') NOT NULL DEFAULT 'pending'"
                 )
             )
             connection.execute(
@@ -52,6 +52,22 @@ def init_db() -> None:
                     "WHERE lime_output IS NOT NULL AND shap_output IS NOT NULL AND top_features IS NOT NULL"
                 )
             )
+        connection.execute(
+            text(
+                "UPDATE `cognitive-style-analysis` "
+                "SET analysis_status = CASE "
+                "WHEN lime_output IS NOT NULL AND shap_output IS NOT NULL AND top_features IS NOT NULL "
+                "THEN 'completed' ELSE 'pending' END "
+                "WHERE analysis_status IS NULL OR analysis_status NOT IN ('pending', 'completed')"
+            )
+        )
+        connection.execute(
+            text(
+                "ALTER TABLE `cognitive-style-analysis` "
+                "MODIFY COLUMN `analysis_status` "
+                "ENUM('pending','completed') NOT NULL DEFAULT 'pending'"
+            )
+        )
         if "updated_at" not in columns:
             connection.execute(
                 text(

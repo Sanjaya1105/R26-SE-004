@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, Integer, JSON, String, Text
+from sqlalchemy import DateTime, Enum, Float, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from config.database import Base
@@ -14,7 +14,13 @@ class CognitiveStyleAnalysis(Base):
     student_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     session_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     source_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)
-    analysis_status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", index=True)
+    analysis_status: Mapped[str] = mapped_column(
+        Enum("pending", "completed", name="cognitive_style_analysis_status"),
+        nullable=False,
+        default="pending",
+        server_default="pending",
+        index=True,
+    )
     cognitive_style: Mapped[str | None] = mapped_column(String(50), nullable=True)
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     feature_values: Mapped[dict] = mapped_column(JSON, nullable=False)
