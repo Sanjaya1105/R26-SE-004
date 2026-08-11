@@ -13,6 +13,7 @@ from models.student_lesson_top_signals import StudentLessonTopSignals
 from schemas.prediction import AggregateExplanationRequest, CognitiveLoadInput
 from services.human_explanation_service import generate_human_explanation
 from services.lecture_support_service import generate_lecture_support
+from services.local_model import LocalModelError, predict_scores
 from services.model_client import ModelClientError, request_prediction
 from services.ollama_client import OllamaServiceError
 from services.study_technique_service import generate_study_techniques
@@ -26,15 +27,6 @@ RAW_FEATURE_FIELDS = [
     "idle_duration_video",
     "time_on_content",
 ]
-
-INT_FEATURE_FIELDS = {
-    "pause_frequency",
-    "navigation_count_video",
-    "rewatch_segments",
-    "playback_rate_change",
-    "idle_duration_video",
-    "time_on_content",
-}
 
 # These columns remain in the shared table so existing installations and old
 # prediction rows continue to work. They are no longer accepted as model inputs.
@@ -632,44 +624,8 @@ def aggregate_and_save_student_lesson_summary(
     }
 
 
-def _row_to_model_payload(row: CognitiveLoadPrediction, feature_values: dict[str, float] | None = None) -> dict[str, Any]:
-    values = feature_values or {
-        name: float(getattr(row, name))
-        for name in RAW_FEATURE_FIELDS
-    }
-
-    normalized_values: dict[str, Any] = {}
-    for name in RAW_FEATURE_FIELDS:
-        value = float(values[name])
-        if name in INT_FEATURE_FIELDS:
-            normalized_values[name] = max(0, int(round(value)))
-        else:
-            normalized_values[name] = value
-
-    return {
-        "student_id": row.student_id,
-        "lesson_id": row.lesson_id,
-        "session_id": row.session_id,
-        "minute_index": row.minute_index,
-        "window_start": row.window_start.isoformat() if row.window_start else None,
-        "window_end": row.window_end.isoformat() if row.window_end else None,
-        **normalized_values,
-    }
-
-
-def _predict_scores_for_matrix(feature_matrix: np.ndarray, base_row: CognitiveLoadPrediction) -> np.ndarray:
-    scores: list[float] = []
-
-    for vector in feature_matrix:
-        feature_values = {
-            RAW_FEATURE_FIELDS[index]: float(vector[index])
-            for index in range(len(RAW_FEATURE_FIELDS))
-        }
-        payload = _row_to_model_payload(base_row, feature_values)
-        prediction_payload = request_prediction(payload)
-        scores.append(float(_prediction_score(prediction_payload)))
-
-    return np.asarray(scores, dtype=float)
+def _predict_scores_for_matrix(feature_matrix: np.ndarray) -> np.ndarray:
+    return predict_scores(feature_matrix)
 
 
 def get_lime_explanation_for_prediction(
@@ -736,11 +692,11 @@ def get_lime_explanation_for_prediction(
     try:
         explanation = explainer.explain_instance(
             data_row=target_vector,
-            predict_fn=lambda matrix: _predict_scores_for_matrix(matrix, target_row),
+            predict_fn=_predict_scores_for_matrix,
             num_features=max(1, min(num_features, len(RAW_FEATURE_FIELDS))),
             num_samples=max(50, num_samples),
         )
-    except ModelClientError as exc:
+    except (ModelClientError, LocalModelError) as exc:
         raise HTTPException(
             status_code=503,
             detail={

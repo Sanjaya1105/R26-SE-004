@@ -1,3 +1,4 @@
 CognitiveStyleBackend/.env
+__pycache__/
 *.pyc
-*.pyc
+*.pyo

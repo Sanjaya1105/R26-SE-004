@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     MODEL_API_URL: str = "http://127.0.0.1:8021"
     MODEL_API_PREDICT_PATH: str = "/predict"
     MODEL_API_TIMEOUT_SECONDS: int = 30
+    LOCAL_MODEL_PATH: str = "../COGNITIVE-LOAD-API/model/cognitive_load_model.pkl"
 
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "gemma3:12b"

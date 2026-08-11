@@ -55,7 +55,7 @@ def get_prediction_shap_explanation(
     lesson_id: str,
     prediction_id: int,
     num_features: int = 6,
-    num_samples: int = 50,
+    num_samples: int = 100,
     db: Session = Depends(get_db),
 ):
     return get_shap_explanation_for_prediction(

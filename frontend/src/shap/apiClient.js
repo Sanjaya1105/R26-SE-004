@@ -26,7 +26,7 @@ async function request(path, options = {}) {
   return payload;
 }
 
-export async function fetchShapExplanation(lessonId, predictionId, { numFeatures = 6, numSamples = 50 } = {}) {
+export async function fetchShapExplanation(lessonId, predictionId, { numFeatures = 6, numSamples = 100 } = {}) {
   const query = new URLSearchParams();
   query.set('num_features', String(numFeatures));
   query.set('num_samples', String(numSamples));

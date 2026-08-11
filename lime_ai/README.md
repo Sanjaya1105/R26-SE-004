@@ -2,6 +2,11 @@
 
 This service receives cognitive-load feature payloads, calls the model API, and automatically saves the prediction to MySQL.
 
+LIME explanations load the same trained model read-only from
+`../COGNITIVE-LOAD-API/model/cognitive_load_model.pkl` and predict all
+perturbations locally as a batch. Normal prediction ingestion still uses the
+existing cognitive-load API. The cognitive-load API itself is not modified.
+
 ## What it stores
 
 - `student_id`

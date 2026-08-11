@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from models.prediction import CognitiveLoadPrediction
 from models.student_lesson_summary import StudentLessonSummary
-from services.model_client import ModelClientError, request_prediction
+from services.local_model import LocalModelError, predict_scores
 
 
 RAW_FEATURE_FIELDS = [
@@ -20,16 +20,6 @@ RAW_FEATURE_FIELDS = [
     "idle_duration_video",
     "time_on_content",
 ]
-
-INT_FEATURE_FIELDS = {
-    "pause_frequency",
-    "navigation_count_video",
-    "rewatch_segments",
-    "playback_rate_change",
-    "idle_duration_video",
-    "time_on_content",
-}
-
 
 def _prediction_label(payload: dict[str, Any]) -> str:
     for key in ("predicted_cognitive_load", "predicted_label", "final_cognitive_load", "cognitive_load"):
@@ -64,44 +54,8 @@ def _confidence(payload: dict[str, Any]) -> float:
     return 0.0
 
 
-def _row_to_model_payload(row: CognitiveLoadPrediction, feature_values: dict[str, float] | None = None) -> dict[str, Any]:
-    values = feature_values or {
-        name: float(getattr(row, name))
-        for name in RAW_FEATURE_FIELDS
-    }
-
-    normalized_values: dict[str, Any] = {}
-    for name in RAW_FEATURE_FIELDS:
-        value = float(values[name])
-        if name in INT_FEATURE_FIELDS:
-            normalized_values[name] = max(0, int(round(value)))
-        else:
-            normalized_values[name] = value
-
-    return {
-        "student_id": row.student_id,
-        "lesson_id": row.lesson_id,
-        "session_id": row.session_id,
-        "minute_index": row.minute_index,
-        "window_start": row.window_start.isoformat() if row.window_start else None,
-        "window_end": row.window_end.isoformat() if row.window_end else None,
-        **normalized_values,
-    }
-
-
-def _predict_scores_for_matrix(feature_matrix: np.ndarray, base_row: CognitiveLoadPrediction) -> np.ndarray:
-    scores: list[float] = []
-
-    for vector in feature_matrix:
-        feature_values = {
-            RAW_FEATURE_FIELDS[index]: float(vector[index])
-            for index in range(len(RAW_FEATURE_FIELDS))
-        }
-        payload = _row_to_model_payload(base_row, feature_values)
-        prediction_payload = request_prediction(payload)
-        scores.append(float(_prediction_score(prediction_payload)))
-
-    return np.asarray(scores, dtype=float)
+def _predict_scores_for_matrix(feature_matrix: np.ndarray) -> np.ndarray:
+    return predict_scores(feature_matrix)
 
 
 def list_lessons(db: Session) -> dict[str, Any]:
@@ -211,7 +165,7 @@ def get_shap_explanation_for_prediction(
     lesson_id: str,
     prediction_id: int,
     num_features: int = 6,
-    num_samples: int = 50,
+    num_samples: int = 100,
 ) -> dict[str, Any]:
     # Only look in StudentLessonSummary
     target_row = (
@@ -259,9 +213,16 @@ def get_shap_explanation_for_prediction(
         dtype=float,
     )
 
+    unique_background = np.unique(background_data, axis=0)
+    cluster_count = min(10, len(unique_background))
+    summarized_background = (
+        shap.kmeans(unique_background, cluster_count)
+        if cluster_count > 1
+        else unique_background
+    )
     explainer = shap.KernelExplainer(
-        lambda matrix: _predict_scores_for_matrix(matrix, target_row),
-        background_data,
+        _predict_scores_for_matrix,
+        summarized_background,
     )
 
     try:
@@ -269,7 +230,7 @@ def get_shap_explanation_for_prediction(
             target_vector,
             nsamples=max(25, num_samples),
         )
-    except ModelClientError as exc:
+    except LocalModelError as exc:
         raise HTTPException(
             status_code=503,
             detail={
