@@ -1,12 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { downloadExamMaterial, fetchExamMaterials, uploadExamMaterial } from '../exam/apiClient';
+import {
+  downloadExamMaterial,
+  fetchExamMaterials,
+  fetchMyCourses,
+  uploadExamMaterial,
+} from '../exam/apiClient';
 import './ExamMaterialUpload.css';
 
 const allowedExtensions = ['pdf', 'ppt', 'pptx'];
 const formatSize = (bytes) => `${(Number(bytes) / 1024 / 1024).toFixed(2)} MB`;
 
 export default function ExamMaterialUpload() {
+  const [courses, setCourses] = useState([]);
+  const [courseId, setCourseId] = useState('');
   const [lessonName, setLessonName] = useState('');
   const [unitNo, setUnitNo] = useState('');
   const [documentFile, setDocumentFile] = useState(null);
@@ -18,9 +25,14 @@ export default function ExamMaterialUpload() {
   const inputRef = useRef(null);
   const navigate = useNavigate();
 
-  async function loadMaterials() {
+  async function loadPageData() {
     try {
-      setMaterials(await fetchExamMaterials());
+      const [courseList, materialList] = await Promise.all([
+        fetchMyCourses(),
+        fetchExamMaterials(),
+      ]);
+      setCourses(courseList);
+      setMaterials(materialList);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -28,7 +40,7 @@ export default function ExamMaterialUpload() {
     }
   }
 
-  useEffect(() => { loadMaterials(); }, []);
+  useEffect(() => { loadPageData(); }, []);
 
   function handleFile(event) {
     setError('');
@@ -47,19 +59,26 @@ export default function ExamMaterialUpload() {
     event.preventDefault();
     setError('');
     setMessage('');
-    if (!lessonName.trim() || !unitNo.trim() || !documentFile) {
-      setError('Enter the lesson name and unit number, then choose a document.');
+    const selectedCourse = courses.find((course) => String(course.id) === courseId);
+    if (!selectedCourse || !lessonName.trim() || !unitNo.trim() || !documentFile) {
+      setError('Select a course, enter the lesson name and unit number, then choose a document.');
       return;
     }
     setSubmitting(true);
     try {
-      await uploadExamMaterial({ lessonName: lessonName.trim(), unitNo: unitNo.trim(), document: documentFile });
+      await uploadExamMaterial({
+        courseId: String(selectedCourse.id),
+        courseName: selectedCourse.courseName,
+        lessonName: lessonName.trim(),
+        unitNo: unitNo.trim(),
+        document: documentFile,
+      });
       setLessonName('');
       setUnitNo('');
       setDocumentFile(null);
       if (inputRef.current) inputRef.current.value = '';
       setMessage('Exam material uploaded successfully.');
-      await loadMaterials();
+      setMaterials(await fetchExamMaterials());
     } catch (err) {
       setError(err.message);
     } finally {
@@ -86,10 +105,11 @@ export default function ExamMaterialUpload() {
         <section className="exam-section">
           <div className="exam-heading"><h2>Upload material</h2><span>PDF and PowerPoint, up to 25 MB</span></div>
           <form className="exam-form" onSubmit={submit}>
+            <label className="exam-course"><span>Course</span><select value={courseId} onChange={(e) => setCourseId(e.target.value)} required disabled={loading || courses.length === 0}><option value="">{loading ? 'Loading your courses...' : courses.length ? 'Select a course' : 'No uploaded courses found'}</option>{courses.map((course) => <option key={course.id} value={String(course.id)}>{course.courseName}</option>)}</select><small>Only courses uploaded by your logged-in account are shown.</small></label>
             <label><span>Lesson name</span><input value={lessonName} onChange={(e) => setLessonName(e.target.value)} maxLength={255} required /></label>
             <label><span>Unit number</span><input value={unitNo} onChange={(e) => setUnitNo(e.target.value)} maxLength={50} required /></label>
             <label className="exam-file"><span>Lecture document</span><input ref={inputRef} type="file" accept=".pdf,.ppt,.pptx" onChange={handleFile} required /><small>{documentFile ? `${documentFile.name} (${formatSize(documentFile.size)})` : 'No document selected'}</small></label>
-            <button className="exam-button primary" type="submit" disabled={submitting}>{submitting ? 'Uploading...' : 'Upload exam material'}</button>
+            <button className="exam-button primary" type="submit" disabled={submitting || loading || courses.length === 0}>{submitting ? 'Uploading...' : 'Upload exam material'}</button>
           </form>
           {message && <p className="exam-message success">{message}</p>}
           {error && <p className="exam-message error">{error}</p>}
@@ -97,8 +117,8 @@ export default function ExamMaterialUpload() {
         <section className="exam-section">
           <div className="exam-heading"><h2>Your uploaded materials</h2><span>{materials.length} documents</span></div>
           {loading ? <p>Loading...</p> : materials.length === 0 ? <p>No exam materials uploaded yet.</p> : (
-            <div className="exam-table-wrap"><table><thead><tr><th>Lesson</th><th>Unit</th><th>Type</th><th>File</th><th>Uploaded</th><th /></tr></thead><tbody>
-              {materials.map((item) => <tr key={item.id}><td>{item.lessonName}</td><td>{item.unitNo}</td><td>{item.documentType === 'pdf' ? 'PDF' : 'Presentation'}</td><td><strong>{item.originalFileName}</strong><small>{formatSize(item.fileSize)}</small></td><td>{new Date(item.createdAt).toLocaleDateString()}</td><td><button className="exam-button secondary" type="button" onClick={() => download(item)}>Download</button></td></tr>)}
+            <div className="exam-table-wrap"><table><thead><tr><th>Course</th><th>Lesson</th><th>Unit</th><th>Type</th><th>File</th><th>Uploaded</th><th /></tr></thead><tbody>
+              {materials.map((item) => <tr key={item.id}><td>{item.courseName}</td><td>{item.lessonName}</td><td>{item.unitNo}</td><td>{item.documentType === 'pdf' ? 'PDF' : 'Presentation'}</td><td><strong>{item.originalFileName}</strong><small>{formatSize(item.fileSize)}</small></td><td>{new Date(item.createdAt).toLocaleDateString()}</td><td><button className="exam-button secondary" type="button" onClick={() => download(item)}>Download</button></td></tr>)}
             </tbody></table></div>
           )}
         </section>

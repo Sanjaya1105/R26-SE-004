@@ -15,6 +15,8 @@ async function initializeDatabase() {
     CREATE TABLE IF NOT EXISTS exam_materials (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
       teacher_id VARCHAR(64) NOT NULL,
+      course_id VARCHAR(64) NOT NULL,
+      course_name VARCHAR(255) NOT NULL,
       lesson_name VARCHAR(255) NOT NULL,
       unit_no VARCHAR(50) NOT NULL,
       document_type ENUM('pdf', 'presentation') NOT NULL,
@@ -29,6 +31,7 @@ async function initializeDatabase() {
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
       INDEX idx_exam_materials_teacher (teacher_id),
+      INDEX idx_exam_materials_teacher_course (teacher_id, course_id),
       INDEX idx_exam_materials_lesson_unit (lesson_name, unit_no)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
@@ -36,6 +39,12 @@ async function initializeDatabase() {
   // Keep existing installations compatible with the extraction pipeline.
   const [columns] = await pool.query('SHOW COLUMNS FROM exam_materials');
   const columnNames = new Set(columns.map((column) => column.Field));
+  if (!columnNames.has('course_id')) {
+    await pool.execute('ALTER TABLE exam_materials ADD COLUMN course_id VARCHAR(64) NULL AFTER teacher_id');
+  }
+  if (!columnNames.has('course_name')) {
+    await pool.execute('ALTER TABLE exam_materials ADD COLUMN course_name VARCHAR(255) NULL AFTER course_id');
+  }
   if (!columnNames.has('extraction_status')) {
     await pool.execute(
       "ALTER TABLE exam_materials ADD COLUMN extraction_status ENUM('pending', 'completed', 'failed', 'not_applicable') NOT NULL DEFAULT 'pending' AFTER file_size"

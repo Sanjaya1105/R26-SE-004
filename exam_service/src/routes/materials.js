@@ -21,11 +21,13 @@ function runUpload(req, res, next) {
 }
 
 router.post('/', requireTeacher, runUpload, async (req, res) => {
+  const courseId = String(req.body.courseId || '').trim();
+  const courseName = String(req.body.courseName || '').trim();
   const lessonName = String(req.body.lessonName || '').trim();
   const unitNo = String(req.body.unitNo || '').trim();
-  if (!lessonName || !unitNo || !req.file) {
+  if (!courseId || !courseName || !lessonName || !unitNo || !req.file) {
     if (req.file) await fs.unlink(req.file.path).catch(() => {});
-    return res.status(400).json({ message: 'Lesson name, unit number, and document are required.' });
+    return res.status(400).json({ message: 'Course, lesson name, unit number, and document are required.' });
   }
 
   const extension = path.extname(req.file.originalname).toLowerCase();
@@ -41,11 +43,11 @@ router.post('/', requireTeacher, runUpload, async (req, res) => {
       await connection.beginTransaction();
       [result] = await connection.execute(
         `INSERT INTO exam_materials
-         (teacher_id, lesson_name, unit_no, document_type, original_file_name,
+         (teacher_id, course_id, course_name, lesson_name, unit_no, document_type, original_file_name,
           stored_file_name, file_path, mime_type, file_size, extraction_status, extracted_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          String(req.teacher.id), lessonName, unitNo, documentType,
+          String(req.teacher.id), courseId, courseName, lessonName, unitNo, documentType,
           req.file.originalname, req.file.filename,
           path.relative(path.resolve(__dirname, '../..'), req.file.path).replace(/\\/g, '/'),
           req.file.mimetype || 'application/octet-stream', req.file.size,
@@ -89,6 +91,8 @@ router.post('/', requireTeacher, runUpload, async (req, res) => {
       material: {
         id: result.insertId,
         teacherId: String(req.teacher.id),
+        courseId,
+        courseName,
         lessonName,
         unitNo,
         documentType,
@@ -114,7 +118,8 @@ router.post('/', requireTeacher, runUpload, async (req, res) => {
 router.get('/', requireTeacher, async (req, res) => {
   try {
     const [rows] = await pool.execute(
-      `SELECT id, lesson_name AS lessonName, unit_no AS unitNo,
+      `SELECT id, course_id AS courseId, course_name AS courseName,
+              lesson_name AS lessonName, unit_no AS unitNo,
               document_type AS documentType, original_file_name AS originalFileName,
               file_size AS fileSize, extraction_status AS extractionStatus,
               (SELECT COUNT(*) FROM exam_material_chunks c WHERE c.material_id = exam_materials.id) AS chunkCount,

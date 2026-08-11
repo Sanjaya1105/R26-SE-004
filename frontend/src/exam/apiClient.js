@@ -13,8 +13,18 @@ async function parseResponse(response) {
   return payload;
 }
 
-export async function uploadExamMaterial({ lessonName, unitNo, document }) {
+export async function fetchMyCourses() {
+  const response = await fetch(`${getGatewayBaseUrl()}/api/courses/mine`, {
+    headers: authHeaders(),
+  });
+  const payload = await parseResponse(response);
+  return Array.isArray(payload.data) ? payload.data : [];
+}
+
+export async function uploadExamMaterial({ courseId, courseName, lessonName, unitNo, document }) {
   const body = new FormData();
+  body.append('courseId', courseId);
+  body.append('courseName', courseName);
   body.append('lessonName', lessonName);
   body.append('unitNo', unitNo);
   body.append('document', document);

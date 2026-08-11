@@ -6,6 +6,7 @@ const verifyToken = require('../middleware/verifyToken');
 
 const router = express.Router();
 const examServiceUrl = (process.env.EXAM_SERVICE_URL || 'http://localhost:8120').replace(/\/$/, '');
+const apiGatewayUrl = (process.env.API_GATEWAY_URL || 'http://localhost:4000').replace(/\/$/, '');
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 25 * 1024 * 1024 },
@@ -19,6 +20,14 @@ function upstreamError(res, error) {
   if (error.response) return res.status(error.response.status).json(error.response.data);
   console.error('Exam service request failed:', error.message);
   return res.status(502).json({ message: 'Exam service is unavailable.' });
+}
+
+async function resolveOwnedCourse(req, courseId) {
+  const response = await axios.get(
+    `${apiGatewayUrl}/api/courses/${encodeURIComponent(courseId)}/for-edit`,
+    { headers: { Authorization: req.headers.authorization } }
+  );
+  return response.data?.data;
 }
 
 router.get('/materials', verifyToken, async (req, res) => {
@@ -52,7 +61,29 @@ router.post('/materials', verifyToken, (req, res, next) => {
 }, async (req, res) => {
   if (!req.file) return res.status(400).json({ message: 'Choose a document to upload.' });
 
+  const courseId = String(req.body.courseId || '').trim();
+  if (!courseId) return res.status(400).json({ message: 'Select one of your courses.' });
+
+  let course;
+  try {
+    course = await resolveOwnedCourse(req, courseId);
+  } catch (error) {
+    if (error.response?.status === 400 || error.response?.status === 404) {
+      return res.status(400).json({ message: 'The selected course does not exist.' });
+    }
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      return res.status(403).json({ message: 'You can only upload exam materials to your own courses.' });
+    }
+    return upstreamError(res, error);
+  }
+
+  if (!course?.id || !course?.courseName) {
+    return res.status(502).json({ message: 'Could not verify the selected course.' });
+  }
+
   const form = new FormData();
+  form.append('courseId', String(course.id));
+  form.append('courseName', String(course.courseName));
   form.append('lessonName', req.body.lessonName || '');
   form.append('unitNo', req.body.unitNo || '');
   form.append('document', req.file.buffer, {
