@@ -45,23 +45,43 @@ const Course = () => {
           margin: '0 auto 2rem',
           padding: '1.25rem 1.5rem',
           borderRadius: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '1rem',
+          flexWrap: 'wrap',
         }}
       >
-        <h1
-          className="gradient-text"
-          style={{ fontSize: '1.35rem', fontWeight: 700 }}
-        >
-          Courses
-        </h1>
-        <p
+        <div>
+          <h1
+            className="gradient-text"
+            style={{ fontSize: '1.35rem', fontWeight: 700 }}
+          >
+            Courses
+          </h1>
+          <p
+            style={{
+              marginTop: '0.35rem',
+              fontSize: '0.9rem',
+              color: 'var(--text-muted)',
+            }}
+          >
+            Browse published courses from educators.
+          </p>
+        </div>
+        <Link
+          to="/get-exam"
+          className="btn"
           style={{
-            marginTop: '0.35rem',
-            fontSize: '0.9rem',
-            color: 'var(--text-muted)',
+            textDecoration: 'none',
+            background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+            color: '#fff',
+            border: '1px solid #1d4ed8',
+            whiteSpace: 'nowrap',
           }}
         >
-          Browse published courses from educators.
-        </p>
+          Get Exam
+        </Link>
       </header>
 
       <main className="container" style={{ maxWidth: '1200px', paddingTop: 0 }}>

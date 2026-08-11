@@ -18,11 +18,11 @@ import Course from './pages/Course';
 import CourseDetail from './pages/CourseDetail';
 import EditCourse from './pages/EditCourse';
 import Gpt from './pages/Gpt';
-import LessonSummary from './pages/LessonSummary';
 import StudentAnalyse from './pages/StudentAnalyse';
 import ExamMaterialUpload from './pages/ExamMaterialUpload';
 import ObjectSpacialVerbalQuestionnaire from './pages/cognitiveStyleAndLearnerProfile/CognitiveStyle/SplitScreenModule/ObjectSpacialVerbalQuestionnaire/ObjectSpacialVerbalQuestionnaire';
 import GetExam from './pages/GetExam';
+import NextLessonRecommendation from './pages/NextLessonRecommendation';
 import './index.css';
 
 // Simple PrivateRoute component
@@ -89,9 +89,9 @@ function App() {
             <Gpt />
           </PrivateRoute>
         } />
-        <Route path="/lesson-summary" element={
+        <Route path="/next-lesson-recommendation" element={
           <PrivateRoute>
-            <LessonSummary />
+            <NextLessonRecommendation />
           </PrivateRoute>
         } />
         <Route path="/student-analyse" element={

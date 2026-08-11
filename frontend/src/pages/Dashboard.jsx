@@ -55,9 +55,8 @@ const Dashboard = () => {
     { label: 'Teacher Analyze', path: '/teacher-analysis' },
     { label: 'Student Analyse', path: '/student-analyse' },
     { label: 'Chat Assistant', path: '/gpt' },
-    { label: 'Lesson Summary', path: '/lesson-summary' },
-    { label: 'Upload Lecture PDF for Exam', path: '/exam-materials' },
-    { label: 'Get Exam', path: '/get-exam' }
+    { label: 'Next Lesson Recommendation', path: '/next-lesson-recommendation' },
+    { label: 'Upload Lecture PDF for Exam', path: '/exam-materials' }
   ];
 
   if (loading) {

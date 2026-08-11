@@ -275,6 +275,7 @@ const getCourseForEdit = async (req, res) => {
       success: true,
       data: {
         id: course._id,
+        educatorId: course.educatorId,
         courseName: course.courseName,
         thumbnailUrl: course.thumbnailUrl,
         keywords: course.keywords || [],

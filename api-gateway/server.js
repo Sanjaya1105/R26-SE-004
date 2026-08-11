@@ -21,8 +21,8 @@ const LIME_AI_SERVICE_URL =
   process.env.LIME_AI_SERVICE_URL || "http://localhost:8110";
 const SHAP_AI_SERVICE_URL =
   process.env.SHAP_AI_SERVICE_URL || "http://localhost:8111";
-const RECOMMENDATION_AI_URL = 
-  process.env.RECOMMENDATION_AI_URL || "http://localhost:5002";
+const NEXT_LESSON_RECOMMENDATION_URL =
+  process.env.NEXT_LESSON_RECOMMENDATION_URL || "http://localhost:5003";
 const COGNITIVE_LOAD_SERVICE_URL =
   process.env.COGNITIVE_LOAD_SERVICE_URL || "http://localhost:8000";
 const COGNITIVE_STYLE_SERVICE_URL = 
@@ -206,11 +206,12 @@ app.use(
 );
 
 app.use(
-  "/api/recommendation",
+  "/api/next-lesson-recommendation",
   createProxyMiddleware({
-    target: RECOMMENDATION_AI_URL,
+    target: NEXT_LESSON_RECOMMENDATION_URL,
     changeOrigin: true,
-    pathRewrite: (path) => path.replace(/^\/api\/recommendation/, ""),
+    pathRewrite: (path) =>
+      path.replace(/^\/api\/next-lesson-recommendation/, ""),
   })
 );
 
