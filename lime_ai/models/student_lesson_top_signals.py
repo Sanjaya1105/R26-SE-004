@@ -16,6 +16,7 @@ class StudentLessonTopSignals(Base):
     student_id: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     lesson_id: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     prediction_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    predicted_cognitive_load: Mapped[str] = mapped_column(String(20), nullable=False)
 
     top_1_signal: Mapped[str | None] = mapped_column(String(255), nullable=True)
     top_1_value: Mapped[float | None] = mapped_column(Float, nullable=True)

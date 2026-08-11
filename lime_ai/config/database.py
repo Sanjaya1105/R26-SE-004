@@ -1,6 +1,6 @@
 from collections.abc import Generator
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 from config.settings import settings
@@ -46,6 +46,21 @@ def init_db() -> None:
 
     db_engine = get_engine()
     Base.metadata.create_all(bind=db_engine)
+
+    # create_all() does not add columns to an existing table. Keep current
+    # installations compatible when this field is introduced after the table
+    # has already been created.
+    table_name = "student-lesson-top-signals"
+    column_names = {column["name"] for column in inspect(db_engine).get_columns(table_name)}
+    if "predicted_cognitive_load" not in column_names:
+        with db_engine.begin() as connection:
+            connection.execute(
+                text(
+                    "ALTER TABLE `student-lesson-top-signals` "
+                    "ADD COLUMN predicted_cognitive_load VARCHAR(20) "
+                    "NOT NULL DEFAULT 'Unknown' AFTER prediction_id"
+                )
+            )
 
 
 def get_db() -> Generator[Session, None, None]:

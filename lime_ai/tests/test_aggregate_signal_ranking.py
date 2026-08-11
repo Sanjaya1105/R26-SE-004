@@ -107,10 +107,12 @@ class AggregateSignalPersistenceTests(unittest.TestCase):
 
         self.assertEqual(first.student_id, "student-9")
         self.assertEqual(first.lesson_id, "lesson-7")
+        self.assertEqual(first.predicted_cognitive_load, "High")
         self.assertEqual(first.top_1_signal, "pause_frequency")
         self.assertEqual(first.top_3_value, 0.8)
 
         self.payload.prediction_id = 43
+        self.payload.predicted_cognitive_load = "Very High"
         updated = _save_top_aggregate_signals(
             self.db,
             self.payload,
@@ -119,6 +121,7 @@ class AggregateSignalPersistenceTests(unittest.TestCase):
 
         self.assertEqual(updated.id, first.id)
         self.assertEqual(updated.prediction_id, 43)
+        self.assertEqual(updated.predicted_cognitive_load, "Very High")
         self.assertEqual(updated.top_1_signal, "idle_duration_video")
         self.assertIsNone(updated.top_2_signal)
         self.assertIsNone(updated.top_3_value)

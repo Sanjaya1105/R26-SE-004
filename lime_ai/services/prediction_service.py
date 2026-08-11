@@ -152,10 +152,12 @@ def _save_top_aggregate_signals(
             student_id=payload.student_id,
             lesson_id=payload.lesson_id,
             prediction_id=payload.prediction_id,
+            predicted_cognitive_load=payload.predicted_cognitive_load,
         )
         db.add(saved)
 
     saved.prediction_id = payload.prediction_id
+    saved.predicted_cognitive_load = payload.predicted_cognitive_load
     for rank in range(1, 4):
         signal = top_signals[rank - 1] if rank <= len(top_signals) else None
         setattr(saved, f"top_{rank}_signal", signal["signal"] if signal else None)

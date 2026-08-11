@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS `student-lesson-top-signals` (
     student_id VARCHAR(50) NOT NULL,
     lesson_id VARCHAR(50) NOT NULL,
     prediction_id BIGINT NOT NULL,
+    predicted_cognitive_load VARCHAR(20) NOT NULL,
     top_1_signal VARCHAR(255) DEFAULT NULL,
     top_1_value FLOAT DEFAULT NULL,
     top_1_normalized_value FLOAT DEFAULT NULL,
