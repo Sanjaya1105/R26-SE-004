@@ -99,6 +99,15 @@ app.use(
 );
 
 app.use(
+  "/api/student-lesson-summaries",
+  createProxyMiddleware({
+    target: BACKEND_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: (path) => `/api/student-lesson-summaries${path}`,
+  })
+);
+
+app.use(
   "/api/gpt",
   createProxyMiddleware({
     target: GPT_SERVICE_URL,

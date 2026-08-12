@@ -13,6 +13,7 @@ import {
 } from '../lime/apiClient';
 import { fetchShapExplanation } from '../shap/apiClient';
 import { analyseCognitiveStyle } from '../cognitiveStyle/apiClient';
+import { shareLessonGuidance } from '../lessonSummary/apiClient';
 import '../styles/studentAnalyse.css';
 
 function formatRecommendationItems(text) {
@@ -79,6 +80,7 @@ export default function StudentAnalyse() {
   const [styleAnalysis, setStyleAnalysis] = useState(null);
   const [styleLoading, setStyleLoading] = useState(false);
   const [styleError, setStyleError] = useState('');
+  const [sharingGuidance, setSharingGuidance] = useState(false);
 
   const recommendationItems = formatRecommendationItems(
     aggregateExplanation?.human_explanation || limeExplanation?.human_explanation || '',
@@ -312,6 +314,25 @@ export default function StudentAnalyse() {
     }
   }
 
+  async function handleShareGuidance() {
+    if (!aggregateExplanation || !selectedLessonId || !selectedStudentId) return;
+    try {
+      setSharingGuidance(true);
+      setError('');
+      const shared = await shareLessonGuidance(selectedStudentId, selectedLessonId);
+      setAggregateExplanation((current) => ({
+        ...current,
+        shared_to_student: true,
+        shared_at: shared.shared_at,
+      }));
+      setStatusMessage('Recommendation and study techniques sent to the student.');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSharingGuidance(false);
+    }
+  }
+
   return (
     <div className="student-analyse-shell">
       <header className="student-analyse-header">
@@ -513,6 +534,21 @@ export default function StudentAnalyse() {
             <p>
               <strong>Intercept:</strong> {Number(limeExplanation.intercept).toFixed(4)}
             </p>
+
+            {aggregateExplanation ? (
+              <button
+                type="button"
+                className="support-button"
+                onClick={handleShareGuidance}
+                disabled={sharingGuidance || aggregateExplanation.shared_to_student}
+              >
+                {sharingGuidance
+                  ? 'Sending...'
+                  : aggregateExplanation.shared_to_student
+                    ? 'Sent to Student'
+                    : 'Send Recommendation and Techniques to Student'}
+              </button>
+            ) : null}
 
             <div className="human-explanation-card">
               <p className="human-explanation-title">Combined Human-Readable Explanation (LIME + SHAP)</p>

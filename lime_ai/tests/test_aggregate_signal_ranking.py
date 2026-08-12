@@ -12,6 +12,8 @@ from services.prediction_service import (
     _top_aggregate_signals,
     get_cached_student_lesson_analysis,
     get_student_lesson_cognitive_load_counts,
+    list_shared_student_lesson_guidance,
+    share_student_lesson_guidance,
 )
 
 
@@ -178,6 +180,30 @@ class AggregateSignalPersistenceTests(unittest.TestCase):
         result = get_cached_student_lesson_analysis(self.db, "lesson-7", "student-9")
 
         self.assertIsNone(result["data"])
+
+    def test_teacher_can_share_saved_guidance_and_student_can_list_it(self):
+        self.payload.lime_explanation = {"factors": []}
+        self.payload.shap_explanation = {"shap_values": []}
+        _save_top_aggregate_signals(
+            self.db,
+            self.payload,
+            [{"signal": "pause_frequency", "raw_value": 1.0, "normalized_value": 1.0}],
+            human_explanation="Saved explanation",
+            explanation_source="ollama",
+            study_technique={"techniques": [{"technique": "Pomodoro"}]},
+            lecture_support={"strategies": "1) Pause after each concept."},
+        )
+
+        shared = share_student_lesson_guidance(self.db, "lesson-7", "student-9")
+        listed = list_shared_student_lesson_guidance(self.db, "student-9")
+
+        self.assertTrue(shared["data"]["shared_to_student"])
+        self.assertEqual(len(listed["data"]), 1)
+        self.assertEqual(listed["data"][0]["lesson_id"], "lesson-7")
+        self.assertEqual(
+            listed["data"][0]["study_technique"]["techniques"][0]["technique"],
+            "Pomodoro",
+        )
 
 
 class CognitiveLoadCountTests(unittest.TestCase):

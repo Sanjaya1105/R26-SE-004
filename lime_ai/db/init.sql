@@ -82,6 +82,8 @@ CREATE TABLE IF NOT EXISTS `student-lesson-top-signals` (
     explanation_source VARCHAR(30) DEFAULT NULL,
     study_technique JSON DEFAULT NULL,
     lecture_support JSON DEFAULT NULL,
+    shared_to_student BOOLEAN NOT NULL DEFAULT FALSE,
+    shared_at DATETIME DEFAULT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),

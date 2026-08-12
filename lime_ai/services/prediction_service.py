@@ -276,9 +276,87 @@ def get_cached_student_lesson_analysis(
                 "explanation_source": record.explanation_source or "ollama",
                 "study_technique": record.study_technique,
                 "lecture_support": record.lecture_support,
+                "shared_to_student": bool(record.shared_to_student),
+                "shared_at": record.shared_at.isoformat() if record.shared_at else None,
             },
             "saved_at": record.updated_at.isoformat() if record.updated_at else None,
+            "shared_to_student": bool(record.shared_to_student),
+            "shared_at": record.shared_at.isoformat() if record.shared_at else None,
         },
+        "errors": [],
+    }
+
+
+def share_student_lesson_guidance(
+    db: Session,
+    lesson_id: str,
+    student_id: str,
+) -> dict[str, Any]:
+    record = (
+        db.query(StudentLessonTopSignals)
+        .filter(
+            StudentLessonTopSignals.student_id == student_id,
+            StudentLessonTopSignals.lesson_id == lesson_id,
+        )
+        .one_or_none()
+    )
+    if record is None or record.study_technique is None or record.lecture_support is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "success": False,
+                "message": "Run Raw Analyse before sending guidance to the student.",
+                "data": None,
+                "errors": [],
+            },
+        )
+
+    record.shared_to_student = True
+    record.shared_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(record)
+    return {
+        "success": True,
+        "message": "Recommendation and study techniques sent to the student.",
+        "data": {
+            "student_id": record.student_id,
+            "lesson_id": record.lesson_id,
+            "shared_to_student": True,
+            "shared_at": record.shared_at.isoformat() if record.shared_at else None,
+        },
+        "errors": [],
+    }
+
+
+def list_shared_student_lesson_guidance(
+    db: Session,
+    student_id: str,
+) -> dict[str, Any]:
+    records = (
+        db.query(StudentLessonTopSignals)
+        .filter(
+            StudentLessonTopSignals.student_id == student_id,
+            StudentLessonTopSignals.shared_to_student.is_(True),
+        )
+        .order_by(StudentLessonTopSignals.shared_at.desc(), StudentLessonTopSignals.id.desc())
+        .all()
+    )
+    return {
+        "success": True,
+        "message": "Shared previous-lesson guidance retrieved successfully.",
+        "data": [
+            {
+                "student_id": record.student_id,
+                "lesson_id": record.lesson_id,
+                "predicted_cognitive_load": record.predicted_cognitive_load,
+                "human_explanation": record.human_explanation,
+                "lecture_support": record.lecture_support,
+                "study_technique": record.study_technique,
+                "top_signals": _top_signals_from_record(record),
+                "shared_at": record.shared_at.isoformat() if record.shared_at else None,
+            }
+            for record in records
+        ],
         "errors": [],
     }
 

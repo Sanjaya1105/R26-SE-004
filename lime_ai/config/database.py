@@ -63,6 +63,8 @@ def init_db() -> None:
         "explanation_source": "explanation_source VARCHAR(30) NULL AFTER human_explanation",
         "study_technique": "study_technique JSON NULL AFTER explanation_source",
         "lecture_support": "lecture_support JSON NULL AFTER study_technique",
+        "shared_to_student": "shared_to_student BOOLEAN NOT NULL DEFAULT FALSE AFTER lecture_support",
+        "shared_at": "shared_at DATETIME NULL AFTER shared_to_student",
     }
     missing_columns = [name for name in migrations if name not in column_names]
     if missing_columns:
