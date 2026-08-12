@@ -1,8 +1,10 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 const Teacher = require('../models/Teacher');
 const Student = require('../models/Student');
+const verifyToken = require('../middleware/verifyToken');
 
 const router = express.Router();
 
@@ -11,6 +13,39 @@ const handleServerError = (res, err) => {
   console.error(err);
   res.status(500).json({ message: 'Internal server error' });
 };
+
+// Resolve cognitive-load student IDs to display names for authenticated
+// teachers. Only names are returned; private student fields remain hidden.
+router.get('/student-names', verifyToken, async (req, res) => {
+  if (req.user?.role === 'Student') {
+    return res.status(403).json({ message: 'Teacher access only.' });
+  }
+
+  const requestedIds = String(req.query?.ids || '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter((id, index, values) => id && values.indexOf(id) === index)
+    .slice(0, 200);
+  const validIds = requestedIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
+
+  if (!validIds.length) {
+    return res.json({ data: [] });
+  }
+
+  try {
+    const students = await Student.find({ _id: { $in: validIds } })
+      .select('name')
+      .lean();
+    return res.json({
+      data: students.map((student) => ({
+        student_id: String(student._id),
+        student_name: student.name,
+      })),
+    });
+  } catch (err) {
+    return handleServerError(res, err);
+  }
+});
 
 // Register endpoint
 router.post('/register', async (req, res) => {

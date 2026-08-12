@@ -34,6 +34,34 @@ export async function fetchLimeStudentsByLesson(lessonId) {
   return request(`/lessons/${lessonId}/students`);
 }
 
+export async function fetchLessonNames() {
+  const response = await fetch(`${getGatewayBaseUrl()}/api/public/courses`);
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(payload?.message || 'Could not load lesson names.');
+  }
+  return Array.isArray(payload?.data) ? payload.data : [];
+}
+
+export async function fetchStudentNames(studentIds) {
+  const ids = [...new Set((studentIds ?? []).map(String).filter(Boolean))];
+  if (!ids.length) return [];
+
+  const token = localStorage.getItem('token');
+  const query = new URLSearchParams({ ids: ids.join(',') });
+  const response = await fetch(
+    `${getGatewayBaseUrl()}/api/auth/student-names?${query.toString()}`,
+    {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    },
+  );
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(payload?.message || 'Could not load student names.');
+  }
+  return Array.isArray(payload?.data) ? payload.data : [];
+}
+
 export async function fetchSavedStudentLessonAnalysis(lessonId, studentId) {
   return request(`/lessons/${lessonId}/students/${studentId}/analysis`);
 }

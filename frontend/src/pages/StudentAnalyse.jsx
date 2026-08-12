@@ -4,10 +4,12 @@ import { useNavigate } from 'react-router-dom';
 import {
   createStudentLessonSummary,
   fetchAggregateExplanation,
+  fetchLessonNames,
   fetchLimeExplanation,
   fetchLimeLessons,
   fetchLimeStudentsByLesson,
   fetchSavedStudentLessonAnalysis,
+  fetchStudentNames,
 } from '../lime/apiClient';
 import { fetchShapExplanation } from '../shap/apiClient';
 import { analyseCognitiveStyle } from '../cognitiveStyle/apiClient';
@@ -115,11 +117,21 @@ export default function StudentAnalyse() {
   async function loadLessons() {
     try {
       setError('');
-      const lessonRows = await fetchLimeLessons();
-      setLessons(lessonRows ?? []);
+      const [lessonRows, courseRows] = await Promise.all([
+        fetchLimeLessons(),
+        fetchLessonNames().catch(() => []),
+      ]);
+      const courseNames = new Map(
+        (courseRows ?? []).map((course) => [String(course.id), course.courseName]),
+      );
+      const namedLessons = (lessonRows ?? []).map((lesson) => ({
+        ...lesson,
+        lesson_name: courseNames.get(String(lesson.lesson_id)) || '',
+      }));
+      setLessons(namedLessons);
 
-      if (lessonRows?.length) {
-        setSelectedLessonId(String(lessonRows[0].lesson_id));
+      if (namedLessons.length) {
+        setSelectedLessonId(String(namedLessons[0].lesson_id));
       }
     } catch (err) {
       setError(err.message);
@@ -130,7 +142,18 @@ export default function StudentAnalyse() {
     try {
       setError('');
       const studentRows = await fetchLimeStudentsByLesson(lessonId);
-      setStudents(studentRows ?? []);
+      const nameRows = await fetchStudentNames(
+        (studentRows ?? []).map((student) => student.student_id),
+      ).catch(() => []);
+      const studentNames = new Map(
+        nameRows.map((student) => [String(student.student_id), student.student_name]),
+      );
+      setStudents(
+        (studentRows ?? []).map((student) => ({
+          ...student,
+          student_name: studentNames.get(String(student.student_id)) || '',
+        })),
+      );
       setSelectedStudentId('');
     } catch (err) {
       setError(err.message);
@@ -307,7 +330,7 @@ export default function StudentAnalyse() {
             <option value="">Select a lesson</option>
             {lessons.map((lesson) => (
               <option key={lesson.lesson_id} value={lesson.lesson_id}>
-                Lesson {lesson.lesson_id}
+                {lesson.lesson_name || `Lesson ${lesson.lesson_id}`}
               </option>
             ))}
           </select>
@@ -320,10 +343,10 @@ export default function StudentAnalyse() {
             onChange={(event) => setSelectedStudentId(event.target.value)}
             disabled={!students.length}
           >
-            <option value="">All students in lesson</option>
+            <option value="">Select a student</option>
             {students.map((student) => (
               <option key={student.student_id} value={student.student_id}>
-                Student {student.student_id}
+                {student.student_name || `Student ${student.student_id}`}
               </option>
             ))}
           </select>
@@ -431,8 +454,12 @@ export default function StudentAnalyse() {
   <tbody>
     {predictions.map((row) => (
       <tr key={row.id}>
-        <td>{row.lesson_id}</td>
-        <td>{row.student_id}</td>
+        <td>
+          {lessons.find((lesson) => String(lesson.lesson_id) === String(row.lesson_id))?.lesson_name || row.lesson_id}
+        </td>
+        <td>
+          {students.find((student) => String(student.student_id) === String(row.student_id))?.student_name || row.student_id}
+        </td>
         <td>
           <span
             className={`load-badge ${
