@@ -18,7 +18,8 @@ USER_PROMPT_TEMPLATE = (
     "Write exactly four short recommendations directly to the student. Include actions for staying "
     "engaged during the lecture, handling difficult content, and checking understanding. Tailor every "
     "recommendation to the observed behaviors and cognitive-load level. Each item must begin with a "
-    "direct action verb and explain briefly how it helps. Do not explain model results or mention LIME, SHAP, "
+    "direct action verb and explain briefly how it helps. Use 'Write down' instead of the phrase 'Jot down'. "
+    "Do not explain model results or mention LIME, SHAP, "
     "features, drivers, signals, pressure, or relief. Use encouraging, simple language and return "
     "only a plain-text numbered list with no heading, introduction, Markdown, or bold formatting. "
     "Keep each item to one sentence and the complete response under 120 words."
@@ -26,7 +27,8 @@ USER_PROMPT_TEMPLATE = (
 
 
 def _clean_strategy(text: str) -> str:
-    return re.sub(r"[*_`]+", "", text).strip()
+    cleaned = re.sub(r"[*_`]+", "", text).strip()
+    return re.sub(r"^jot down\b", "Write down", cleaned, flags=re.IGNORECASE)
 
 
 def generate_lecture_support(

@@ -16,7 +16,6 @@ import '../styles/studentAnalyse.css';
 function formatRecommendationItems(text) {
   if (!text) return [];
 
-  // If backend returned "Unable to generate", return empty
   if (text.includes('Unable to generate strategies')) {
     return [];
   }
@@ -24,38 +23,32 @@ function formatRecommendationItems(text) {
   const normalized = String(text).replace(/\r/g, ' ').replace(/\s+/g, ' ').trim();
   if (!normalized || normalized.length < 5) return [];
 
-  // Strategy 1: Split by numbered patterns (1) text, 1. text, 1- text, 1: text)
-  const items = [];
-  const patterns = [
-    /^\s*\d+[).:-]\s*(.+?)$/gm,  // Lines starting with number
-    /(\d+[).:-]\s*[^):\n]+(?=[1-9][).:-]|$))/g  // Inline numbered items
-  ];
+  // Ollama commonly returns one line such as "1) ... 2) ... 3) ...".
+  // Extract each numbered section once instead of also treating the complete
+  // line as the first recommendation.
+  const cleanRecommendation = (value) => value
+    .replace(/^[)\-.:\s]+/, '')
+    .replace(/^["']|["']$/g, '')
+    .replace(/^jot down\b/i, 'Write down')
+    .trim();
 
-  for (const pattern of patterns) {
-    const matches = normalized.matchAll(pattern);
-    for (const match of matches) {
-      const text = match[1] || match[0];
-      if (text && text.length > 5) {
-        // Clean quotes and special leading chars
-        const clean = text
-          .replace(/^[\d)\-.:]\s*/, '')
-          .replace(/^["']|["']$/g, '')
-          .trim();
-        if (clean && !items.includes(clean)) {
-          items.push(clean);
-        }
-      }
+  const numberedItems = [];
+  const numberedPattern = /(?:^|\s)\d+[).:-]\s*(.*?)(?=\s+\d+[).:-]\s*|$)/g;
+  for (const match of normalized.matchAll(numberedPattern)) {
+    const clean = cleanRecommendation(match[1]);
+    if (clean.length > 5 && !numberedItems.includes(clean)) {
+      numberedItems.push(clean);
     }
   }
 
-  if (items.length > 0) {
-    return items.slice(0, 5); // Max 5 items
+  if (numberedItems.length > 0) {
+    return numberedItems.slice(0, 5);
   }
 
-  // Strategy 2: Split by sentence endings if no numbered pattern found
+  // Plain prose is displayed as separate sentences when no numbering exists.
   return normalized
     .split(/(?<=[.!?])\s+/)
-    .map(item => item.trim())
+    .map(cleanRecommendation)
     .filter(item => item.length > 5)
     .slice(0, 5);
 }
