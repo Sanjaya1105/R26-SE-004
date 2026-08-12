@@ -300,7 +300,11 @@ export default function StudentAnalyse() {
       setStyleAnalysis(null);
       const result = await analyseCognitiveStyle(selectedLessonId, selectedStudentId);
       setStyleAnalysis(result);
-      setStatusMessage(`Cognitive-style LIME and SHAP analysis completed for student ${selectedStudentId}.`);
+      setStatusMessage(
+        result.cached
+          ? `Saved cognitive-style analysis loaded for student ${selectedStudentId}; LIME and SHAP were not rerun.`
+          : `Cognitive-style LIME and SHAP analysis completed for student ${selectedStudentId}.`,
+      );
     } catch (err) {
       setStyleError(err.message);
     } finally {

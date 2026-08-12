@@ -47,6 +47,24 @@ def analyse_student_style(
     shap_samples: int = Query(100, ge=25, le=2000),
     db: Session = Depends(get_db),
 ):
+    completed = (
+        db.query(CognitiveStyleAnalysis)
+        .filter(
+            CognitiveStyleAnalysis.lesson_id == lesson_id,
+            CognitiveStyleAnalysis.student_id == student_id,
+            CognitiveStyleAnalysis.analysis_status == "completed",
+        )
+        .order_by(CognitiveStyleAnalysis.updated_at.desc(), CognitiveStyleAnalysis.id.desc())
+        .first()
+    )
+    if completed is not None:
+        return {
+            "success": True,
+            "message": "Saved cognitive-style analysis loaded without rerunning LIME, SHAP, or Ollama.",
+            "data": {**_serialize(completed), "cached": True},
+            "errors": [],
+        }
+
     def find_pending():
         return (
             db.query(CognitiveStyleAnalysis)
@@ -148,7 +166,7 @@ def analyse_student_style(
     return {
         "success": True,
         "message": "LIME, SHAP, top-three aggregation, and Ollama explanation completed.",
-        "data": _serialize(record),
+        "data": {**_serialize(record), "cached": False},
         "errors": [],
     }
 
