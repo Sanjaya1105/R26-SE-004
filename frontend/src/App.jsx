@@ -134,9 +134,9 @@ function App() {
           </PrivateRoute>
         } />
         <Route path="/get-exam" element={
-          <PrivateRoute>
+          <StudentRoute>
             <GetExam />
-          </PrivateRoute>
+          </StudentRoute>
         } />
       </Routes>
     </Router>

@@ -45,13 +45,16 @@ export async function fetchExamLessons() {
   return payload.lessons ?? [];
 }
 
-export async function generateExamQuiz({ lessonName, unitNo }) {
+export async function generateExamQuiz({ courseId, lessonName, unitNo }) {
   const payload = await parseResponse(await fetch(`${API_BASE}/quizzes/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ lessonName, unitNo }),
+    body: JSON.stringify({ courseId, lessonName, unitNo }),
   }));
-  return payload.quiz;
+  return {
+    ...payload.quiz,
+    cognitiveLoadCounts: payload.cognitiveLoadCounts ?? {},
+  };
 }
 
 export async function checkExamAnswers(quizId, answers) {

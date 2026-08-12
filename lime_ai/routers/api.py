@@ -7,6 +7,7 @@ from services.prediction_service import (
     aggregate_and_save_student_lesson_summary,
     generate_aggregate_explanation,
     get_cached_student_lesson_analysis,
+    get_student_lesson_cognitive_load_counts,
     get_lime_explanation_for_prediction,
     list_lessons,
     list_predictions,
@@ -84,6 +85,15 @@ def get_student_lesson_analysis(
     db: Session = Depends(get_db),
 ):
     return get_cached_student_lesson_analysis(db, lesson_id, student_id)
+
+
+@router.get("/lessons/{lesson_id}/students/{student_id}/cognitive-load-counts")
+def get_student_lesson_load_counts(
+    lesson_id: str,
+    student_id: str,
+    db: Session = Depends(get_db),
+):
+    return get_student_lesson_cognitive_load_counts(db, lesson_id, student_id)
 
 
 @router.get("/lessons/{lesson_id}/predictions/{prediction_id}/lime")

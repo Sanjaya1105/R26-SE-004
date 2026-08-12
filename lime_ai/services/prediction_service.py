@@ -557,6 +557,47 @@ def list_students_for_lesson(db: Session, lesson_id: str) -> dict[str, Any]:
     }
 
 
+def get_student_lesson_cognitive_load_counts(
+    db: Session,
+    lesson_id: str,
+    student_id: str,
+) -> dict[str, Any]:
+    rows = (
+        db.query(
+            CognitiveLoadPrediction.predicted_cognitive_load,
+            func.count(CognitiveLoadPrediction.id).label("load_count"),
+        )
+        .filter(
+            CognitiveLoadPrediction.lesson_id == lesson_id,
+            CognitiveLoadPrediction.student_id == student_id,
+        )
+        .group_by(CognitiveLoadPrediction.predicted_cognitive_load)
+        .all()
+    )
+    severity = {"Very High": 5, "High": 4, "Medium": 3, "Low": 2, "Very Low": 1}
+    counts = {
+        str(row.predicted_cognitive_load): int(row.load_count)
+        for row in rows
+    }
+    dominant = max(
+        counts,
+        key=lambda label: (counts[label], severity.get(label, 0), label),
+        default=None,
+    )
+    return {
+        "success": True,
+        "message": "Cognitive-load counts retrieved successfully.",
+        "data": {
+            "student_id": student_id,
+            "lesson_id": lesson_id,
+            "counts": counts,
+            "total_predictions": sum(counts.values()),
+            "dominant_cognitive_load": dominant,
+        },
+        "errors": [],
+    }
+
+
 def list_predictions_filtered(
     db: Session,
     lesson_id: str,

@@ -41,6 +41,7 @@ test('generateMcqs requests structured non-streaming output from gemma3:12b', as
   const result = await generateMcqs({
     lessonName: 'Algorithms',
     unitNo: '1',
+    cognitiveLoad: 'High',
     context: '[Page 1]\nA sorting algorithm arranges values.',
   });
 
@@ -49,4 +50,5 @@ test('generateMcqs requests structured non-streaming output from gemma3:12b', as
   assert.equal(requestBody.stream, false);
   assert.equal(requestBody.format.properties.questions.minItems, 10);
   assert.match(requestBody.messages[1].content, /sorting algorithm/);
+  assert.match(requestBody.messages[1].content, /dominant cognitive-load level.*"High"/);
 });

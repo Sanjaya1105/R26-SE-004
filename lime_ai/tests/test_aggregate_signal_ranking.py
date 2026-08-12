@@ -5,11 +5,13 @@ from sqlalchemy.orm import sessionmaker
 
 from config.database import Base
 from models.student_lesson_top_signals import StudentLessonTopSignals
+from models.prediction import CognitiveLoadPrediction
 from schemas.prediction import AggregateExplanationRequest
 from services.prediction_service import (
     _save_top_aggregate_signals,
     _top_aggregate_signals,
     get_cached_student_lesson_analysis,
+    get_student_lesson_cognitive_load_counts,
 )
 
 
@@ -176,6 +178,54 @@ class AggregateSignalPersistenceTests(unittest.TestCase):
         result = get_cached_student_lesson_analysis(self.db, "lesson-7", "student-9")
 
         self.assertIsNone(result["data"])
+
+
+class CognitiveLoadCountTests(unittest.TestCase):
+    def setUp(self):
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        self.db = sessionmaker(bind=engine)()
+
+    def tearDown(self):
+        self.db.close()
+
+    def _prediction(self, label: str, minute: int) -> CognitiveLoadPrediction:
+        return CognitiveLoadPrediction(
+            student_id="student-1",
+            lesson_id="lesson-1",
+            session_id="session-1",
+            minute_index=minute,
+            pause_frequency=1,
+            navigation_count_video=1,
+            rewatch_segments=1,
+            playback_rate_change=1,
+            idle_duration_video=1,
+            time_on_content=1,
+            navigation_count_adaptation=0,
+            revisit_frequency=0,
+            idle_duration_adaptation=0,
+            quiz_response_time=0,
+            error_rate=0.0,
+            predicted_cognitive_load=label,
+            predicted_score=3,
+            confidence=0.8,
+        )
+
+    def test_returns_highest_count_for_selected_student_and_lesson(self):
+        self.db.add_all([
+            self._prediction("Low", 1),
+            self._prediction("High", 2),
+            self._prediction("High", 3),
+        ])
+        self.db.commit()
+
+        result = get_student_lesson_cognitive_load_counts(
+            self.db, "lesson-1", "student-1"
+        )["data"]
+
+        self.assertEqual(result["counts"], {"High": 2, "Low": 1})
+        self.assertEqual(result["dominant_cognitive_load"], "High")
+        self.assertEqual(result["total_predictions"], 3)
 
 
 if __name__ == "__main__":

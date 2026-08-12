@@ -138,10 +138,11 @@ router.get('/', requireTeacher, async (req, res) => {
 router.get('/lessons', requireTeacher, async (_req, res) => {
   try {
     const [rows] = await pool.execute(
-      `SELECT lesson_name AS lessonName, unit_no AS unitNo, COUNT(*) AS materialCount
+      `SELECT course_id AS courseId, course_name AS courseName,
+              lesson_name AS lessonName, unit_no AS unitNo, COUNT(*) AS materialCount
        FROM exam_materials
-       GROUP BY lesson_name, unit_no
-       ORDER BY lesson_name ASC, unit_no ASC`
+       GROUP BY course_id, course_name, lesson_name, unit_no
+       ORDER BY course_name ASC, lesson_name ASC, unit_no ASC`
     );
     return res.json({ lessons: rows });
   } catch (error) {

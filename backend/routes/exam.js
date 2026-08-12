@@ -3,10 +3,12 @@ const multer = require('multer');
 const axios = require('axios');
 const FormData = require('form-data');
 const verifyToken = require('../middleware/verifyToken');
+const Enrollment = require('../models/Enrollment');
 
 const router = express.Router();
 const examServiceUrl = (process.env.EXAM_SERVICE_URL || 'http://localhost:8120').replace(/\/$/, '');
 const apiGatewayUrl = (process.env.API_GATEWAY_URL || 'http://localhost:4000').replace(/\/$/, '');
+const limeServiceUrl = (process.env.LIME_AI_SERVICE_URL || 'http://localhost:8110').replace(/\/$/, '');
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 25 * 1024 * 1024 },
@@ -44,7 +46,18 @@ router.get('/materials/lessons', verifyToken, async (req, res) => {
     const upstream = await axios.get(`${examServiceUrl}/materials/lessons`, {
       headers: teacherHeaders(req),
     });
-    return res.status(upstream.status).json(upstream.data);
+    if (req.user?.role !== 'Student') {
+      return res.status(upstream.status).json(upstream.data);
+    }
+
+    const enrollments = await Enrollment.find({ studentId: req.user.id })
+      .select('courseId')
+      .lean();
+    const enrolledCourseIds = new Set(enrollments.map((row) => String(row.courseId)));
+    const lessons = Array.isArray(upstream.data?.lessons)
+      ? upstream.data.lessons.filter((lesson) => enrolledCourseIds.has(String(lesson.courseId)))
+      : [];
+    return res.status(upstream.status).json({ ...upstream.data, lessons });
   } catch (error) {
     return upstreamError(res, error);
   }
@@ -144,11 +157,32 @@ router.get('/materials/:id/images/:imageId', verifyToken, async (req, res) => {
 
 router.post('/quizzes/generate', verifyToken, async (req, res) => {
   try {
-    const upstream = await axios.post(`${examServiceUrl}/quizzes/generate`, req.body, {
+    const requestBody = { ...req.body };
+    if (req.user?.role === 'Student') {
+      const courseId = String(requestBody.courseId || '').trim();
+      const enrollment = await Enrollment.findOne({ studentId: req.user.id, courseId }).lean();
+      if (!enrollment) {
+        return res.status(403).json({ message: 'You can only generate exams for enrolled courses.' });
+      }
+
+      const loadResponse = await axios.get(
+        `${limeServiceUrl}/api/v1/lessons/${encodeURIComponent(courseId)}` +
+          `/students/${encodeURIComponent(String(req.user.id))}/cognitive-load-counts`,
+        { timeout: 10000 }
+      );
+      const loadData = loadResponse.data?.data || {};
+      requestBody.cognitiveLoad = loadData.dominant_cognitive_load || 'Unknown';
+      requestBody.cognitiveLoadCounts = loadData.counts || {};
+    }
+
+    const upstream = await axios.post(`${examServiceUrl}/quizzes/generate`, requestBody, {
       headers: teacherHeaders(req),
       timeout: Number(process.env.EXAM_GENERATION_TIMEOUT_MS || 620000),
     });
-    return res.status(upstream.status).json(upstream.data);
+    return res.status(upstream.status).json({
+      ...upstream.data,
+      cognitiveLoadCounts: requestBody.cognitiveLoadCounts || {},
+    });
   } catch (error) {
     return upstreamError(res, error);
   }

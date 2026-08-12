@@ -33,8 +33,10 @@ function buildContext(rows) {
 router.post('/generate', requireTeacher, async (req, res) => {
   const lessonName = String(req.body.lessonName || '').trim();
   const unitNo = String(req.body.unitNo || '').trim();
-  if (!lessonName || !unitNo) {
-    return res.status(400).json({ message: 'Lesson name and unit number are required.' });
+  const courseId = String(req.body.courseId || '').trim();
+  const cognitiveLoad = String(req.body.cognitiveLoad || '').trim() || 'Unknown';
+  if (!courseId || !lessonName || !unitNo) {
+    return res.status(400).json({ message: 'Course, lesson name, and unit number are required.' });
   }
 
   try {
@@ -42,9 +44,10 @@ router.post('/generate', requireTeacher, async (req, res) => {
       `SELECT c.content, c.page_number AS pageNumber
        FROM exam_material_chunks c
        INNER JOIN exam_materials m ON m.id = c.material_id
-       WHERE m.lesson_name = ? AND m.unit_no = ? AND m.extraction_status = 'completed'
+       WHERE m.course_id = ? AND m.lesson_name = ? AND m.unit_no = ?
+         AND m.extraction_status = 'completed'
        ORDER BY m.created_at ASC, c.chunk_index ASC`,
-      [lessonName, unitNo]
+      [courseId, lessonName, unitNo]
     );
     const context = buildContext(chunks);
     if (!context) {
@@ -53,7 +56,7 @@ router.post('/generate', requireTeacher, async (req, res) => {
       });
     }
 
-    const generated = await generateMcqs({ lessonName, unitNo, context });
+    const generated = await generateMcqs({ lessonName, unitNo, cognitiveLoad, context });
     const quizId = crypto.randomUUID();
     const connection = await pool.getConnection();
     try {
@@ -88,6 +91,7 @@ router.post('/generate', requireTeacher, async (req, res) => {
         id: quizId,
         lessonName,
         unitNo,
+        cognitiveLoad,
         questionCount: generated.questions.length,
         questions: generated.questions.map((question, index) => ({
           index,

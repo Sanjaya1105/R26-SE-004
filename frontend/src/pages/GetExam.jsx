@@ -3,6 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { checkExamAnswers, fetchExamLessons, generateExamQuiz } from '../exam/apiClient';
 import './GetExam.css';
 
+function formatCognitiveLoadCounts(counts) {
+  const displayOrder = ['Very Low', 'Low', 'Medium', 'High', 'Very High'];
+  return displayOrder
+    .filter((level) => Number(counts?.[level] || 0) > 0)
+    .map((level) => `${level}: ${counts[level]}`)
+    .join(', ');
+}
+
 export default function GetExam() {
   const [lessons, setLessons] = useState([]);
   const [showLessons, setShowLessons] = useState(false);
@@ -17,7 +25,7 @@ export default function GetExam() {
   const navigate = useNavigate();
 
   const selectedLesson = lessons.find(
-    (lesson) => `${lesson.lessonName}\u0000${lesson.unitNo}` === selectedLessonKey
+    (lesson) => `${lesson.courseId}\u0000${lesson.lessonName}\u0000${lesson.unitNo}` === selectedLessonKey
   );
 
   async function loadLessons() {
@@ -93,10 +101,10 @@ export default function GetExam() {
         <div>
           <p>Exam preparation</p>
           <h1>Get Exam</h1>
-          <span>Generate a 10-question exam from extracted lecture notes.</span>
+          <span>Generate a personalized 10-question exam from your enrolled lessons.</span>
         </div>
-        <button type="button" className="get-exam-button secondary" onClick={() => navigate('/dashboard')}>
-          Back to dashboard
+        <button type="button" className="get-exam-button secondary" onClick={() => navigate('/course')}>
+          Back to courses
         </button>
       </header>
 
@@ -104,7 +112,7 @@ export default function GetExam() {
         <section className="get-exam-panel intro-panel">
           <div>
             <h2>Choose your lesson</h2>
-            <p>Lessons are loaded from all uploaded materials in the exam-mcq database.</p>
+            <p>Lessons are loaded only from courses in which you are enrolled.</p>
           </div>
           <button type="button" className="get-exam-button primary" onClick={loadLessons} disabled={loading}>
             {loading ? 'Loading lessons...' : 'Select Lesson'}
@@ -125,9 +133,9 @@ export default function GetExam() {
             {!loading && !error && lessons.length === 0 && (
               <div className="empty-lessons">
                 <h3>No lessons found</h3>
-                <p>Upload a lecture PDF for an exam before selecting a lesson.</p>
-                <button type="button" className="get-exam-button secondary" onClick={() => navigate('/exam-materials')}>
-                  Upload lecture material
+                <p>No exam material is available for your enrolled courses.</p>
+                <button type="button" className="get-exam-button secondary" onClick={() => navigate('/course')}>
+                  Browse courses
                 </button>
               </div>
             )}
@@ -138,10 +146,10 @@ export default function GetExam() {
                 <select value={selectedLessonKey} onChange={(event) => chooseLesson(event.target.value)}>
                   <option value="">Choose a lesson</option>
                   {lessons.map((lesson) => {
-                    const key = `${lesson.lessonName}\u0000${lesson.unitNo}`;
+                    const key = `${lesson.courseId}\u0000${lesson.lessonName}\u0000${lesson.unitNo}`;
                     return (
                       <option value={key} key={key}>
-                        {lesson.lessonName} - Unit {lesson.unitNo}
+                        {lesson.courseName} - {lesson.lessonName} - Unit {lesson.unitNo}
                       </option>
                     );
                   })}
@@ -171,8 +179,17 @@ export default function GetExam() {
                 <p className="eyebrow">Generated exam</p>
                 <h2>{quiz.lessonName} - 10 MCQs</h2>
               </div>
-              <span>{answers.filter(Boolean).length}/10 answered</span>
+              <span>
+                Cognitive load: {quiz.cognitiveLoad || 'Unknown'} · {answers.filter(Boolean).length}/10 answered
+              </span>
             </div>
+
+            <p className="get-exam-message success">
+              MCQ prompt used dominant cognitive load: <strong>{quiz.cognitiveLoad || 'Unknown'}</strong>
+              {formatCognitiveLoadCounts(quiz.cognitiveLoadCounts)
+                ? ` (${formatCognitiveLoadCounts(quiz.cognitiveLoadCounts)})`
+                : ' (no cognitive-load predictions were recorded for this lesson)'}.
+            </p>
 
             <div className="quiz-questions">
               {quiz.questions.map((question, questionIndex) => {

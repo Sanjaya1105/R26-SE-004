@@ -79,7 +79,7 @@ function validateQuiz(payload) {
   });
 }
 
-async function generateMcqs({ lessonName, unitNo, context }) {
+async function generateMcqs({ lessonName, unitNo, cognitiveLoad = 'Unknown', context }) {
   const baseUrl = String(process.env.OLLAMA_BASE_URL || 'http://localhost:11434').replace(/\/$/, '');
   const model = String(process.env.OLLAMA_EXAM_MODEL || DEFAULT_MODEL).trim();
   const timeoutMs = Number(process.env.OLLAMA_EXAM_TIMEOUT_MS || 600000);
@@ -87,6 +87,11 @@ async function generateMcqs({ lessonName, unitNo, context }) {
 
 Requirements:
 - Test important concepts from the material for lesson "${lessonName}", unit "${unitNo}".
+- The student's dominant cognitive-load level for this lesson is "${cognitiveLoad}".
+- Adapt question wording and difficulty to that level: for High or Very High, use concise wording,
+  direct concept checks, and avoid trick questions or unnecessary multi-step reasoning; for Medium,
+  use a balanced mix of recall, understanding, and simple application; for Low or Very Low, include
+  more application and inference questions while remaining strictly grounded in the material.
 - Each question must have exactly four plausible options in A, B, C, D order.
 - There must be exactly one correct option.
 - Include a short explanation grounded in the lecture material.
