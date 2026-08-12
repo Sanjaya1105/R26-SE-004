@@ -1,0 +1,197 @@
+const express = require("express");
+const axios = require("axios");
+const verifyToken = require("../middleware/verifyToken");
+const { selectBestOutput } = require("../lib/selectBestOutput");
+
+const router = express.Router();
+
+const DEFAULT_SYSTEM =
+  "You are a helpful educational assistant. Explain clearly, keep answers practical, and support content conversion and learning.";
+
+function getDeepseekConfig() {
+  const apiKey = String(process.env.DEEPSEEK_API_KEY || "").trim();
+  const baseUrl = String(
+    process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com"
+  )
+    .trim()
+    .replace(/\/$/, "");
+  const model = String(process.env.DEEPSEEK_MODEL || "deepseek-chat").trim();
+  return { apiKey, baseUrl, model };
+}
+
+async function callDeepseekChat(messages, { maxTokens = 1024 } = {}) {
+  const { apiKey, baseUrl, model } = getDeepseekConfig();
+  if (!apiKey) {
+    const error = new Error("DEEPSEEK_API_KEY is not configured.");
+    error.status = 500;
+    throw error;
+  }
+
+  const response = await axios.post(
+    `${baseUrl}/chat/completions`,
+    {
+      model,
+      messages,
+      max_tokens: maxTokens,
+      temperature: 0.7,
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      timeout: 120000,
+      validateStatus: () => true,
+    }
+  );
+
+  if (response.status >= 400) {
+    const detail =
+      response.data?.error?.message ||
+      (typeof response.data?.error === "string"
+        ? response.data.error
+        : JSON.stringify(response.data));
+    const error = new Error(detail || "DeepSeek request failed.");
+    error.status = 502;
+    error.detail = detail;
+    throw error;
+  }
+
+  const answer = String(
+    response.data?.choices?.[0]?.message?.content || ""
+  ).trim();
+
+  if (!answer) {
+    const error = new Error("DeepSeek returned an empty answer.");
+    error.status = 502;
+    throw error;
+  }
+
+  return { answer, model };
+}
+
+function normalizeHistory(history) {
+  if (!Array.isArray(history)) return [];
+  return history
+    .map((item) => ({
+      role: String(item?.role || "").trim(),
+      content: String(item?.content || "").trim(),
+    }))
+    .filter(
+      (item) =>
+        item.content &&
+        (item.role === "user" ||
+          item.role === "assistant" ||
+          item.role === "system")
+    )
+    .slice(-20);
+}
+
+/**
+ * Frontend chat (via API gateway). Requires student/teacher JWT.
+ * Body: { message: string, history?: [{ role, content }] }
+ */
+router.post("/chat", verifyToken, async (req, res) => {
+  const message = String(req.body?.message || "").trim();
+  if (!message) {
+    return res.status(400).json({ message: "message is required" });
+  }
+
+  const history = normalizeHistory(req.body?.history);
+  const messages = [
+    { role: "system", content: DEFAULT_SYSTEM },
+    ...history.filter((item) => item.role !== "system"),
+    { role: "user", content: message },
+  ];
+
+  try {
+    const { answer, model } = await callDeepseekChat(messages);
+    return res.status(200).json({
+      success: true,
+      data: { answer, model },
+    });
+  } catch (error) {
+    return res.status(error.status || 500).json({
+      message: error.message || "Failed to get response from DeepSeek.",
+      detail: error.detail,
+    });
+  }
+});
+
+/**
+ * Service-to-service content conversion (direct call to this service).
+ * Body: { content: string, instruction?: string }
+ */
+router.post("/convert", async (req, res) => {
+  const content = String(req.body?.content || "").trim();
+  const instruction = String(
+    req.body?.instruction ||
+      "Convert and rewrite the following content into clear educational material."
+  ).trim();
+
+  if (!content) {
+    return res.status(400).json({ message: "content is required" });
+  }
+
+  const messages = [
+    {
+      role: "system",
+      content:
+        "You convert educational content. Follow the instruction precisely and return only the converted content.",
+    },
+    {
+      role: "user",
+      content: `${instruction}\n\n---\n\n${content}`,
+    },
+  ];
+
+  try {
+    const { answer, model } = await callDeepseekChat(messages, {
+      maxTokens: 2048,
+    });
+    return res.status(200).json({
+      success: true,
+      data: { converted: answer, model },
+    });
+  } catch (error) {
+    return res.status(error.status || 500).json({
+      message: error.message || "Failed to convert content with DeepSeek.",
+      detail: error.detail,
+    });
+  }
+});
+
+router.get("/health", (req, res) => {
+  res.json({ ok: true, service: "deepseek-service" });
+});
+
+/**
+ * Cross-check two model outputs against source content and pick the better one.
+ * Body: {
+ *   sourceContent, gptOutput, deepseekOutput, cognitiveLoadLevel?
+ * }
+ */
+router.post("/select-best", verifyToken, async (req, res) => {
+  try {
+    const result = await selectBestOutput({
+      sourceContent: req.body?.sourceContent,
+      gptOutput: req.body?.gptOutput,
+      deepseekOutput: req.body?.deepseekOutput,
+      cognitiveLoadLevel: req.body?.cognitiveLoadLevel,
+    });
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    return res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    console.error("[select-best] Unexpected error:", error);
+    return res.status(500).json({
+      message: "Failed to select best output.",
+      detail: error?.message || String(error),
+    });
+  }
+});
+
+module.exports = router;
