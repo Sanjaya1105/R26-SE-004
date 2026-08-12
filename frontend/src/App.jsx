@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import StudentLogin from './pages/student/StudentLogin';
 import StudentRegistration from './pages/student/StudentRegistration';
+import StudentProfile from './pages/student/StudentProfile';
 import AssistQuestionPage from './pages/cognitiveStyleAndLearnerProfile/Learner Profile/AssistQuestionPage';
 import CalibrationPage from './pages/cognitiveStyleAndLearnerProfile/CognitiveStyle/Calibration/Calibration';
 import Module2 from './pages/cognitiveStyleAndLearnerProfile/CognitiveStyle/SplitScreenModule/Module2';
@@ -25,10 +26,25 @@ import GetExam from './pages/GetExam';
 import NextLessonRecommendation from './pages/NextLessonRecommendation';
 import './index.css';
 
-// Simple PrivateRoute component
+const getStoredUser = () => {
+  try {
+    return JSON.parse(localStorage.getItem('user') || 'null');
+  } catch {
+    return null;
+  }
+};
+
+// Simple PrivateRoute component (teacher routes)
 const PrivateRoute = ({ children }) => {
   const token = localStorage.getItem('token');
   return token ? children : <Navigate to="/login" replace />;
+};
+
+const StudentRoute = ({ children }) => {
+  const token = localStorage.getItem('token');
+  const user = getStoredUser();
+  const isStudent = Boolean(token && user?.role === 'Student');
+  return isStudent ? children : <Navigate to="/student/login" replace />;
 };
 
 function App() {
@@ -38,10 +54,23 @@ function App() {
         <Route path="/" element={<Navigate to="/course" replace />} />
         <Route path="/student/login" element={<StudentLogin />} />
         <Route path="/student/register" element={<StudentRegistration />} />
+        <Route path="/student/profile" element={
+          <StudentRoute>
+            <StudentProfile />
+          </StudentRoute>
+        } />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/course/:courseId" element={<CourseDetail />} />
-        <Route path="/course" element={<Course />} />
+        <Route path="/course/:courseId" element={
+          <StudentRoute>
+            <CourseDetail />
+          </StudentRoute>
+        } />
+        <Route path="/course" element={
+          <StudentRoute>
+            <Course />
+          </StudentRoute>
+        } />
         <Route path="/learner-profile" element={<AssistQuestionPage />} />
         <Route path="/split-screen" element={<Module2 />} />
         <Route path="/geft" element={<QuestionRunner />} />

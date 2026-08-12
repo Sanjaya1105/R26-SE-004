@@ -14,11 +14,13 @@ const authRoutes = require('./routes/auth');
 const dashboardRoutes = require('./routes/dashboard');
 const lessonsRoutes = require('./routes/lessons');
 const examRoutes = require('./routes/exam');
+const enrollmentRoutes = require('./routes/enrollments');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/lessons', lessonsRoutes);
 app.use('/api/exam', examRoutes);
+app.use('/api/enrollments', enrollmentRoutes);
 
 const mongoUri =
   process.env.MONGO_URI ||
