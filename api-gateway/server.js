@@ -90,6 +90,15 @@ app.use(
 );
 
 app.use(
+  "/api/enrollments",
+  createProxyMiddleware({
+    target: BACKEND_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: (path) => `/api/enrollments${path}`,
+  })
+);
+
+app.use(
   "/api/gpt",
   createProxyMiddleware({
     target: GPT_SERVICE_URL,
