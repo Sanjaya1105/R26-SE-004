@@ -6,6 +6,7 @@ from schemas.prediction import AggregateExplanationRequest, CognitiveLoadInput
 from services.prediction_service import (
     aggregate_and_save_student_lesson_summary,
     generate_aggregate_explanation,
+    get_cached_student_lesson_analysis,
     get_lime_explanation_for_prediction,
     list_lessons,
     list_predictions,
@@ -74,6 +75,15 @@ def create_student_lesson_summary(
     db: Session = Depends(get_db),
 ):
     return aggregate_and_save_student_lesson_summary(db, lesson_id, student_id)
+
+
+@router.get("/lessons/{lesson_id}/students/{student_id}/analysis")
+def get_student_lesson_analysis(
+    lesson_id: str,
+    student_id: str,
+    db: Session = Depends(get_db),
+):
+    return get_cached_student_lesson_analysis(db, lesson_id, student_id)
 
 
 @router.get("/lessons/{lesson_id}/predictions/{prediction_id}/lime")

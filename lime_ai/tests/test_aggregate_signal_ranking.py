@@ -6,7 +6,11 @@ from sqlalchemy.orm import sessionmaker
 from config.database import Base
 from models.student_lesson_top_signals import StudentLessonTopSignals
 from schemas.prediction import AggregateExplanationRequest
-from services.prediction_service import _save_top_aggregate_signals, _top_aggregate_signals
+from services.prediction_service import (
+    _save_top_aggregate_signals,
+    _top_aggregate_signals,
+    get_cached_student_lesson_analysis,
+)
 
 
 class AggregateSignalRankingTests(unittest.TestCase):
@@ -126,6 +130,52 @@ class AggregateSignalPersistenceTests(unittest.TestCase):
         self.assertIsNone(updated.top_2_signal)
         self.assertIsNone(updated.top_3_value)
         self.assertEqual(self.db.query(StudentLessonTopSignals).count(), 1)
+
+    def test_complete_analysis_can_be_loaded_without_regeneration(self):
+        self.payload.lime_explanation = {
+            "prediction_id": 42,
+            "intercept": 2.5,
+            "factors": [{"rule": "pause_frequency > 5", "weight": 0.4}],
+        }
+        self.payload.shap_explanation = {
+            "prediction_id": 42,
+            "expected_value": 2.1,
+            "shap_values": [{"feature": "pause_frequency", "shap_value": 0.7}],
+        }
+        _save_top_aggregate_signals(
+            self.db,
+            self.payload,
+            [{"signal": "pause_frequency", "raw_value": 2.0, "normalized_value": 1.0}],
+            human_explanation="The student paused frequently while working through the lesson.",
+            explanation_source="ollama",
+            study_technique={"techniques": [{"technique": "Pomodoro"}], "source": "ollama"},
+            lecture_support={"strategies": "1. Pause after each concept.", "source": "ollama"},
+        )
+
+        result = get_cached_student_lesson_analysis(self.db, "lesson-7", "student-9")
+
+        self.assertTrue(result["data"]["cached"])
+        self.assertEqual(result["data"]["lime_explanation"]["intercept"], 2.5)
+        self.assertEqual(result["data"]["shap_explanation"]["expected_value"], 2.1)
+        self.assertEqual(
+            result["data"]["aggregate_explanation"]["study_technique"]["source"],
+            "ollama",
+        )
+        self.assertEqual(
+            result["data"]["aggregate_explanation"]["top_signals"][0]["signal"],
+            "pause_frequency",
+        )
+
+    def test_top_signals_only_is_not_treated_as_complete_cache(self):
+        _save_top_aggregate_signals(
+            self.db,
+            self.payload,
+            [{"signal": "pause_frequency", "raw_value": 2.0, "normalized_value": 1.0}],
+        )
+
+        result = get_cached_student_lesson_analysis(self.db, "lesson-7", "student-9")
+
+        self.assertIsNone(result["data"])
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, Integer, String, UniqueConstraint
+from sqlalchemy import JSON, DateTime, Float, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from config.database import Base
@@ -17,6 +17,8 @@ class StudentLessonTopSignals(Base):
     lesson_id: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     prediction_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     predicted_cognitive_load: Mapped[str] = mapped_column(String(20), nullable=False)
+    predicted_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     top_1_signal: Mapped[str | None] = mapped_column(String(255), nullable=True)
     top_1_value: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -27,6 +29,16 @@ class StudentLessonTopSignals(Base):
     top_3_signal: Mapped[str | None] = mapped_column(String(255), nullable=True)
     top_3_value: Mapped[float | None] = mapped_column(Float, nullable=True)
     top_3_normalized_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Keep the complete analysis beside the ranked values.  This record is
+    # unique per student and lesson, so a later request can be served without
+    # rerunning LIME, SHAP, or Ollama.
+    lime_explanation: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    shap_explanation: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    human_explanation: Mapped[str | None] = mapped_column(Text, nullable=True)
+    explanation_source: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    study_technique: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    lecture_support: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(

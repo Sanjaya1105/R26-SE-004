@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -63,3 +64,5 @@ class AggregateExplanationRequest(BaseModel):
     confidence: float
     lime_factors: list[AggregateLimeFactor]
     shap_values: list[AggregateShapValue]
+    lime_explanation: dict[str, Any] | None = None
+    shap_explanation: dict[str, Any] | None = None

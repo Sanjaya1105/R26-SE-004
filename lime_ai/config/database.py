@@ -48,19 +48,33 @@ def init_db() -> None:
     Base.metadata.create_all(bind=db_engine)
 
     # create_all() does not add columns to an existing table. Keep current
-    # installations compatible when this field is introduced after the table
-    # has already been created.
+    # installations compatible as analysis-cache fields are introduced.
     table_name = "student-lesson-top-signals"
     column_names = {column["name"] for column in inspect(db_engine).get_columns(table_name)}
-    if "predicted_cognitive_load" not in column_names:
+    migrations = {
+        "predicted_cognitive_load": (
+            "predicted_cognitive_load VARCHAR(20) NOT NULL DEFAULT 'Unknown' AFTER prediction_id"
+        ),
+        "predicted_score": "predicted_score INT NULL AFTER predicted_cognitive_load",
+        "confidence": "confidence FLOAT NULL AFTER predicted_score",
+        "lime_explanation": "lime_explanation JSON NULL AFTER top_3_normalized_value",
+        "shap_explanation": "shap_explanation JSON NULL AFTER lime_explanation",
+        "human_explanation": "human_explanation TEXT NULL AFTER shap_explanation",
+        "explanation_source": "explanation_source VARCHAR(30) NULL AFTER human_explanation",
+        "study_technique": "study_technique JSON NULL AFTER explanation_source",
+        "lecture_support": "lecture_support JSON NULL AFTER study_technique",
+    }
+    missing_columns = [name for name in migrations if name not in column_names]
+    if missing_columns:
         with db_engine.begin() as connection:
-            connection.execute(
-                text(
-                    "ALTER TABLE `student-lesson-top-signals` "
-                    "ADD COLUMN predicted_cognitive_load VARCHAR(20) "
-                    "NOT NULL DEFAULT 'Unknown' AFTER prediction_id"
+            for column_name in missing_columns:
+                definition = migrations[column_name]
+                connection.execute(
+                    text(
+                        "ALTER TABLE `student-lesson-top-signals` "
+                        f"ADD COLUMN {definition}"
+                    )
                 )
-            )
 
 
 def get_db() -> Generator[Session, None, None]:

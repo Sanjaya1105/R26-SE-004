@@ -137,6 +137,11 @@ def _save_top_aggregate_signals(
     db: Session,
     payload: AggregateExplanationRequest,
     top_signals: list[dict[str, Any]],
+    *,
+    human_explanation: str | None = None,
+    explanation_source: str | None = None,
+    study_technique: dict[str, Any] | None = None,
+    lecture_support: dict[str, Any] | None = None,
 ) -> StudentLessonTopSignals:
     saved = (
         db.query(StudentLessonTopSignals)
@@ -158,6 +163,8 @@ def _save_top_aggregate_signals(
 
     saved.prediction_id = payload.prediction_id
     saved.predicted_cognitive_load = payload.predicted_cognitive_load
+    saved.predicted_score = payload.predicted_score
+    saved.confidence = payload.confidence
     for rank in range(1, 4):
         signal = top_signals[rank - 1] if rank <= len(top_signals) else None
         setattr(saved, f"top_{rank}_signal", signal["signal"] if signal else None)
@@ -168,9 +175,112 @@ def _save_top_aggregate_signals(
             float(signal["normalized_value"]) if signal else None,
         )
 
+    if payload.lime_explanation is not None:
+        saved.lime_explanation = payload.lime_explanation
+    if payload.shap_explanation is not None:
+        saved.shap_explanation = payload.shap_explanation
+    if human_explanation is not None:
+        saved.human_explanation = human_explanation
+    if explanation_source is not None:
+        saved.explanation_source = explanation_source
+    if study_technique is not None:
+        saved.study_technique = study_technique
+    if lecture_support is not None:
+        saved.lecture_support = lecture_support
+
     db.commit()
     db.refresh(saved)
     return saved
+
+
+def _top_signals_from_record(record: StudentLessonTopSignals) -> list[dict[str, Any]]:
+    signals = []
+    for rank in range(1, 4):
+        signal = getattr(record, f"top_{rank}_signal")
+        if signal is None:
+            continue
+        raw_value = float(getattr(record, f"top_{rank}_value") or 0.0)
+        normalized_value = float(getattr(record, f"top_{rank}_normalized_value") or 0.0)
+        signals.append(
+            {
+                "source": "combined",
+                "signal": signal,
+                "raw_value": raw_value,
+                "strength": raw_value,
+                "normalized_value": normalized_value,
+                "normalized_strength": normalized_value,
+                "impact": "positive",
+            }
+        )
+    return signals
+
+
+def get_cached_student_lesson_analysis(
+    db: Session,
+    lesson_id: str,
+    student_id: str,
+) -> dict[str, Any]:
+    record = (
+        db.query(StudentLessonTopSignals)
+        .filter(
+            StudentLessonTopSignals.student_id == student_id,
+            StudentLessonTopSignals.lesson_id == lesson_id,
+        )
+        .one_or_none()
+    )
+
+    # Old rows contain only top-three values. They are not complete cache hits
+    # and should be regenerated once so every displayed section can be restored.
+    complete = record is not None and all(
+        value is not None
+        for value in (
+            record.lime_explanation,
+            record.shap_explanation,
+            record.human_explanation,
+            record.study_technique,
+            record.lecture_support,
+        )
+    )
+    if not complete:
+        return {
+            "success": True,
+            "message": "No complete saved analysis was found.",
+            "data": None,
+            "errors": [],
+        }
+
+    return {
+        "success": True,
+        "message": "Saved analysis retrieved successfully.",
+        "data": {
+            "cached": True,
+            "lesson_id": record.lesson_id,
+            "prediction_id": record.prediction_id,
+            "student_id": record.student_id,
+            "predicted_cognitive_load": record.predicted_cognitive_load,
+            "predicted_score": record.predicted_score,
+            "confidence": record.confidence,
+            "lime_explanation": record.lime_explanation,
+            "shap_explanation": record.shap_explanation,
+            "aggregate_explanation": {
+                "cached": True,
+                "lesson_id": record.lesson_id,
+                "prediction_id": record.prediction_id,
+                "student_id": record.student_id,
+                "predicted_cognitive_load": record.predicted_cognitive_load,
+                "predicted_score": record.predicted_score,
+                "confidence": record.confidence,
+                "top_signals": _top_signals_from_record(record),
+                "top_signals_record_id": record.id,
+                "human_explanation": record.human_explanation,
+                "explanation_source": record.explanation_source or "ollama",
+                "study_technique": record.study_technique,
+                "lecture_support": record.lecture_support,
+            },
+            "saved_at": record.updated_at.isoformat() if record.updated_at else None,
+        },
+        "errors": [],
+    }
 
 
 def generate_aggregate_explanation(
@@ -224,12 +334,21 @@ def generate_aggregate_explanation(
             },
         ) from exc
 
-    saved_signals = _save_top_aggregate_signals(db, payload, top_signals)
+    saved_signals = _save_top_aggregate_signals(
+        db,
+        payload,
+        top_signals,
+        human_explanation=explanation_text,
+        explanation_source="ollama",
+        study_technique=study_technique,
+        lecture_support=lecture_support,
+    )
 
     return {
         "success": True,
         "message": "Aggregate explanation generated successfully.",
         "data": {
+            "cached": False,
             "lesson_id": payload.lesson_id,
             "prediction_id": payload.prediction_id,
             "student_id": payload.student_id,

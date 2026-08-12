@@ -7,6 +7,7 @@ import {
   fetchLimeExplanation,
   fetchLimeLessons,
   fetchLimeStudentsByLesson,
+  fetchSavedStudentLessonAnalysis,
 } from '../lime/apiClient';
 import { fetchShapExplanation } from '../shap/apiClient';
 import { analyseCognitiveStyle } from '../cognitiveStyle/apiClient';
@@ -193,6 +194,21 @@ export default function StudentAnalyse() {
       const limeSamples = 50;   // LIME: 50 samples
       const shapSamples = 25;   // SHAP: 25 samples
 
+      const savedAnalysis = await fetchSavedStudentLessonAnalysis(
+        selectedLessonId,
+        row.student_id,
+      );
+      if (savedAnalysis) {
+        setLimeExplanation(savedAnalysis.lime_explanation);
+        setShapExplanation(savedAnalysis.shap_explanation);
+        setAggregateExplanation(savedAnalysis.aggregate_explanation);
+        setSelectedAnalysisRowId(row.id);
+        setStatusMessage(
+          `Saved LIME, SHAP, and AI guidance loaded for student ${row.student_id}.`,
+        );
+        return;
+      }
+
       const [limeResult, shapResult] = await Promise.allSettled([
         fetchLimeExplanation(selectedLessonId, row.id, {
           numFeatures: 8,
@@ -229,6 +245,8 @@ export default function StudentAnalyse() {
             confidence: Number(row.confidence),
             lime_factors: limeResult.value.factors ?? [],
             shap_values: shapResult.value.shap_values ?? [],
+            lime_explanation: limeResult.value,
+            shap_explanation: shapResult.value,
           });
           setAggregateExplanation(aggregate);
         } catch (aggregateErr) {

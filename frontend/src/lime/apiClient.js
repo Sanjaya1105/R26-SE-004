@@ -34,6 +34,10 @@ export async function fetchLimeStudentsByLesson(lessonId) {
   return request(`/lessons/${lessonId}/students`);
 }
 
+export async function fetchSavedStudentLessonAnalysis(lessonId, studentId) {
+  return request(`/lessons/${lessonId}/students/${studentId}/analysis`);
+}
+
 export async function fetchLimePredictions(lessonId, { studentId = '', highOnly = true, includeMedium = false, limit = 200 } = {}) {
   const query = new URLSearchParams();
 
