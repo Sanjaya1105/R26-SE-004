@@ -93,21 +93,22 @@ def _top_aggregate_signals(
         if float(item.get("shap_value", 0.0)) > 0
     ]
 
-    # Max normalization puts each explainer on a stable 0-1 scale before their
-    # scores are combined. Empty inputs retain a zero maximum and skip division.
-    max_lime_weight = max((weight for _, weight in positive_lime_factors), default=0.0)
-    max_shap_value = max((shap_value for _, shap_value in positive_shap_values), default=0.0)
+    # Convert each explainer's positive contributions into shares of its own
+    # positive total. This keeps LIME and SHAP on comparable 0-1 scales without
+    # allowing the magnitude used by either explainer to dominate the ranking.
+    total_lime_weight = sum(weight for _, weight in positive_lime_factors)
+    total_shap_value = sum(shap_value for _, shap_value in positive_shap_values)
     combined_by_feature: dict[str, float] = {}
 
     for factor, weight in positive_lime_factors:
         feature_name = _canonical_feature_name(str(factor.get("rule", "unknown")))
-        normalized_weight = weight / max_lime_weight if max_lime_weight else 0.0
-        combined_by_feature[feature_name] = combined_by_feature.get(feature_name, 0.0) + normalized_weight
+        normalized_weight = weight / total_lime_weight if total_lime_weight else 0.0
+        combined_by_feature[feature_name] = combined_by_feature.get(feature_name, 0.0) + (normalized_weight / 2.0)
 
     for item, shap_value in positive_shap_values:
         feature_name = _canonical_feature_name(str(item.get("feature", "unknown")))
-        normalized_shap_value = shap_value / max_shap_value if max_shap_value else 0.0
-        combined_by_feature[feature_name] = combined_by_feature.get(feature_name, 0.0) + normalized_shap_value
+        normalized_shap_value = shap_value / total_shap_value if total_shap_value else 0.0
+        combined_by_feature[feature_name] = combined_by_feature.get(feature_name, 0.0) + (normalized_shap_value / 2.0)
 
     max_combined_importance = max(combined_by_feature.values(), default=0.0)
 

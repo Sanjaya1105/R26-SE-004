@@ -38,12 +38,39 @@ class AggregateSignalRankingTests(unittest.TestCase):
             ["pause_frequency", "playback_rate_change", "rewatch_segments"],
         )
         self.assertEqual(signals[0]["source"], "combined")
-        self.assertAlmostEqual(signals[0]["raw_value"], 2.0)
+        self.assertAlmostEqual(signals[0]["raw_value"], 2 / 3)
         self.assertAlmostEqual(signals[0]["normalized_strength"], 1.0)
         self.assertAlmostEqual(signals[1]["normalized_strength"], 0.25)
         self.assertAlmostEqual(signals[2]["normalized_strength"], 0.25)
         self.assertTrue(all(item["raw_value"] > 0 for item in signals))
         self.assertTrue(all(item["impact"] == "positive" for item in signals))
+
+    def test_normalizes_by_each_positive_sum_then_averages_lime_and_shap(self):
+        signals = _top_aggregate_signals(
+            lime_factors=[
+                {"rule": "idle_duration_video", "weight": 0.40},
+                {"rule": "playback_rate_change", "weight": 0.20},
+                {"rule": "navigation_count_video", "weight": -0.10},
+                {"rule": "rewatch_segments", "weight": 0.10},
+                {"rule": "pause_frequency", "weight": 0.05},
+            ],
+            shap_values=[
+                {"feature": "idle_duration_video", "shap_value": 0.15},
+                {"feature": "playback_rate_change", "shap_value": -0.05},
+                {"feature": "navigation_count_video", "shap_value": 0.30},
+                {"feature": "rewatch_segments", "shap_value": 0.15},
+                {"feature": "pause_frequency", "shap_value": 0.06},
+            ],
+            limit=3,
+        )
+
+        self.assertEqual(
+            [item["signal"] for item in signals],
+            ["idle_duration_video", "navigation_count_video", "rewatch_segments"],
+        )
+        self.assertAlmostEqual(signals[0]["raw_value"], ((0.40 / 0.75) + (0.15 / 0.66)) / 2)
+        self.assertAlmostEqual(signals[1]["raw_value"], ((0.0 / 0.75) + (0.30 / 0.66)) / 2)
+        self.assertAlmostEqual(signals[2]["raw_value"], ((0.10 / 0.75) + (0.15 / 0.66)) / 2)
 
     def test_removes_zero_and_negative_values(self):
         signals = _top_aggregate_signals(
