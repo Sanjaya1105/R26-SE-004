@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { checkExamAnswers, fetchExamLessons, generateExamQuiz } from '../exam/apiClient';
+import { downloadQuizPdf } from '../exam/downloadQuizPdf';
 import './GetExam.css';
 
 function formatCognitiveLoadCounts(counts) {
@@ -29,6 +30,7 @@ export default function GetExam() {
   const [result, setResult] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [generationMessageIndex, setGenerationMessageIndex] = useState(0);
   const navigate = useNavigate();
 
@@ -112,6 +114,18 @@ export default function GetExam() {
       setError(requestError.message);
     } finally {
       setChecking(false);
+    }
+  }
+
+  async function downloadPdf() {
+    try {
+      setError('');
+      setDownloadingPdf(true);
+      await downloadQuizPdf(quiz, answers, result);
+    } catch (downloadError) {
+      setError(downloadError.message || 'The PDF could not be downloaded.');
+    } finally {
+      setDownloadingPdf(false);
     }
   }
 
@@ -224,9 +238,19 @@ export default function GetExam() {
                 <p className="eyebrow">Generated exam</p>
                 <h2>{quiz.lessonName} - 10 MCQs</h2>
               </div>
-              <span>
-                Cognitive load: {quiz.cognitiveLoad || 'Unknown'} · {answers.filter(Boolean).length}/10 answered
-              </span>
+              <div className="quiz-heading-actions">
+                <span>
+                  Cognitive load: {quiz.cognitiveLoad || 'Unknown'} · {answers.filter(Boolean).length}/10 answered
+                </span>
+                <button
+                  type="button"
+                  className="get-exam-button download"
+                  onClick={downloadPdf}
+                  disabled={downloadingPdf}
+                >
+                  {downloadingPdf ? 'Preparing PDF...' : 'Download PDF'}
+                </button>
+              </div>
             </div>
 
             <p className="get-exam-message success">

@@ -87,6 +87,17 @@
   border: 1px solid #9aabbe;
 }
 
+.get-exam-button.download {
+  color: #fff;
+  background: #274f7d;
+  border: 1px solid #274f7d;
+}
+
+.get-exam-button.download:hover {
+  background: #1e3f66;
+  border-color: #1e3f66;
+}
+
 .get-exam-button:disabled {
   opacity: 0.65;
   cursor: wait;
@@ -100,6 +111,17 @@
 
 .lesson-list-heading h2 {
   margin-top: 5px;
+}
+
+.quiz-heading-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+}
+
+.quiz-heading-actions span {
+  text-align: right;
 }
 
 .lesson-select-label {
@@ -443,9 +465,14 @@
   }
 
   .selected-lesson-actions,
-  .quiz-score {
+  .quiz-score,
+  .quiz-heading-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .quiz-heading-actions span {
+    text-align: left;
   }
 
   .mcq-generation-loader {
