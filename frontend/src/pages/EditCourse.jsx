@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getGatewayBaseUrl } from '../config/gateway';
+import { assertClientVideoDuration } from '../utils/videoDuration';
 
 function getLoggedInEducatorName() {
   try {
@@ -79,6 +80,15 @@ function SubsectionMaterialsUpdater({
         'Select at least one new file (video, PPT, PDF, or images) to replace existing materials.'
       );
       return;
+    }
+
+    if (subVideo) {
+      try {
+        await assertClientVideoDuration(subVideo);
+      } catch (durationErr) {
+        setLocalMsg(durationErr.message);
+        return;
+      }
     }
 
     const token = getToken();
@@ -197,22 +207,41 @@ function SubsectionMaterialsUpdater({
             }}
           >
             Replace any file type below (only selected files are updated). New images
-            replace all previous images for this subsection.
+            replace all previous images for this subsection. Videos must be 15 minutes
+            or less.
           </p>
           <div
             key={fileKey}
             style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
           >
             <label className="form-label" style={{ fontSize: '0.75rem' }}>
-              Video
+              Video (15 minutes or less)
             </label>
             <input
               type="file"
               accept="video/*"
               className="form-input"
               style={{ padding: '0.35rem', fontSize: '0.8rem' }}
-              onChange={(e) => setSubVideo(e.target.files?.[0] || null)}
+              onChange={async (e) => {
+                const file = e.target.files?.[0] || null;
+                if (!file) {
+                  setSubVideo(null);
+                  return;
+                }
+                try {
+                  await assertClientVideoDuration(file);
+                  setSubVideo(file);
+                  setLocalMsg('');
+                } catch (durationErr) {
+                  setSubVideo(null);
+                  e.target.value = '';
+                  setLocalMsg(durationErr.message);
+                }
+              }}
             />
+            <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: 0 }}>
+              Note: we only accept subsection videos of 15 minutes or less (max 40MB).
+            </p>
             <label className="form-label" style={{ fontSize: '0.75rem' }}>
               PPT / PPTX
             </label>
@@ -328,6 +357,14 @@ function NewSubsectionForm({
       setLocalMsg('Add at least one file for the new subsection.');
       return;
     }
+    if (subVideo) {
+      try {
+        await assertClientVideoDuration(subVideo);
+      } catch (durationErr) {
+        setLocalMsg(durationErr.message);
+        return;
+      }
+    }
     const token = getToken();
     if (!token) return;
 
@@ -430,7 +467,25 @@ function NewSubsectionForm({
             key={fileKey}
             style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', marginTop: '0.5rem' }}
           >
-            <input type="file" accept="video/*" className="form-input" style={{ padding: '0.35rem', fontSize: '0.8rem' }} onChange={(e) => setSubVideo(e.target.files?.[0] || null)} />
+            <input type="file" accept="video/*" className="form-input" style={{ padding: '0.35rem', fontSize: '0.8rem' }} onChange={async (e) => {
+              const file = e.target.files?.[0] || null;
+              if (!file) {
+                setSubVideo(null);
+                return;
+              }
+              try {
+                await assertClientVideoDuration(file);
+                setSubVideo(file);
+                setLocalMsg('');
+              } catch (durationErr) {
+                setSubVideo(null);
+                e.target.value = '';
+                setLocalMsg(durationErr.message);
+              }
+            }} />
+            <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: 0 }}>
+              Video: 15 minutes or less only (max 40MB). Longer videos are not accepted.
+            </p>
             <input type="file" accept=".ppt,.pptx" className="form-input" style={{ padding: '0.35rem', fontSize: '0.8rem' }} onChange={(e) => setSubPpt(e.target.files?.[0] || null)} />
             <input type="file" accept=".pdf" className="form-input" style={{ padding: '0.35rem', fontSize: '0.8rem' }} onChange={(e) => setSubPdf(e.target.files?.[0] || null)} />
             <input type="file" accept="image/*" multiple className="form-input" style={{ padding: '0.35rem', fontSize: '0.8rem' }} onChange={(e) => setSubImages(e.target.files ? Array.from(e.target.files) : [])} />
@@ -673,7 +728,7 @@ const EditCourse = () => {
               <h2 style={{ fontSize: '1.35rem', marginBottom: '0.5rem' }}>Course details</h2>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
                 Update basic information, then scroll down to edit subsection materials (video,
-                slides, PDF, images).
+                PPT, PDF, images). Subsection videos must be 15 minutes or less.
               </p>
 
               <form onSubmit={handleSubmit}>
@@ -777,7 +832,7 @@ const EditCourse = () => {
               </h2>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.25rem' }}>
                 Add new sections, then update or add subsections with files. Updating a subsection
-                replaces only the file types you upload.
+                replaces only the file types you upload. Subsection videos must be 15 minutes or less.
               </p>
 
               <div className="form-group" style={{ marginBottom: '1.25rem' }}>

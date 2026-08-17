@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { getGatewayBaseUrl } from '../config/gateway';
+import { assertClientVideoDuration } from '../utils/videoDuration';
 
 const resetInnerSectionState = () => ({
   sectionName: '',
@@ -293,6 +294,13 @@ const UploadNewLesson = () => {
 
     if (!subVideo) {
       setMessage('Subsection video is required. PPT, PDF, and images are optional.');
+      return;
+    }
+
+    try {
+      await assertClientVideoDuration(subVideo);
+    } catch (durationErr) {
+      setMessage(durationErr.message);
       return;
     }
 
@@ -634,7 +642,7 @@ const UploadNewLesson = () => {
               }}
             >
               {coursePartComplete
-                ? 'Open Add section, enter a section name, then use Add sub section to upload materials. Submit each subsection before adding another.'
+                ? 'Open Add section, enter a section name, then use Add sub section to upload materials. Submit each subsection before adding another. Subsection videos must be 15 minutes or less.'
                 : 'Save the course on the left first.'}
             </p>
 
@@ -722,13 +730,13 @@ const UploadNewLesson = () => {
                         marginBottom: '1rem',
                       }}
                     >
-                      Upload subsection video (required). PPT, PDF, and multiple
-                      images are optional.
+                      Upload subsection video (required). We only accept videos of
+                      15 minutes or less. PPT, PDF, and multiple images are optional.
                     </p>
 
                     <div className="form-group">
                       <label className="form-label" htmlFor="sub-video">
-                        Video
+                        Video (15 minutes or less)
                       </label>
                       <input
                         id="sub-video"
@@ -736,9 +744,22 @@ const UploadNewLesson = () => {
                         accept="video/*"
                         className="form-input"
                         style={{ padding: '0.5rem' }}
-                        onChange={(e) =>
-                          setSubVideo(e.target.files?.[0] || null)
-                        }
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0] || null;
+                          if (!file) {
+                            setSubVideo(null);
+                            return;
+                          }
+                          try {
+                            await assertClientVideoDuration(file);
+                            setSubVideo(file);
+                            setMessage('');
+                          } catch (durationErr) {
+                            setSubVideo(null);
+                            e.target.value = '';
+                            setMessage(durationErr.message);
+                          }
+                        }}
                       />
                       <p
                         style={{
@@ -747,7 +768,7 @@ const UploadNewLesson = () => {
                           color: 'var(--text-muted)',
                         }}
                       >
-                        Max 40MB.
+                        Note: only videos of 15 minutes or less are accepted (max 40MB). Longer videos will be rejected.
                       </p>
                     </div>
 

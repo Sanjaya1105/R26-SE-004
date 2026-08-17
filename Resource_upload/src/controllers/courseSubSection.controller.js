@@ -10,6 +10,7 @@ const {
   resolveEducatorNameFromRequest,
   ensureCourseEducatorName,
 } = require("../utils/educatorDisplay");
+const { assertVideoDurationLimit } = require("../utils/videoDuration");
 
 const MAX_VIDEO = 40 * 1024 * 1024;
 const MAX_OFFICE = 15 * 1024 * 1024;
@@ -61,6 +62,13 @@ const createSubSection = async (req, res) => {
 
   if (videoFile?.size > MAX_VIDEO) {
     return res.status(400).json({ message: "Video must be 40MB or smaller." });
+  }
+  try {
+    await assertVideoDurationLimit(videoFile);
+  } catch (durationErr) {
+    return res.status(400).json({
+      message: durationErr.message || "Video must be 15 minutes or less.",
+    });
   }
   if (pptFile?.size > MAX_OFFICE) {
     return res.status(400).json({ message: "PPT must be 15MB or smaller." });
@@ -278,6 +286,15 @@ const updateSubSection = async (req, res) => {
 
   if (videoFile?.size > MAX_VIDEO) {
     return res.status(400).json({ message: "Video must be 40MB or smaller." });
+  }
+  if (videoFile?.buffer?.length) {
+    try {
+      await assertVideoDurationLimit(videoFile);
+    } catch (durationErr) {
+      return res.status(400).json({
+        message: durationErr.message || "Video must be 15 minutes or less.",
+      });
+    }
   }
   if (pptFile?.size > MAX_OFFICE) {
     return res.status(400).json({ message: "PPT must be 15MB or smaller." });

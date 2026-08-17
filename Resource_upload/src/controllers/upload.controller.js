@@ -5,6 +5,7 @@ const TranscriptChunk = require("../models/transcriptChunk.model");
 const {
   runWhisperTranscription,
 } = require("../services/transcription.service");
+const { assertVideoDurationLimit } = require("../utils/videoDuration");
 
 const healthCheck = (req, res) => {
   res.json({
@@ -57,6 +58,15 @@ const createNameWithVideo = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Video file is required",
+      });
+    }
+
+    try {
+      await assertVideoDurationLimit(req.file);
+    } catch (durationErr) {
+      return res.status(400).json({
+        success: false,
+        message: durationErr.message || "Video must be 15 minutes or less.",
       });
     }
 

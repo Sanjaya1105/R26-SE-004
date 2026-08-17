@@ -2,6 +2,7 @@ import { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { getGatewayBaseUrl } from "../config/gateway";
+import { assertClientVideoDuration } from "../utils/videoDuration";
 
 const Upload = () => {
   const navigate = useNavigate();
@@ -29,6 +30,13 @@ const Upload = () => {
 
     if (videoFile.size > maxVideoSizeBytes) {
       setMessage("Video size exceeds 40MB limit.");
+      return;
+    }
+
+    try {
+      await assertClientVideoDuration(videoFile);
+    } catch (durationErr) {
+      setMessage(durationErr.message);
       return;
     }
 
@@ -89,13 +97,28 @@ const Upload = () => {
           onChange={(event) => setName(event.target.value)}
           placeholder="Enter name"
         />
-        <label htmlFor="video">Video (Max 40MB)</label>
+        <label htmlFor="video">Video (Max 40MB, 15 minutes)</label>
         <input
           id="video"
           name="video"
           type="file"
           accept="video/*"
-          onChange={(event) => setVideoFile(event.target.files?.[0] || null)}
+          onChange={async (event) => {
+            const file = event.target.files?.[0] || null;
+            if (!file) {
+              setVideoFile(null);
+              return;
+            }
+            try {
+              await assertClientVideoDuration(file);
+              setVideoFile(file);
+              setMessage("");
+            } catch (durationErr) {
+              setVideoFile(null);
+              event.target.value = "";
+              setMessage(durationErr.message);
+            }
+          }}
         />
         <button type="submit" disabled={isSubmitting}>
           {isSubmitting ? "Submitting..." : "Submit"}
