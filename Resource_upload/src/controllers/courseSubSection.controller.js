@@ -323,6 +323,10 @@ const updateSubSection = async (req, res) => {
           .destroy(doc.videoPublicId, { resource_type: "video" })
           .catch(() => {});
       }
+      const transcriptionResult = await runWhisperTranscription(
+        videoFile.buffer,
+        videoFile.originalname
+      );
       const r = await uploadBuffer(videoFile.buffer, {
         folder: "upload_section_subsections/video",
         resource_type: "video",
@@ -330,6 +334,25 @@ const updateSubSection = async (req, res) => {
       doc.videoUrl = r.secure_url;
       doc.videoPublicId = r.public_id;
       rollbackIds.push(r.public_id);
+      doc.transcriptText = transcriptionResult.text || "";
+      doc.transcriptPreview = (transcriptionResult.text || "").slice(0, 300);
+      doc.transcriptChunkCount = Array.isArray(transcriptionResult.chunks)
+        ? transcriptionResult.chunks.length
+        : 0;
+
+      await SubsectionTranscriptChunk.deleteMany({ subsectionId: doc._id });
+      if (Array.isArray(transcriptionResult.chunks) && transcriptionResult.chunks.length > 0) {
+        const chunkDocs = transcriptionResult.chunks.map((chunk, idx) => ({
+          courseId: doc.courseId,
+          sectionId: doc.sectionId,
+          subsectionId: doc._id,
+          index: Number.isFinite(chunk.index) ? chunk.index : idx,
+          startSec: Number(chunk.startSec ?? idx * 10),
+          endSec: Number(chunk.endSec ?? (idx + 1) * 10),
+          text: chunk.text || "",
+        }));
+        await SubsectionTranscriptChunk.insertMany(chunkDocs);
+      }
     }
 
     if (pptFile?.buffer?.length) {
