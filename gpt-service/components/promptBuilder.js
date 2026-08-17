@@ -31,10 +31,23 @@ function truncate(text, maxLen) {
   return `${t.slice(0, maxLen)}\n\n[…truncated for length…]`;
 }
 
+function uniqueKnowledgeText(input = {}) {
+  const provided = clean(input.knowledgeChunk);
+  if (provided) return provided;
+  return [
+    clean(input.dedupedPptText || input.pptText),
+    clean(input.dedupedPdfText || input.pdfText),
+    clean(input.dedupedTranscriptText || input.transcriptText),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 /**
  * @param {object} input
  * @param {string} [input.courseName]
  * @param {string} [input.subsectionTitle]
+ * @param {string} [input.knowledgeChunk] - single MiniLM-deduped knowledge text
  * @param {string} [input.transcriptText] - video transcript
  * @param {string} [input.pptText]
  * @param {string} [input.pdfText]
@@ -63,27 +76,16 @@ function buildPedagogicalPrompt(input = {}) {
     frustration = "Low";
   }
 
-  const video = truncate(input.transcriptText, 12000);
-  const ppt = truncate(input.pptText, 8000);
-  const pdf = truncate(input.pdfText, 8000);
-
   const courseName = clean(input.courseName) || "(course)";
   const subsectionTitle = clean(input.subsectionTitle) || "(subsection)";
+  const uniqueText = truncate(uniqueKnowledgeText(input), 18000);
 
-  const knowledgeParts = [];
-  knowledgeParts.push(`Course: ${courseName}`);
-  knowledgeParts.push(`Subsection: ${subsectionTitle}`);
-  knowledgeParts.push("");
-  knowledgeParts.push("--- Video transcript ---");
-  knowledgeParts.push(video || "(none)");
-  knowledgeParts.push("");
-  knowledgeParts.push("--- PPT extracted text ---");
-  knowledgeParts.push(ppt || "(none)");
-  knowledgeParts.push("");
-  knowledgeParts.push("--- PDF extracted text ---");
-  knowledgeParts.push(pdf || "(none)");
-
-  const knowledgeChunk = knowledgeParts.join("\n");
+  const knowledgeChunk = [
+    `Course: ${courseName}`,
+    `Subsection: ${subsectionTitle}`,
+    "",
+    uniqueText || "(none)",
+  ].join("\n");
 
   return `System Role: You are a pedagogical expert specializing in instructional content transformation. Your goal is to adapt a specific knowledge chunk for a student to maximize engagement and minimize cognitive fatigue.
 
@@ -103,6 +105,7 @@ Transformation Goal: If adaptation is needed, rewrite the knowledge chunk to red
 
 module.exports = {
   buildPedagogicalPrompt,
+  uniqueKnowledgeText,
   COGNITIVE_STYLES: Array.from(COGNITIVE_STYLES),
   LOAD_LEVELS: Array.from(LOAD_LEVELS),
   FRUSTRATION_LEVELS: Array.from(FRUSTRATION_LEVELS),

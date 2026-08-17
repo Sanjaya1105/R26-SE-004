@@ -40,6 +40,10 @@ const courseSubSectionSchema = new mongoose.Schema(
     transcriptText: { type: String, default: "" },
     transcriptPreview: { type: String, default: "" },
     transcriptChunkCount: { type: Number, default: 0 },
+    dedupedPptText: { type: String, default: "" },
+    dedupedPdfText: { type: String, default: "" },
+    dedupedTranscriptText: { type: String, default: "" },
+    dedupeStats: { type: Object, default: null },
   },
   { timestamps: true }
 );

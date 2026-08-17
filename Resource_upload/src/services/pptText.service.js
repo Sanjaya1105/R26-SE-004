@@ -33,17 +33,19 @@ function extractPptxTextFromBuffer(buffer) {
       return aNum - bNum;
     });
 
-  const chunks = [];
+  const slides = [];
   for (const entry of entries) {
     const xml = entry.getData().toString("utf8");
     const matches = [...xml.matchAll(/<a:t[^>]*>([\s\S]*?)<\/a:t>/g)];
+    const slideBits = [];
     for (const m of matches) {
       const cleaned = cleanExtractedText(decodeXmlEntities(m[1]));
-      if (cleaned) chunks.push(cleaned);
+      if (cleaned) slideBits.push(cleaned);
     }
+    if (slideBits.length) slides.push(slideBits.join(". "));
   }
 
-  return cleanExtractedText(chunks.join(" "));
+  return slides.join("\n");
 }
 
 function extractPptText(buffer, originalName) {

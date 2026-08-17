@@ -11,6 +11,7 @@ const {
   ensureCourseEducatorName,
 } = require("../utils/educatorDisplay");
 const { assertVideoDurationLimit } = require("../utils/videoDuration");
+const { dedupeSubsectionExtracts } = require("../services/semanticDedupe.service");
 
 const MAX_VIDEO = 40 * 1024 * 1024;
 const MAX_OFFICE = 15 * 1024 * 1024;
@@ -157,6 +158,16 @@ const createSubSection = async (req, res) => {
       uploaded.images.push({ url: r.secure_url, publicId: r.public_id });
       rollbackIds.push(r.public_id);
     }
+
+    const dedupeResult = await dedupeSubsectionExtracts({
+      pptText: uploaded.pptText,
+      pdfText: uploaded.pdfText,
+      transcriptText: uploaded.transcriptText,
+    });
+    uploaded.dedupedPptText = dedupeResult.ppt || "";
+    uploaded.dedupedPdfText = dedupeResult.pdf || "";
+    uploaded.dedupedTranscriptText = dedupeResult.transcript || "";
+    uploaded.dedupeStats = dedupeResult.stats || null;
 
     const order = await CourseSubSection.countDocuments({
       sectionId: sectionObjectId,
@@ -359,6 +370,7 @@ const updateSubSection = async (req, res) => {
       if (doc.pptPublicId) {
         cloudinary.uploader.destroy(doc.pptPublicId, { resource_type: "raw" }).catch(() => {});
       }
+      doc.pptText = extractPptText(pptFile.buffer, pptFile.originalname);
       const r = await uploadBuffer(pptFile.buffer, {
         folder: "upload_section_subsections/ppt",
         resource_type: "raw",
@@ -372,6 +384,7 @@ const updateSubSection = async (req, res) => {
       if (doc.pdfPublicId) {
         cloudinary.uploader.destroy(doc.pdfPublicId, { resource_type: "raw" }).catch(() => {});
       }
+      doc.pdfText = await extractPdfText(pdfFile.buffer);
       const r = await uploadBuffer(pdfFile.buffer, {
         folder: "upload_section_subsections/pdf",
         resource_type: "raw",
@@ -401,6 +414,16 @@ const updateSubSection = async (req, res) => {
       }
       doc.images = newImages;
     }
+
+    const dedupeResult = await dedupeSubsectionExtracts({
+      pptText: doc.pptText,
+      pdfText: doc.pdfText,
+      transcriptText: doc.transcriptText,
+    });
+    doc.dedupedPptText = dedupeResult.ppt || "";
+    doc.dedupedPdfText = dedupeResult.pdf || "";
+    doc.dedupedTranscriptText = dedupeResult.transcript || "";
+    doc.dedupeStats = dedupeResult.stats || null;
 
     await doc.save();
 

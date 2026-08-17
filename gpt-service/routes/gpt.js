@@ -40,9 +40,13 @@ router.post("/build-prompt", (req, res) => {
     const prompt = buildPedagogicalPrompt({
       courseName: body.courseName,
       subsectionTitle: body.subsectionTitle,
+      knowledgeChunk: body.knowledgeChunk,
       transcriptText: body.transcriptText,
       pptText: body.pptText,
       pdfText: body.pdfText,
+      dedupedTranscriptText: body.dedupedTranscriptText,
+      dedupedPptText: body.dedupedPptText,
+      dedupedPdfText: body.dedupedPdfText,
       studentProfile: body.studentProfile,
       cognitiveStyle: body.cognitiveStyle,
       cognitiveLoad: body.cognitiveLoad,

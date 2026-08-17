@@ -138,7 +138,7 @@ const getPublicCourseDetail = async (req, res) => {
 
     const subs = await CourseSubSection.find({ courseId })
       .sort({ order: 1, createdAt: 1 })
-      .select("sectionId order videoUrl pptUrl pdfUrl images transcriptText pptText pdfText")
+      .select("sectionId order videoUrl pptUrl pdfUrl images transcriptText pptText pdfText dedupedTranscriptText dedupedPptText dedupedPdfText")
       .lean();
 
     const subsectionsBySection = new Map();
@@ -147,15 +147,22 @@ const getPublicCourseDetail = async (req, res) => {
       if (!subsectionsBySection.has(sid)) {
         subsectionsBySection.set(sid, []);
       }
+      const hasDedupe = Boolean(
+        sub.dedupedPptText || sub.dedupedPdfText || sub.dedupedTranscriptText
+      );
+      const knowledgeParts = hasDedupe
+        ? [sub.dedupedPptText, sub.dedupedPdfText, sub.dedupedTranscriptText]
+        : [sub.pptText, sub.pdfText, sub.transcriptText];
       subsectionsBySection.get(sid).push({
         id: sub._id,
         order: sub.order,
         videoUrl: sub.videoUrl || "",
         pptUrl: sub.pptUrl || "",
-        pptText: sub.pptText || "",
         pdfUrl: sub.pdfUrl || "",
-        pdfText: sub.pdfText || "",
-        transcriptText: sub.transcriptText || "",
+        knowledgeChunk: knowledgeParts
+          .map((t) => String(t || "").trim())
+          .filter(Boolean)
+          .join("\n\n"),
         images: Array.isArray(sub.images)
           ? sub.images.map((img) => ({ url: img.url }))
           : [],

@@ -303,7 +303,7 @@ const CourseDetail = () => {
   const [mainVideo, setMainVideo] = useState(null);
   /** About description: collapsed shows ~20 words */
   const [aboutExpanded, setAboutExpanded] = useState(false);
-  /** Inline GPT assistant (below extracted text when a subsection video is open) */
+  /** Inline GPT assistant (when a subsection video is open) */
   const [gptQuestion, setGptQuestion] = useState('');
   const [gptAnswer, setGptAnswer] = useState('');
   const [deepseekAnswer, setDeepseekAnswer] = useState('');
@@ -821,9 +821,7 @@ const CourseDetail = () => {
       const body = {
         courseName: course?.courseName || '',
         subsectionTitle: mainVideo.title || '',
-        transcriptText: mainVideo.transcriptText || '',
-        pptText: mainVideo.pptText || '',
-        pdfText: mainVideo.pdfText || '',
+        knowledgeChunk: mainVideo.knowledgeChunk || '',
         studentProfile: {
           major: studentMajor,
           year: studentYear,
@@ -874,9 +872,7 @@ const CourseDetail = () => {
   }, [
     mainVideo?.url,
     mainVideo?.title,
-    mainVideo?.transcriptText,
-    mainVideo?.pptText,
-    mainVideo?.pdfText,
+    mainVideo?.knowledgeChunk,
     course?.courseName,
     studentMajor,
     studentYear,
@@ -951,31 +947,24 @@ const CourseDetail = () => {
     setSelectionMeta(null);
     setShowBothOutputs(false);
 
-    // Prefer the ask field; if empty, use the pedagogical prompt above.
-    const q = gptQuestion.trim() || pedagogicalPrompt.trim();
-    if (!q) {
-      setGptError('Enter a question (or wait for the prompt above to load).');
-      return;
-    }
-    if (!gptQuestion.trim() && pedagogicalPrompt.trim()) {
-      setGptQuestion(pedagogicalPrompt);
-    }
-
     const token = localStorage.getItem('token');
     if (!token) {
       setGptError('Sign in to use the assistant (open /login in another tab).');
       return;
     }
 
+    const prompt = pedagogicalPrompt.trim();
+    const studentQuestion = gptQuestion.trim();
+    const q = studentQuestion
+      ? `${prompt}\n\nStudent question: ${studentQuestion}`
+      : prompt;
+    if (!q) {
+      setGptError('Wait for the subsection prompt to load, or type a question.');
+      return;
+    }
+
     const authHeaders = { Authorization: `Bearer ${token}` };
-    const sourceContent = [
-      mainVideo?.transcriptText || '',
-      mainVideo?.pptText || '',
-      mainVideo?.pdfText || '',
-    ]
-      .filter(Boolean)
-      .join('\n\n')
-      .slice(0, 12000);
+    const sourceContent = String(mainVideo?.knowledgeChunk || '').slice(0, 12000);
 
     const postWithFallback = async (urls, body) => {
       let lastErr;
@@ -1614,10 +1603,8 @@ const CourseDetail = () => {
                                                       s.sectionName ||
                                                       'Section'
                                                     } · Subsection ${n}`,
-                                                    transcriptText:
-                                                      sub.transcriptText || '',
-                                                    pptText: sub.pptText || '',
-                                                    pdfText: sub.pdfText || '',
+                                                    knowledgeChunk:
+                                                      sub.knowledgeChunk || '',
                                                   });
                                                 }}
                                               >
@@ -1961,77 +1948,6 @@ const CourseDetail = () => {
                   </p>
                 )}
               </div>
-              {mainVideo.pptText ? (
-                <div
-                  style={{
-                    marginTop: '0.75rem',
-                    padding: '1rem',
-                    borderRadius: '12px',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    background: 'rgba(15, 23, 42, 0.35)',
-                  }}
-                >
-                  <p
-                    className="form-label"
-                    style={{
-                      margin: 0,
-                      fontSize: '0.8rem',
-                      marginBottom: '0.5rem',
-                      letterSpacing: '0.02em',
-                    }}
-                  >
-                    Extracted PPT text
-                  </p>
-                  <div
-                    style={{
-                      maxHeight: '220px',
-                      overflowY: 'auto',
-                      whiteSpace: 'pre-wrap',
-                      lineHeight: 1.5,
-                      fontSize: '0.9rem',
-                      color: 'var(--text-muted)',
-                    }}
-                  >
-                    {mainVideo.pptText}
-                  </div>
-                </div>
-              ) : null}
-              {mainVideo.pdfText ? (
-                <div
-                  style={{
-                    marginTop: '0.75rem',
-                    padding: '1rem',
-                    borderRadius: '12px',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    background: 'rgba(15, 23, 42, 0.35)',
-                  }}
-                >
-                  <p
-                    className="form-label"
-                    style={{
-                      margin: 0,
-                      fontSize: '0.8rem',
-                      marginBottom: '0.5rem',
-                      letterSpacing: '0.02em',
-                    }}
-                  >
-                    Extracted PDF text
-                  </p>
-                  <div
-                    style={{
-                      maxHeight: '220px',
-                      overflowY: 'auto',
-                      whiteSpace: 'pre-wrap',
-                      lineHeight: 1.5,
-                      fontSize: '0.9rem',
-                      color: 'var(--text-muted)',
-                    }}
-                  >
-                    {mainVideo.pdfText}
-                  </div>
-                </div>
-              ) : null}
-
               <div
                 style={{
                   marginTop: '0.75rem',
@@ -2050,7 +1966,7 @@ const CourseDetail = () => {
                     letterSpacing: '0.02em',
                   }}
                 >
-                  Pedagogical prompt (subsection)
+                  Learning profile
                 </p>
                 <p
                   style={{
@@ -2060,8 +1976,8 @@ const CourseDetail = () => {
                     lineHeight: 1.45,
                   }}
                 >
-                  Built from this subsection’s extracted video, PPT, and PDF text.
-                  Adjust profile fields to refresh the template.
+                  Adjust these fields. Ask uses the unique knowledge chunk below
+                  (PPT, PDF, and video combined by MiniLM).
                 </p>
                 <div
                   style={{
@@ -2152,6 +2068,72 @@ const CourseDetail = () => {
                     {promptError}
                   </p>
                 ) : null}
+                {String(mainVideo.knowledgeChunk || '').trim() ? (
+                  <div
+                    style={{
+                      marginTop: '0.75rem',
+                      padding: '0.85rem',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(34, 197, 94, 0.28)',
+                      background: 'rgba(15, 23, 42, 0.35)',
+                    }}
+                  >
+                    <p
+                      className="form-label"
+                      style={{
+                        margin: 0,
+                        fontSize: '0.8rem',
+                        marginBottom: '0.45rem',
+                        letterSpacing: '0.02em',
+                      }}
+                    >
+                      Knowledge chunk
+                    </p>
+                    <div
+                      style={{
+                        maxHeight: '280px',
+                        overflowY: 'auto',
+                        whiteSpace: 'pre-wrap',
+                        lineHeight: 1.5,
+                        fontSize: '0.88rem',
+                        color: 'var(--text-muted)',
+                      }}
+                    >
+                      {String(mainVideo.knowledgeChunk).trim()}
+                    </div>
+                  </div>
+                ) : !promptLoading ? (
+                  <p
+                    style={{
+                      margin: '0.45rem 0 0 0',
+                      fontSize: '0.78rem',
+                      color: 'var(--text-muted)',
+                    }}
+                  >
+                    No unique knowledge text for this subsection.
+                  </p>
+                ) : null}
+                <p
+                  className="form-label"
+                  style={{
+                    margin: '0.85rem 0 0.45rem 0',
+                    fontSize: '0.8rem',
+                    letterSpacing: '0.02em',
+                  }}
+                >
+                  Pedagogical prompt (subsection)
+                </p>
+                <p
+                  style={{
+                    margin: '0 0 0.5rem 0',
+                    fontSize: '0.75rem',
+                    color: 'var(--text-muted)',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  This prompt uses the unique knowledge chunk above. You can
+                  review it here, then use it in Ask.
+                </p>
                 <textarea
                   className="form-input"
                   readOnly
@@ -2159,11 +2141,10 @@ const CourseDetail = () => {
                   value={pedagogicalPrompt}
                   placeholder={
                     promptLoading
-                      ? ''
+                      ? 'Building prompt…'
                       : 'Prompt will appear here when the subsection has loaded.'
                   }
                   style={{
-                    marginTop: '0.5rem',
                     resize: 'vertical',
                     fontSize: '0.78rem',
                     lineHeight: 1.45,
@@ -2201,8 +2182,8 @@ const CourseDetail = () => {
                     lineHeight: 1.45,
                   }}
                 >
-                  Paste or edit the prompt above, then Ask. The same prompt is
-                  sent to Hugging Face and DeepSeek.{' '}
+                  Review the prompt above, then Ask. The same prompt is sent to
+                  Hugging Face and DeepSeek. You can also type an extra question.{' '}
                   <Link to="/login" style={{ color: '#93c5fd' }}>
                     Sign in
                   </Link>{' '}
@@ -2238,7 +2219,7 @@ const CourseDetail = () => {
                   type="button"
                   className="btn btn-primary"
                   onClick={askCourseGpt}
-                  disabled={gptLoading}
+                  disabled={gptLoading || !pedagogicalPrompt.trim()}
                   style={{ marginTop: '0.5rem', width: '100%', fontSize: '0.85rem' }}
                 >
                   {gptLoading
