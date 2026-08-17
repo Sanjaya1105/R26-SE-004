@@ -4,13 +4,16 @@ import { useNavigate } from 'react-router-dom';
 import {
   createStudentLessonSummary,
   fetchAggregateExplanation,
+  fetchLessonNames,
   fetchLimeExplanation,
   fetchLimeLessons,
   fetchLimeStudentsByLesson,
   fetchSavedStudentLessonAnalysis,
+  fetchStudentNames,
 } from '../lime/apiClient';
 import { fetchShapExplanation } from '../shap/apiClient';
 import { analyseCognitiveStyle } from '../cognitiveStyle/apiClient';
+import { shareLessonGuidance } from '../lessonSummary/apiClient';
 import '../styles/studentAnalyse.css';
 
 function formatRecommendationItems(text) {
@@ -77,6 +80,7 @@ export default function StudentAnalyse() {
   const [styleAnalysis, setStyleAnalysis] = useState(null);
   const [styleLoading, setStyleLoading] = useState(false);
   const [styleError, setStyleError] = useState('');
+  const [sharingGuidance, setSharingGuidance] = useState(false);
 
   const recommendationItems = formatRecommendationItems(
     aggregateExplanation?.human_explanation || limeExplanation?.human_explanation || '',
@@ -115,11 +119,21 @@ export default function StudentAnalyse() {
   async function loadLessons() {
     try {
       setError('');
-      const lessonRows = await fetchLimeLessons();
-      setLessons(lessonRows ?? []);
+      const [lessonRows, courseRows] = await Promise.all([
+        fetchLimeLessons(),
+        fetchLessonNames().catch(() => []),
+      ]);
+      const courseNames = new Map(
+        (courseRows ?? []).map((course) => [String(course.id), course.courseName]),
+      );
+      const namedLessons = (lessonRows ?? []).map((lesson) => ({
+        ...lesson,
+        lesson_name: courseNames.get(String(lesson.lesson_id)) || '',
+      }));
+      setLessons(namedLessons);
 
-      if (lessonRows?.length) {
-        setSelectedLessonId(String(lessonRows[0].lesson_id));
+      if (namedLessons.length) {
+        setSelectedLessonId(String(namedLessons[0].lesson_id));
       }
     } catch (err) {
       setError(err.message);
@@ -130,7 +144,18 @@ export default function StudentAnalyse() {
     try {
       setError('');
       const studentRows = await fetchLimeStudentsByLesson(lessonId);
-      setStudents(studentRows ?? []);
+      const nameRows = await fetchStudentNames(
+        (studentRows ?? []).map((student) => student.student_id),
+      ).catch(() => []);
+      const studentNames = new Map(
+        nameRows.map((student) => [String(student.student_id), student.student_name]),
+      );
+      setStudents(
+        (studentRows ?? []).map((student) => ({
+          ...student,
+          student_name: studentNames.get(String(student.student_id)) || '',
+        })),
+      );
       setSelectedStudentId('');
     } catch (err) {
       setError(err.message);
@@ -277,11 +302,34 @@ export default function StudentAnalyse() {
       setStyleAnalysis(null);
       const result = await analyseCognitiveStyle(selectedLessonId, selectedStudentId);
       setStyleAnalysis(result);
-      setStatusMessage(`Cognitive-style LIME and SHAP analysis completed for student ${selectedStudentId}.`);
+      setStatusMessage(
+        result.cached
+          ? `Saved cognitive-style analysis loaded for student ${selectedStudentId}; LIME and SHAP were not rerun.`
+          : `Cognitive-style LIME and SHAP analysis completed for student ${selectedStudentId}.`,
+      );
     } catch (err) {
       setStyleError(err.message);
     } finally {
       setStyleLoading(false);
+    }
+  }
+
+  async function handleShareGuidance() {
+    if (!aggregateExplanation || !selectedLessonId || !selectedStudentId) return;
+    try {
+      setSharingGuidance(true);
+      setError('');
+      const shared = await shareLessonGuidance(selectedStudentId, selectedLessonId);
+      setAggregateExplanation((current) => ({
+        ...current,
+        shared_to_student: true,
+        shared_at: shared.shared_at,
+      }));
+      setStatusMessage('Recommendation and study techniques sent to the student.');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSharingGuidance(false);
     }
   }
 
@@ -307,7 +355,7 @@ export default function StudentAnalyse() {
             <option value="">Select a lesson</option>
             {lessons.map((lesson) => (
               <option key={lesson.lesson_id} value={lesson.lesson_id}>
-                Lesson {lesson.lesson_id}
+                {lesson.lesson_name || `Lesson ${lesson.lesson_id}`}
               </option>
             ))}
           </select>
@@ -320,10 +368,10 @@ export default function StudentAnalyse() {
             onChange={(event) => setSelectedStudentId(event.target.value)}
             disabled={!students.length}
           >
-            <option value="">All students in lesson</option>
+            <option value="">Select a student</option>
             {students.map((student) => (
               <option key={student.student_id} value={student.student_id}>
-                Student {student.student_id}
+                {student.student_name || `Student ${student.student_id}`}
               </option>
             ))}
           </select>
@@ -431,8 +479,12 @@ export default function StudentAnalyse() {
   <tbody>
     {predictions.map((row) => (
       <tr key={row.id}>
-        <td>{row.lesson_id}</td>
-        <td>{row.student_id}</td>
+        <td>
+          {lessons.find((lesson) => String(lesson.lesson_id) === String(row.lesson_id))?.lesson_name || row.lesson_id}
+        </td>
+        <td>
+          {students.find((student) => String(student.student_id) === String(row.student_id))?.student_name || row.student_id}
+        </td>
         <td>
           <span
             className={`load-badge ${
@@ -482,6 +534,21 @@ export default function StudentAnalyse() {
             <p>
               <strong>Intercept:</strong> {Number(limeExplanation.intercept).toFixed(4)}
             </p>
+
+            {aggregateExplanation ? (
+              <button
+                type="button"
+                className="support-button"
+                onClick={handleShareGuidance}
+                disabled={sharingGuidance || aggregateExplanation.shared_to_student}
+              >
+                {sharingGuidance
+                  ? 'Sending...'
+                  : aggregateExplanation.shared_to_student
+                    ? 'Sent to Student'
+                    : 'Send Recommendation and Techniques to Student'}
+              </button>
+            ) : null}
 
             <div className="human-explanation-card">
               <p className="human-explanation-title">Combined Human-Readable Explanation (LIME + SHAP)</p>

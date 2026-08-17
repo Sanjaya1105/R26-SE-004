@@ -93,21 +93,22 @@ def _top_aggregate_signals(
         if float(item.get("shap_value", 0.0)) > 0
     ]
 
-    # Max normalization puts each explainer on a stable 0-1 scale before their
-    # scores are combined. Empty inputs retain a zero maximum and skip division.
-    max_lime_weight = max((weight for _, weight in positive_lime_factors), default=0.0)
-    max_shap_value = max((shap_value for _, shap_value in positive_shap_values), default=0.0)
+    # Convert each explainer's positive contributions into shares of its own
+    # positive total. This keeps LIME and SHAP on comparable 0-1 scales without
+    # allowing the magnitude used by either explainer to dominate the ranking.
+    total_lime_weight = sum(weight for _, weight in positive_lime_factors)
+    total_shap_value = sum(shap_value for _, shap_value in positive_shap_values)
     combined_by_feature: dict[str, float] = {}
 
     for factor, weight in positive_lime_factors:
         feature_name = _canonical_feature_name(str(factor.get("rule", "unknown")))
-        normalized_weight = weight / max_lime_weight if max_lime_weight else 0.0
-        combined_by_feature[feature_name] = combined_by_feature.get(feature_name, 0.0) + normalized_weight
+        normalized_weight = weight / total_lime_weight if total_lime_weight else 0.0
+        combined_by_feature[feature_name] = combined_by_feature.get(feature_name, 0.0) + (normalized_weight / 2.0)
 
     for item, shap_value in positive_shap_values:
         feature_name = _canonical_feature_name(str(item.get("feature", "unknown")))
-        normalized_shap_value = shap_value / max_shap_value if max_shap_value else 0.0
-        combined_by_feature[feature_name] = combined_by_feature.get(feature_name, 0.0) + normalized_shap_value
+        normalized_shap_value = shap_value / total_shap_value if total_shap_value else 0.0
+        combined_by_feature[feature_name] = combined_by_feature.get(feature_name, 0.0) + (normalized_shap_value / 2.0)
 
     max_combined_importance = max(combined_by_feature.values(), default=0.0)
 
@@ -276,9 +277,87 @@ def get_cached_student_lesson_analysis(
                 "explanation_source": record.explanation_source or "ollama",
                 "study_technique": record.study_technique,
                 "lecture_support": record.lecture_support,
+                "shared_to_student": bool(record.shared_to_student),
+                "shared_at": record.shared_at.isoformat() if record.shared_at else None,
             },
             "saved_at": record.updated_at.isoformat() if record.updated_at else None,
+            "shared_to_student": bool(record.shared_to_student),
+            "shared_at": record.shared_at.isoformat() if record.shared_at else None,
         },
+        "errors": [],
+    }
+
+
+def share_student_lesson_guidance(
+    db: Session,
+    lesson_id: str,
+    student_id: str,
+) -> dict[str, Any]:
+    record = (
+        db.query(StudentLessonTopSignals)
+        .filter(
+            StudentLessonTopSignals.student_id == student_id,
+            StudentLessonTopSignals.lesson_id == lesson_id,
+        )
+        .one_or_none()
+    )
+    if record is None or record.study_technique is None or record.lecture_support is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "success": False,
+                "message": "Run Raw Analyse before sending guidance to the student.",
+                "data": None,
+                "errors": [],
+            },
+        )
+
+    record.shared_to_student = True
+    record.shared_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(record)
+    return {
+        "success": True,
+        "message": "Recommendation and study techniques sent to the student.",
+        "data": {
+            "student_id": record.student_id,
+            "lesson_id": record.lesson_id,
+            "shared_to_student": True,
+            "shared_at": record.shared_at.isoformat() if record.shared_at else None,
+        },
+        "errors": [],
+    }
+
+
+def list_shared_student_lesson_guidance(
+    db: Session,
+    student_id: str,
+) -> dict[str, Any]:
+    records = (
+        db.query(StudentLessonTopSignals)
+        .filter(
+            StudentLessonTopSignals.student_id == student_id,
+            StudentLessonTopSignals.shared_to_student.is_(True),
+        )
+        .order_by(StudentLessonTopSignals.shared_at.desc(), StudentLessonTopSignals.id.desc())
+        .all()
+    )
+    return {
+        "success": True,
+        "message": "Shared previous-lesson guidance retrieved successfully.",
+        "data": [
+            {
+                "student_id": record.student_id,
+                "lesson_id": record.lesson_id,
+                "predicted_cognitive_load": record.predicted_cognitive_load,
+                "human_explanation": record.human_explanation,
+                "lecture_support": record.lecture_support,
+                "study_technique": record.study_technique,
+                "top_signals": _top_signals_from_record(record),
+                "shared_at": record.shared_at.isoformat() if record.shared_at else None,
+            }
+            for record in records
+        ],
         "errors": [],
     }
 
@@ -553,6 +632,47 @@ def list_students_for_lesson(db: Session, lesson_id: str) -> dict[str, Any]:
             }
             for row in rows
         ],
+        "errors": [],
+    }
+
+
+def get_student_lesson_cognitive_load_counts(
+    db: Session,
+    lesson_id: str,
+    student_id: str,
+) -> dict[str, Any]:
+    rows = (
+        db.query(
+            CognitiveLoadPrediction.predicted_cognitive_load,
+            func.count(CognitiveLoadPrediction.id).label("load_count"),
+        )
+        .filter(
+            CognitiveLoadPrediction.lesson_id == lesson_id,
+            CognitiveLoadPrediction.student_id == student_id,
+        )
+        .group_by(CognitiveLoadPrediction.predicted_cognitive_load)
+        .all()
+    )
+    severity = {"Very High": 5, "High": 4, "Medium": 3, "Low": 2, "Very Low": 1}
+    counts = {
+        str(row.predicted_cognitive_load): int(row.load_count)
+        for row in rows
+    }
+    dominant = max(
+        counts,
+        key=lambda label: (counts[label], severity.get(label, 0), label),
+        default=None,
+    )
+    return {
+        "success": True,
+        "message": "Cognitive-load counts retrieved successfully.",
+        "data": {
+            "student_id": student_id,
+            "lesson_id": lesson_id,
+            "counts": counts,
+            "total_predictions": sum(counts.values()),
+            "dominant_cognitive_load": dominant,
+        },
         "errors": [],
     }
 

@@ -236,6 +236,20 @@ const Course = () => {
             Get Exam
           </Link>
 
+          <Link
+            to="/student/previous-lesson-summary"
+            className="btn"
+            style={{
+              textDecoration: 'none',
+              background: 'linear-gradient(135deg, #7c3aed, #4f46e5)',
+              color: '#fff',
+              border: '1px solid #6d28d9',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Previous Lesson Summary
+          </Link>
+
           <button
             type="button"
             aria-label="Open student profile"

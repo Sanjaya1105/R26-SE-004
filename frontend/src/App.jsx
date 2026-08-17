@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import StudentLogin from './pages/student/StudentLogin';
 import StudentRegistration from './pages/student/StudentRegistration';
 import StudentProfile from './pages/student/StudentProfile';
+import PreviousLessonSummary from './pages/student/PreviousLessonSummary';
 import AssistQuestionPage from './pages/cognitiveStyleAndLearnerProfile/Learner Profile/AssistQuestionPage';
 import CalibrationPage from './pages/cognitiveStyleAndLearnerProfile/CognitiveStyle/Calibration/Calibration';
 import Module2 from './pages/cognitiveStyleAndLearnerProfile/CognitiveStyle/SplitScreenModule/Module2';
@@ -140,9 +141,14 @@ function App() {
           </PrivateRoute>
         } />
         <Route path="/get-exam" element={
-          <PrivateRoute>
+          <StudentRoute>
             <GetExam />
-          </PrivateRoute>
+          </StudentRoute>
+        } />
+        <Route path="/student/previous-lesson-summary" element={
+          <StudentRoute>
+            <PreviousLessonSummary />
+          </StudentRoute>
         } />
       </Routes>
     </Router>

@@ -7,12 +7,15 @@ from services.prediction_service import (
     aggregate_and_save_student_lesson_summary,
     generate_aggregate_explanation,
     get_cached_student_lesson_analysis,
+    get_student_lesson_cognitive_load_counts,
     get_lime_explanation_for_prediction,
     list_lessons,
+    list_shared_student_lesson_guidance,
     list_predictions,
     list_predictions_filtered,
     list_students_for_lesson,
     predict_and_store,
+    share_student_lesson_guidance,
 )
 
 
@@ -84,6 +87,29 @@ def get_student_lesson_analysis(
     db: Session = Depends(get_db),
 ):
     return get_cached_student_lesson_analysis(db, lesson_id, student_id)
+
+
+@router.get("/lessons/{lesson_id}/students/{student_id}/cognitive-load-counts")
+def get_student_lesson_load_counts(
+    lesson_id: str,
+    student_id: str,
+    db: Session = Depends(get_db),
+):
+    return get_student_lesson_cognitive_load_counts(db, lesson_id, student_id)
+
+
+@router.post("/lessons/{lesson_id}/students/{student_id}/share-guidance")
+def share_student_guidance(
+    lesson_id: str,
+    student_id: str,
+    db: Session = Depends(get_db),
+):
+    return share_student_lesson_guidance(db, lesson_id, student_id)
+
+
+@router.get("/students/{student_id}/shared-guidance")
+def get_shared_student_guidance(student_id: str, db: Session = Depends(get_db)):
+    return list_shared_student_lesson_guidance(db, student_id)
 
 
 @router.get("/lessons/{lesson_id}/predictions/{prediction_id}/lime")

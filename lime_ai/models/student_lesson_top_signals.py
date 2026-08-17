@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Float, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, Float, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from config.database import Base
@@ -39,6 +39,8 @@ class StudentLessonTopSignals(Base):
     explanation_source: Mapped[str | None] = mapped_column(String(30), nullable=True)
     study_technique: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     lecture_support: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    shared_to_student: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    shared_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
