@@ -19,6 +19,7 @@ import Course from './pages/Course';
 import CourseDetail from './pages/CourseDetail';
 import EditCourse from './pages/EditCourse';
 import Gpt from './pages/Gpt';
+import DeepseekChat from './pages/DeepseekChat';
 import StudentAnalyse from './pages/StudentAnalyse';
 import ExamMaterialUpload from './pages/ExamMaterialUpload';
 import ObjectSpacialVerbalQuestionnaire from './pages/cognitiveStyleAndLearnerProfile/CognitiveStyle/SplitScreenModule/ObjectSpacialVerbalQuestionnaire/ObjectSpacialVerbalQuestionnaire';
@@ -116,6 +117,11 @@ function App() {
         <Route path="/gpt" element={
           <PrivateRoute>
             <Gpt />
+          </PrivateRoute>
+        } />
+        <Route path="/deepseek" element={
+          <PrivateRoute>
+            <DeepseekChat />
           </PrivateRoute>
         } />
         <Route path="/next-lesson-recommendation" element={

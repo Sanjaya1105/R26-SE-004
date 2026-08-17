@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { getGatewayBaseUrl } from '../config/gateway';
 import AssistantMarkdown from '../components/AssistantMarkdown';
+import { selectBestOutputLocally } from '../utils/selectBestOutputLocal';
 
 function buildGptAskUrls() {
   const base = getGatewayBaseUrl();
@@ -14,6 +15,26 @@ function buildGptAskUrls() {
   ].filter((url, i, arr) => arr.indexOf(url) === i);
 }
 
+function buildDeepseekChatUrls() {
+  const base = getGatewayBaseUrl();
+  return [
+    `${base}/api/deepseek/chat`,
+    'http://localhost:4000/api/deepseek/chat',
+    'http://127.0.0.1:4000/api/deepseek/chat',
+    'http://localhost:5004/api/deepseek/chat',
+  ].filter((url, i, arr) => arr.indexOf(url) === i);
+}
+
+function buildSelectBestUrls() {
+  const base = getGatewayBaseUrl();
+  return [
+    `${base}/api/deepseek/select-best`,
+    'http://localhost:4000/api/deepseek/select-best',
+    'http://127.0.0.1:4000/api/deepseek/select-best',
+    'http://localhost:5004/api/deepseek/select-best',
+  ].filter((url, i, arr) => arr.indexOf(url) === i);
+}
+
 function buildGptPromptUrls() {
   const base = getGatewayBaseUrl();
   return [
@@ -22,6 +43,75 @@ function buildGptPromptUrls() {
     'http://127.0.0.1:4000/api/gpt/build-prompt',
     'http://localhost:5002/api/gpt/build-prompt',
   ].filter((url, i, arr) => arr.indexOf(url) === i);
+}
+
+/** Pretty-print dual-model selection reasoning in the browser console (for defense / debugging). */
+function logOutputSelectionReasoning(data, { loadLevel, sourceChars } = {}) {
+  const hf = data?.scores?.huggingface;
+  const ds = data?.scores?.deepseek;
+  const weights = data?.weights || {};
+  const winner =
+    data?.selectedModel === 'huggingface'
+      ? 'Hugging Face'
+      : data?.selectedModel === 'deepseek'
+        ? 'DeepSeek'
+        : data?.selectedModel || 'unknown';
+
+  const row = (label, s) => {
+    if (!s) {
+      return { Model: label, Status: 'missing output' };
+    }
+    return {
+      Model: label,
+      Faithfulness: s.faithfulness == null ? 'n/a' : s.faithfulness,
+      'Flesch (FRE)': s.fleschReadingEase,
+      'Target FRE': s.targetFlesch,
+      'Readability match': s.readabilityMatch,
+      Composite: s.composite,
+      Formula:
+        s.faithfulness == null
+          ? `composite = 1.0 * readabilityMatch = ${s.composite}`
+          : `composite = ${(weights.faithfulness ?? 0.65)}*faithfulness + ${(weights.readabilityMatch ?? 0.35)}*readabilityMatch = ${s.composite}`,
+    };
+  };
+
+  console.groupCollapsed(
+    `%c[Assistant Select-Best]%c Winner → ${winner}`,
+    'color:#2563eb;font-weight:700',
+    'color:inherit;font-weight:600'
+  );
+  console.log('Cognitive load level:', loadLevel);
+  console.log('Source content length (chars):', sourceChars);
+  console.log('Faithfulness method:', data?.faithfulnessMethod || 'n/a');
+  console.log('Reason:', data?.reason || 'n/a');
+  if (data?.warning) {
+    console.warn('Warning:', data.warning);
+  }
+  console.log('Weights:', weights);
+  console.table([row('Hugging Face', hf), row('DeepSeek', ds)]);
+
+  if (hf && ds) {
+    const delta = Number(
+      (Number(hf.composite) - Number(ds.composite)).toFixed(4)
+    );
+    console.log(
+      'Composite delta (HF - DeepSeek):',
+      delta,
+      delta > 0
+        ? '→ Hugging Face higher'
+        : delta < 0
+          ? '→ DeepSeek higher'
+          : '→ tie (faithfulness tie-break applies)'
+    );
+  }
+
+  console.log('Selected model:', data?.selectedModel);
+  console.log(
+    'Selected output preview:',
+    String(data?.selectedText || '').slice(0, 280)
+  );
+  console.log('Full selection payload:', data);
+  console.groupEnd();
 }
 
 const ABOUT_PREVIEW_WORDS = 20;
@@ -216,8 +306,14 @@ const CourseDetail = () => {
   /** Inline GPT assistant (below extracted text when a subsection video is open) */
   const [gptQuestion, setGptQuestion] = useState('');
   const [gptAnswer, setGptAnswer] = useState('');
+  const [deepseekAnswer, setDeepseekAnswer] = useState('');
+  const [selectedAnswer, setSelectedAnswer] = useState('');
+  const [selectionMeta, setSelectionMeta] = useState(null);
+  const [selectionError, setSelectionError] = useState('');
+  const [showBothOutputs, setShowBothOutputs] = useState(false);
   const [gptLoading, setGptLoading] = useState(false);
   const [gptError, setGptError] = useState('');
+  const [deepseekError, setDeepseekError] = useState('');
   /** Pedagogical prompt (gpt-service prompt builder) */
   const [pedagogicalPrompt, setPedagogicalPrompt] = useState('');
   const [promptLoading, setPromptLoading] = useState(false);
@@ -277,7 +373,13 @@ const CourseDetail = () => {
     setAboutExpanded(false);
     setGptQuestion('');
     setGptAnswer('');
+    setDeepseekAnswer('');
+    setSelectedAnswer('');
+    setSelectionMeta(null);
+    setSelectionError('');
+    setShowBothOutputs(false);
     setGptError('');
+    setDeepseekError('');
     setPedagogicalPrompt('');
     setPromptError('');
     setCognitiveLoadResult(null);
@@ -293,7 +395,13 @@ const CourseDetail = () => {
   useEffect(() => {
     setGptQuestion('');
     setGptAnswer('');
+    setDeepseekAnswer('');
+    setSelectedAnswer('');
+    setSelectionMeta(null);
+    setSelectionError('');
+    setShowBothOutputs(false);
     setGptError('');
+    setDeepseekError('');
     setPedagogicalPrompt('');
     setPromptError('');
   }, [mainVideo?.url]);
@@ -835,53 +943,46 @@ const CourseDetail = () => {
 
   const askCourseGpt = async () => {
     setGptError('');
+    setDeepseekError('');
+    setSelectionError('');
     setGptAnswer('');
-    const q = gptQuestion.trim();
+    setDeepseekAnswer('');
+    setSelectedAnswer('');
+    setSelectionMeta(null);
+    setShowBothOutputs(false);
+
+    // Prefer the ask field; if empty, use the pedagogical prompt above.
+    const q = gptQuestion.trim() || pedagogicalPrompt.trim();
     if (!q) {
-      setGptError('Enter a question for the assistant.');
+      setGptError('Enter a question (or wait for the prompt above to load).');
       return;
     }
+    if (!gptQuestion.trim() && pedagogicalPrompt.trim()) {
+      setGptQuestion(pedagogicalPrompt);
+    }
+
     const token = localStorage.getItem('token');
     if (!token) {
       setGptError('Sign in to use the assistant (open /login in another tab).');
       return;
     }
 
-    const ctxParts = [
-      mainVideo?.title ? `Subsection: ${mainVideo.title}` : '',
-      course?.courseName ? `Course: ${course.courseName}` : '',
-    ].filter(Boolean);
-    const ctxBody = [
-      mainVideo?.transcriptText
-        ? `Video transcript:\n${mainVideo.transcriptText}`.slice(0, 6000)
-        : '',
-      mainVideo?.pptText
-        ? `PPT text:\n${mainVideo.pptText}`.slice(0, 4000)
-        : '',
-      mainVideo?.pdfText
-        ? `PDF text:\n${mainVideo.pdfText}`.slice(0, 4000)
-        : '',
+    const authHeaders = { Authorization: `Bearer ${token}` };
+    const sourceContent = [
+      mainVideo?.transcriptText || '',
+      mainVideo?.pptText || '',
+      mainVideo?.pdfText || '',
     ]
       .filter(Boolean)
-      .join('\n\n');
-    const composedQuestion = ctxBody
-      ? `${ctxParts.join(' · ')}\n\n---\n${ctxBody}\n---\n\nQuestion: ${q}`
-      : `${ctxParts.join(' · ')}\n\nQuestion: ${q}`;
+      .join('\n\n')
+      .slice(0, 12000);
 
-    try {
-      setGptLoading(true);
-      const urls = buildGptAskUrls();
+    const postWithFallback = async (urls, body) => {
       let lastErr;
-      let res;
       for (const url of urls) {
         try {
-          res = await axios.post(
-            url,
-            { question: composedQuestion },
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          lastErr = null;
-          break;
+          const res = await axios.post(url, body, { headers: authHeaders });
+          return res;
         } catch (e) {
           lastErr = e;
           if (e.response?.status === 404) continue;
@@ -889,8 +990,106 @@ const CourseDetail = () => {
           throw e;
         }
       }
-      if (!res && lastErr) throw lastErr;
-      setGptAnswer(String(res.data?.data?.answer || '').trim());
+      throw lastErr || new Error('No reachable endpoint.');
+    };
+
+    try {
+      setGptLoading(true);
+
+      const [hfResult, deepseekResult] = await Promise.allSettled([
+        postWithFallback(buildGptAskUrls(), { question: q }),
+        postWithFallback(buildDeepseekChatUrls(), {
+          message: q,
+          history: [],
+        }),
+      ]);
+
+      let hfText = '';
+      let dsText = '';
+
+      if (hfResult.status === 'fulfilled') {
+        hfText = String(hfResult.value.data?.data?.answer || '').trim();
+        setGptAnswer(hfText);
+      } else {
+        const err = hfResult.reason;
+        if (err?.response?.status === 401 || err?.response?.status === 403) {
+          throw err;
+        }
+        setGptError(
+          [
+            err?.response?.data?.message,
+            err?.response?.data?.detail,
+            err?.message,
+          ]
+            .filter(Boolean)
+            .join('\n\n') || 'Hugging Face assistant request failed.'
+        );
+      }
+
+      if (deepseekResult.status === 'fulfilled') {
+        dsText = String(deepseekResult.value.data?.data?.answer || '').trim();
+        setDeepseekAnswer(dsText);
+      } else {
+        const err = deepseekResult.reason;
+        if (err?.response?.status === 401 || err?.response?.status === 403) {
+          throw err;
+        }
+        setDeepseekError(
+          [
+            err?.response?.data?.message,
+            err?.response?.data?.detail,
+            err?.message,
+          ]
+            .filter(Boolean)
+            .join('\n\n') || 'DeepSeek assistant request failed.'
+        );
+      }
+
+      if (!hfText && !dsText) {
+        return;
+      }
+
+      // Cross-check both outputs against original source; pick less-hallucinated / better-fit text.
+      try {
+        const selectRes = await postWithFallback(buildSelectBestUrls(), {
+          sourceContent,
+          gptOutput: hfText,
+          deepseekOutput: dsText,
+          cognitiveLoadLevel: loadLevel,
+        });
+        const data = selectRes.data?.data;
+        setSelectedAnswer(String(data?.selectedText || '').trim());
+        setSelectionMeta(data || null);
+        logOutputSelectionReasoning(data, {
+          loadLevel,
+          sourceChars: sourceContent.length,
+        });
+      } catch (selectErr) {
+        console.warn(
+          'select-best API failed; using local fallback scorer.',
+          selectErr?.response?.status || selectErr?.message || selectErr
+        );
+        const local = selectBestOutputLocally({
+          sourceContent,
+          gptOutput: hfText,
+          deepseekOutput: dsText,
+          cognitiveLoadLevel: loadLevel,
+        });
+        if (!local.success) {
+          setSelectionError(local.message || 'Could not select best output.');
+          return;
+        }
+        setSelectedAnswer(String(local.selectedText || '').trim());
+        setSelectionMeta(local);
+        setSelectionError('');
+        logOutputSelectionReasoning(local, {
+          loadLevel,
+          sourceChars: sourceContent.length,
+        });
+        console.warn(
+          'Tip: restart deepseek-service so /api/deepseek/select-best returns 200 (currently missing on the running process).'
+        );
+      }
     } catch (err) {
       if (err.response?.status === 401 || err.response?.status === 403) {
         localStorage.removeItem('token');
@@ -2047,18 +2246,37 @@ const CourseDetail = () => {
                     lineHeight: 1.45,
                   }}
                 >
-                  Questions use this subsection’s extracted text when available.{' '}
+                  Paste or edit the prompt above, then Ask. The same prompt is
+                  sent to Hugging Face and DeepSeek.{' '}
                   <Link to="/login" style={{ color: '#93c5fd' }}>
                     Sign in
                   </Link>{' '}
                   to ask.
                 </p>
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: '0.5rem',
+                    flexWrap: 'wrap',
+                    marginBottom: '0.5rem',
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={!pedagogicalPrompt.trim() || gptLoading}
+                    onClick={() => setGptQuestion(pedagogicalPrompt)}
+                    style={{ fontSize: '0.8rem' }}
+                  >
+                    Use prompt above
+                  </button>
+                </div>
                 <textarea
                   className="form-input"
-                  rows={3}
+                  rows={6}
                   value={gptQuestion}
                   onChange={(e) => setGptQuestion(e.target.value)}
-                  placeholder="Ask about this lesson…"
+                  placeholder="Paste the pedagogical prompt here, or type a question…"
                   style={{ resize: 'vertical', fontSize: '0.88rem' }}
                 />
                 <button
@@ -2068,9 +2286,12 @@ const CourseDetail = () => {
                   disabled={gptLoading}
                   style={{ marginTop: '0.5rem', width: '100%', fontSize: '0.85rem' }}
                 >
-                  {gptLoading ? 'Asking…' : 'Ask'}
+                  {gptLoading
+                    ? 'Generating + selecting best output…'
+                    : 'Ask both models'}
                 </button>
-                {gptError ? (
+
+                {selectionError ? (
                   <p
                     style={{
                       marginTop: '0.65rem',
@@ -2080,30 +2301,220 @@ const CourseDetail = () => {
                       whiteSpace: 'pre-wrap',
                     }}
                   >
-                    {gptError}
+                    {selectionError}
                   </p>
                 ) : null}
-                {gptAnswer ? (
+
+                {selectedAnswer ? (
                   <div
                     style={{
-                      marginTop: '0.75rem',
-                      padding: '0.75rem',
+                      marginTop: '0.85rem',
+                      padding: '0.85rem',
                       borderRadius: '10px',
-                      border: '1px solid rgba(255,255,255,0.08)',
-                      background: 'rgba(15, 23, 42, 0.45)',
+                      border: '1px solid rgba(34, 197, 94, 0.35)',
+                      background: 'rgba(22, 163, 74, 0.12)',
                     }}
                   >
                     <p
                       className="form-label"
                       style={{ marginBottom: '0.35rem', fontSize: '0.75rem' }}
                     >
-                      Assistant reply
+                      Selected content for student
+                      {selectionMeta?.selectedModel
+                        ? ` (${selectionMeta.selectedModel === 'huggingface' ? 'Hugging Face' : 'DeepSeek'})`
+                        : ''}
                     </p>
+                    {selectionMeta?.reason ? (
+                      <p
+                        style={{
+                          margin: '0 0 0.55rem 0',
+                          fontSize: '0.75rem',
+                          color: 'var(--text-muted)',
+                          lineHeight: 1.45,
+                        }}
+                      >
+                        {selectionMeta.reason}
+                        {selectionMeta.warning
+                          ? ` · Warning: ${selectionMeta.warning}`
+                          : ''}
+                      </p>
+                    ) : null}
+                    {selectionMeta?.scores ? (
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns:
+                            'repeat(auto-fit, minmax(160px, 1fr))',
+                          gap: '0.5rem',
+                          marginBottom: '0.65rem',
+                          fontSize: '0.72rem',
+                          color: 'var(--text-muted)',
+                        }}
+                      >
+                        {['huggingface', 'deepseek'].map((key) => {
+                          const s = selectionMeta.scores?.[key];
+                          if (!s) return null;
+                          const label =
+                            key === 'huggingface' ? 'Hugging Face' : 'DeepSeek';
+                          return (
+                            <div
+                              key={key}
+                              style={{
+                                padding: '0.45rem 0.55rem',
+                                borderRadius: '8px',
+                                border: '1px solid rgba(255,255,255,0.08)',
+                                background: 'rgba(15, 23, 42, 0.35)',
+                              }}
+                            >
+                              <strong style={{ color: 'var(--text)' }}>
+                                {label}
+                              </strong>
+                              <div>Composite: {s.composite}</div>
+                              <div>
+                                Faithfulness:{' '}
+                                {s.faithfulness == null
+                                  ? 'n/a'
+                                  : s.faithfulness}
+                              </div>
+                              <div>
+                                Readability match: {s.readabilityMatch} (FRE{' '}
+                                {s.fleschReadingEase} → target {s.targetFlesch})
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : null}
                     <AssistantMarkdown
-                      style={{ maxHeight: '240px', overflowY: 'auto' }}
+                      style={{ maxHeight: '320px', overflowY: 'auto' }}
                     >
-                      {gptAnswer}
+                      {selectedAnswer}
                     </AssistantMarkdown>
+                  </div>
+                ) : null}
+
+                {(gptAnswer || deepseekAnswer || gptError || deepseekError) && (
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => setShowBothOutputs((v) => !v)}
+                    style={{
+                      marginTop: '0.75rem',
+                      width: '100%',
+                      fontSize: '0.85rem',
+                      background: 'transparent',
+                      border: '1px solid rgba(255,255,255,0.14)',
+                    }}
+                  >
+                    {showBothOutputs
+                      ? 'Hide both model outputs'
+                      : 'View both model outputs'}
+                  </button>
+                )}
+
+                {showBothOutputs ? (
+                  <div
+                    style={{
+                      marginTop: '0.85rem',
+                      display: 'grid',
+                      gridTemplateColumns:
+                        'repeat(auto-fit, minmax(240px, 1fr))',
+                      gap: '0.75rem',
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: '0.75rem',
+                        borderRadius: '10px',
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        background: 'rgba(15, 23, 42, 0.45)',
+                        minHeight: '140px',
+                      }}
+                    >
+                      <p
+                        className="form-label"
+                        style={{ marginBottom: '0.35rem', fontSize: '0.75rem' }}
+                      >
+                        Hugging Face reply
+                      </p>
+                      {gptError ? (
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: '0.82rem',
+                            color: 'var(--danger)',
+                            whiteSpace: 'pre-wrap',
+                          }}
+                        >
+                          {gptError}
+                        </p>
+                      ) : null}
+                      {!gptError && gptAnswer ? (
+                        <AssistantMarkdown
+                          style={{ maxHeight: '280px', overflowY: 'auto' }}
+                        >
+                          {gptAnswer}
+                        </AssistantMarkdown>
+                      ) : null}
+                      {!gptError && !gptAnswer ? (
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: '0.82rem',
+                            color: 'var(--text-muted)',
+                          }}
+                        >
+                          No reply.
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div
+                      style={{
+                        padding: '0.75rem',
+                        borderRadius: '10px',
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        background: 'rgba(15, 23, 42, 0.45)',
+                        minHeight: '140px',
+                      }}
+                    >
+                      <p
+                        className="form-label"
+                        style={{ marginBottom: '0.35rem', fontSize: '0.75rem' }}
+                      >
+                        DeepSeek reply
+                      </p>
+                      {deepseekError ? (
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: '0.82rem',
+                            color: 'var(--danger)',
+                            whiteSpace: 'pre-wrap',
+                          }}
+                        >
+                          {deepseekError}
+                        </p>
+                      ) : null}
+                      {!deepseekError && deepseekAnswer ? (
+                        <AssistantMarkdown
+                          style={{ maxHeight: '280px', overflowY: 'auto' }}
+                        >
+                          {deepseekAnswer}
+                        </AssistantMarkdown>
+                      ) : null}
+                      {!deepseekError && !deepseekAnswer ? (
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: '0.82rem',
+                            color: 'var(--text-muted)',
+                          }}
+                        >
+                          No reply.
+                        </p>
+                      ) : null}
+                    </div>
                   </div>
                 ) : null}
               </div>
