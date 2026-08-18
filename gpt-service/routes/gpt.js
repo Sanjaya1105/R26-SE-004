@@ -30,6 +30,13 @@ function parseModelList() {
   );
 }
 
+function isHfGenerationEnabled() {
+  const raw = String(process.env.HF_GENERATION_ENABLED ?? "true")
+    .trim()
+    .toLowerCase();
+  return raw !== "false" && raw !== "0" && raw !== "off" && raw !== "no";
+}
+
 /**
  * Assembles the pedagogical prompt from client-provided subsection extracts.
  * Public (no JWT): course detail page is public; payload is user-supplied text only.
@@ -50,6 +57,7 @@ router.post("/build-prompt", (req, res) => {
       studentProfile: body.studentProfile,
       cognitiveStyle: body.cognitiveStyle,
       cognitiveLoad: body.cognitiveLoad,
+      containsMath: body.containsMath,
     });
     return res.status(200).json({
       success: true,
@@ -70,6 +78,17 @@ router.post("/build-prompt", (req, res) => {
 });
 
 router.post("/ask", verifyToken, async (req, res) => {
+  if (!isHfGenerationEnabled()) {
+    return res.status(200).json({
+      success: true,
+      data: {
+        answer: "",
+        model: "disabled",
+        skipped: true,
+      },
+    });
+  }
+
   const hfToken = process.env.HF_API_TOKEN;
   const modelCandidates = parseModelList();
 

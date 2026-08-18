@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { getGatewayBaseUrl } from '../config/gateway';
+import { ENABLE_HUGGINGFACE_GENERATION } from '../config/modelGeneration';
 import AssistantMarkdown from '../components/AssistantMarkdown';
 
 function buildGptAskUrls() {
@@ -27,6 +28,13 @@ const Gpt = () => {
     const q = question.trim();
     if (!q) {
       setError('Please enter a question.');
+      return;
+    }
+
+    if (!ENABLE_HUGGINGFACE_GENERATION) {
+      setError(
+        'Hugging Face generation is paused to save credits. Flip ENABLE_HUGGINGFACE_GENERATION in frontend/src/config/modelGeneration.js (and HF_GENERATION_ENABLED in gpt-service/.env) to turn it back on.'
+      );
       return;
     }
 

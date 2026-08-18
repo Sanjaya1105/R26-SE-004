@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getGatewayBaseUrl } from '../config/gateway';
 import { assertClientVideoDuration } from '../utils/videoDuration';
+import ContainsMathCheckbox from '../components/ContainsMathCheckbox';
 
 function getLoggedInEducatorName() {
   try {
@@ -28,6 +29,7 @@ function SubsectionMaterialsUpdater({
   const [subPpt, setSubPpt] = useState(null);
   const [subPdf, setSubPdf] = useState(null);
   const [subImages, setSubImages] = useState([]);
+  const [containsMath, setContainsMath] = useState(Boolean(subsection.containsMath));
   const [fileKey, setFileKey] = useState(0);
   const [saving, setSaving] = useState(false);
   const [localMsg, setLocalMsg] = useState('');
@@ -39,6 +41,10 @@ function SubsectionMaterialsUpdater({
     setSubImages([]);
     setFileKey((k) => k + 1);
   };
+
+  useEffect(() => {
+    setContainsMath(Boolean(subsection.containsMath));
+  }, [subsection.containsMath]);
 
   const wasExpandedRef = useRef(false);
   useEffect(() => {
@@ -58,6 +64,7 @@ function SubsectionMaterialsUpdater({
     if (subsection.videoUrl) parts.push('Video');
     if (subsection.pptUrl) parts.push('PPT');
     if (subsection.pdfUrl) parts.push('PDF');
+    if (subsection.containsMath) parts.push('Equations preserved');
     const imgCount = Array.isArray(subsection.images) ? subsection.images.length : 0;
     if (imgCount > 0) parts.push(`${imgCount} image${imgCount === 1 ? '' : 's'}`);
     return parts.length ? parts.join(' · ') : 'No materials yet';
@@ -65,6 +72,7 @@ function SubsectionMaterialsUpdater({
     subsection.videoUrl,
     subsection.pptUrl,
     subsection.pdfUrl,
+    subsection.containsMath,
     subsection.images,
   ]);
 
@@ -75,9 +83,10 @@ function SubsectionMaterialsUpdater({
       subPpt ||
       subPdf ||
       (Array.isArray(subImages) && subImages.length > 0);
-    if (!hasFile) {
+    const mathChanged = Boolean(containsMath) !== Boolean(subsection.containsMath);
+    if (!hasFile && !mathChanged) {
       setLocalMsg(
-        'Select at least one new file (video, PPT, PDF, or images) to replace existing materials.'
+        'Select at least one new file, or change the equations option, to update this subsection.'
       );
       return;
     }
@@ -101,6 +110,7 @@ function SubsectionMaterialsUpdater({
     if (Array.isArray(subImages)) {
       subImages.forEach((file) => formData.append('images', file));
     }
+    formData.append('containsMath', containsMath ? 'true' : 'false');
     const educatorLabel = getLoggedInEducatorName();
     if (educatorLabel) formData.append('educatorName', educatorLabel);
 
@@ -275,6 +285,11 @@ function SubsectionMaterialsUpdater({
                 setSubImages(e.target.files ? Array.from(e.target.files) : [])
               }
             />
+            <ContainsMathCheckbox
+              id={`sub-contains-math-${subsection.id}`}
+              checked={containsMath}
+              onChange={setContainsMath}
+            />
           </div>
           <button
             type="button"
@@ -321,6 +336,7 @@ function NewSubsectionForm({
   const [subPpt, setSubPpt] = useState(null);
   const [subPdf, setSubPdf] = useState(null);
   const [subImages, setSubImages] = useState([]);
+  const [containsMath, setContainsMath] = useState(false);
   const [fileKey, setFileKey] = useState(0);
   const [saving, setSaving] = useState(false);
   const [localMsg, setLocalMsg] = useState('');
@@ -332,6 +348,7 @@ function NewSubsectionForm({
       setSubPpt(null);
       setSubPdf(null);
       setSubImages([]);
+      setContainsMath(false);
       setFileKey((k) => k + 1);
       setLocalMsg('');
     }
@@ -343,6 +360,7 @@ function NewSubsectionForm({
     setSubPpt(null);
     setSubPdf(null);
     setSubImages([]);
+    setContainsMath(false);
     setFileKey((k) => k + 1);
   };
 
@@ -375,6 +393,7 @@ function NewSubsectionForm({
     if (Array.isArray(subImages)) {
       subImages.forEach((file) => formData.append('images', file));
     }
+    formData.append('containsMath', containsMath ? 'true' : 'false');
     const educatorLabel = getLoggedInEducatorName();
     if (educatorLabel) formData.append('educatorName', educatorLabel);
 
@@ -489,6 +508,11 @@ function NewSubsectionForm({
             <input type="file" accept=".ppt,.pptx" className="form-input" style={{ padding: '0.35rem', fontSize: '0.8rem' }} onChange={(e) => setSubPpt(e.target.files?.[0] || null)} />
             <input type="file" accept=".pdf" className="form-input" style={{ padding: '0.35rem', fontSize: '0.8rem' }} onChange={(e) => setSubPdf(e.target.files?.[0] || null)} />
             <input type="file" accept="image/*" multiple className="form-input" style={{ padding: '0.35rem', fontSize: '0.8rem' }} onChange={(e) => setSubImages(e.target.files ? Array.from(e.target.files) : [])} />
+            <ContainsMathCheckbox
+              id={`new-sub-contains-math-${sectionId}`}
+              checked={containsMath}
+              onChange={setContainsMath}
+            />
           </div>
           <button type="button" className="btn" onClick={submit} disabled={saving} style={{ marginTop: '0.5rem', width: '100%', fontSize: '0.85rem' }}>
             {saving ? 'Saving…' : 'Add subsection'}

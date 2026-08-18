@@ -138,7 +138,7 @@ const getPublicCourseDetail = async (req, res) => {
 
     const subs = await CourseSubSection.find({ courseId })
       .sort({ order: 1, createdAt: 1 })
-      .select("sectionId order videoUrl pptUrl pdfUrl images transcriptText pptText pdfText dedupedTranscriptText dedupedPptText dedupedPdfText")
+      .select("sectionId order videoUrl pptUrl pdfUrl images transcriptText pptText pdfText dedupedTranscriptText dedupedPptText dedupedPdfText containsMath equations")
       .lean();
 
     const subsectionsBySection = new Map();
@@ -153,16 +153,27 @@ const getPublicCourseDetail = async (req, res) => {
       const knowledgeParts = hasDedupe
         ? [sub.dedupedPptText, sub.dedupedPdfText, sub.dedupedTranscriptText]
         : [sub.pptText, sub.pdfText, sub.transcriptText];
+      let knowledgeChunk = knowledgeParts
+        .map((t) => String(t || "").trim())
+        .filter(Boolean)
+        .join("\n\n");
+      if (sub.containsMath && Array.isArray(sub.equations) && sub.equations.length) {
+        const listed = sub.equations
+          .map((eq, idx) => `[eq_${idx + 1}] ${String(eq.latex || "").trim()}`)
+          .filter((line) => line.length > 8)
+          .join("\n");
+        if (listed) {
+          knowledgeChunk = `${knowledgeChunk}\n\nCANONICAL EQUATIONS (copy exactly):\n${listed}`.trim();
+        }
+      }
       subsectionsBySection.get(sid).push({
         id: sub._id,
         order: sub.order,
         videoUrl: sub.videoUrl || "",
         pptUrl: sub.pptUrl || "",
         pdfUrl: sub.pdfUrl || "",
-        knowledgeChunk: knowledgeParts
-          .map((t) => String(t || "").trim())
-          .filter(Boolean)
-          .join("\n\n"),
+        containsMath: Boolean(sub.containsMath),
+        knowledgeChunk,
         images: Array.isArray(sub.images)
           ? sub.images.map((img) => ({ url: img.url }))
           : [],
@@ -257,7 +268,7 @@ const getCourseForEdit = async (req, res) => {
 
     const subs = await CourseSubSection.find({ courseId: cid })
       .sort({ order: 1, createdAt: 1 })
-      .select("sectionId order videoUrl pptUrl pdfUrl images")
+      .select("sectionId order videoUrl pptUrl pdfUrl images containsMath")
       .lean();
 
     const subsectionsBySection = new Map();
@@ -272,6 +283,7 @@ const getCourseForEdit = async (req, res) => {
         videoUrl: sub.videoUrl || "",
         pptUrl: sub.pptUrl || "",
         pdfUrl: sub.pdfUrl || "",
+        containsMath: Boolean(sub.containsMath),
         images: Array.isArray(sub.images)
           ? sub.images.map((img) => ({ url: img.url }))
           : [],

@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { getGatewayBaseUrl } from '../config/gateway';
 import { assertClientVideoDuration } from '../utils/videoDuration';
+import ContainsMathCheckbox from '../components/ContainsMathCheckbox';
 
 const resetInnerSectionState = () => ({
   sectionName: '',
@@ -12,6 +13,7 @@ const resetInnerSectionState = () => ({
   subPpt: null,
   subPdf: null,
   subImages: [],
+  containsMath: false,
   lastSubsectionSubmitted: false,
   submittedSubsections: [],
   subsectionFormKey: 0,
@@ -54,6 +56,7 @@ const UploadNewLesson = () => {
   const [subPpt, setSubPpt] = useState(null);
   const [subPdf, setSubPdf] = useState(null);
   const [subImages, setSubImages] = useState([]);
+  const [containsMath, setContainsMath] = useState(false);
   const [lastSubsectionSubmitted, setLastSubsectionSubmitted] = useState(false);
   const [submittedSubsections, setSubmittedSubsections] = useState([]);
   const [subsectionFormKey, setSubsectionFormKey] = useState(0);
@@ -83,6 +86,7 @@ const UploadNewLesson = () => {
     setSubPpt(r.subPpt);
     setSubPdf(r.subPdf);
     setSubImages(r.subImages);
+    setContainsMath(Boolean(r.containsMath));
     setLastSubsectionSubmitted(r.lastSubsectionSubmitted);
     setSubmittedSubsections(r.submittedSubsections);
     setSubsectionFormKey((k) => k + 1);
@@ -105,6 +109,7 @@ const UploadNewLesson = () => {
     setSubPpt(null);
     setSubPdf(null);
     setSubImages([]);
+    setContainsMath(false);
     setLastSubsectionSubmitted(false);
     setSubmittedSubsections([]);
     setSubsectionFormKey((k) => k + 1);
@@ -280,6 +285,7 @@ const UploadNewLesson = () => {
     setSubPpt(null);
     setSubPdf(null);
     setSubImages([]);
+    setContainsMath(false);
     setSubsectionFormKey((k) => k + 1);
   };
 
@@ -314,6 +320,7 @@ const UploadNewLesson = () => {
     if (Array.isArray(subImages)) {
       subImages.forEach((file) => formData.append('images', file));
     }
+    formData.append('containsMath', containsMath ? 'true' : 'false');
     const educatorLabel = getLoggedInEducatorName();
     if (educatorLabel) {
       formData.append('educatorName', educatorLabel);
@@ -851,6 +858,12 @@ const UploadNewLesson = () => {
                         Up to 15 files, 5MB each.
                       </p>
                     </div>
+
+                    <ContainsMathCheckbox
+                      id="sub-contains-math"
+                      checked={containsMath}
+                      onChange={setContainsMath}
+                    />
 
                     <button
                       type="button"

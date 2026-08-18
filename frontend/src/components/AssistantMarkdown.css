@@ -146,3 +146,19 @@
   border-left: 3px solid rgba(129, 140, 248, 0.45);
   color: rgba(226, 232, 240, 0.85);
 }
+
+.assistant-md .katex {
+  color: var(--text);
+  font-size: 1.08em;
+}
+
+.assistant-md .katex-display {
+  margin: 0.9em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.15em 0;
+}
+
+.assistant-md .katex-error {
+  color: #fca5a5;
+}
