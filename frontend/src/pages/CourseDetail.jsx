@@ -4,6 +4,8 @@ import axios from 'axios';
 import { getGatewayBaseUrl } from '../config/gateway';
 import AssistantMarkdown from '../components/AssistantMarkdown';
 import { selectBestOutputLocally } from '../utils/selectBestOutputLocal';
+import { ENABLE_HUGGINGFACE_GENERATION } from '../config/modelGeneration';
+import { parseCanonicalEquations } from '../utils/assistantMath';
 
 function buildGptAskUrls() {
   const base = getGatewayBaseUrl();
@@ -822,6 +824,7 @@ const CourseDetail = () => {
         courseName: course?.courseName || '',
         subsectionTitle: mainVideo.title || '',
         knowledgeChunk: mainVideo.knowledgeChunk || '',
+        containsMath: Boolean(mainVideo.containsMath),
         studentProfile: {
           major: studentMajor,
           year: studentYear,
@@ -873,6 +876,7 @@ const CourseDetail = () => {
     mainVideo?.url,
     mainVideo?.title,
     mainVideo?.knowledgeChunk,
+    mainVideo?.containsMath,
     course?.courseName,
     studentMajor,
     studentYear,
@@ -936,6 +940,7 @@ const CourseDetail = () => {
     Array.isArray(course?.keywords) && course.keywords.length > 0
       ? course.keywords
       : [];
+  const canonicalEquations = parseCanonicalEquations(mainVideo?.knowledgeChunk);
 
   const askCourseGpt = async () => {
     setGptError('');
@@ -985,8 +990,12 @@ const CourseDetail = () => {
     try {
       setGptLoading(true);
 
+      const hfRequest = ENABLE_HUGGINGFACE_GENERATION
+        ? postWithFallback(buildGptAskUrls(), { question: q })
+        : Promise.resolve({ data: { data: { answer: '', skipped: true } } });
+
       const [hfResult, deepseekResult] = await Promise.allSettled([
-        postWithFallback(buildGptAskUrls(), { question: q }),
+        hfRequest,
         postWithFallback(buildDeepseekChatUrls(), {
           message: q,
           history: [],
@@ -1605,6 +1614,9 @@ const CourseDetail = () => {
                                                     } · Subsection ${n}`,
                                                     knowledgeChunk:
                                                       sub.knowledgeChunk || '',
+                                                    containsMath: Boolean(
+                                                      sub.containsMath
+                                                    ),
                                                   });
                                                 }}
                                               >
@@ -2182,8 +2194,11 @@ const CourseDetail = () => {
                     lineHeight: 1.45,
                   }}
                 >
-                  Review the prompt above, then Ask. The same prompt is sent to
-                  Hugging Face and DeepSeek. You can also type an extra question.{' '}
+                  Review the prompt above, then Ask.{' '}
+                  {ENABLE_HUGGINGFACE_GENERATION
+                    ? 'The same prompt is sent to Hugging Face and DeepSeek.'
+                    : 'Hugging Face generation is paused to save credits; the prompt is sent to DeepSeek only. Scoring still runs.'}{' '}
+                  You can also type an extra question.{' '}
                   <Link to="/login" style={{ color: '#93c5fd' }}>
                     Sign in
                   </Link>{' '}
@@ -2224,7 +2239,9 @@ const CourseDetail = () => {
                 >
                   {gptLoading
                     ? 'Generating + selecting best output…'
-                    : 'Ask both models'}
+                    : ENABLE_HUGGINGFACE_GENERATION
+                      ? 'Ask both models'
+                      : 'Ask DeepSeek'}
                 </button>
 
                 {selectionError ? (
@@ -2322,6 +2339,7 @@ const CourseDetail = () => {
                       </div>
                     ) : null}
                     <AssistantMarkdown
+                      canonicalEquations={canonicalEquations}
                       style={{ maxHeight: '320px', overflowY: 'auto' }}
                     >
                       {selectedAnswer}
@@ -2387,6 +2405,7 @@ const CourseDetail = () => {
                       ) : null}
                       {!gptError && gptAnswer ? (
                         <AssistantMarkdown
+                          canonicalEquations={canonicalEquations}
                           style={{ maxHeight: '280px', overflowY: 'auto' }}
                         >
                           {gptAnswer}
@@ -2434,6 +2453,7 @@ const CourseDetail = () => {
                       ) : null}
                       {!deepseekError && deepseekAnswer ? (
                         <AssistantMarkdown
+                          canonicalEquations={canonicalEquations}
                           style={{ maxHeight: '280px', overflowY: 'auto' }}
                         >
                           {deepseekAnswer}

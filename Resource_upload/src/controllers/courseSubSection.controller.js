@@ -4,18 +4,80 @@ const CourseSection = require("../models/courseSection.model");
 const CourseSubSection = require("../models/courseSubSection.model");
 const SubsectionTranscriptChunk = require("../models/subsectionTranscriptChunk.model");
 const { runWhisperTranscription } = require("../services/transcription.service");
-const { extractPptText } = require("../services/pptText.service");
-const { extractPdfText } = require("../services/pdfText.service");
+const { extractPptText, extractPptMathText } = require("../services/pptText.service");
+const { extractPdfText, extractPdfMathText } = require("../services/pdfText.service");
 const {
   resolveEducatorNameFromRequest,
   ensureCourseEducatorName,
 } = require("../utils/educatorDisplay");
 const { assertVideoDurationLimit } = require("../utils/videoDuration");
+const { parseContainsMath, hasContainsMathField } = require("../utils/parseContainsMath");
+const { collectEquations } = require("../utils/mathText");
 const { dedupeSubsectionExtracts } = require("../services/semanticDedupe.service");
 
 const MAX_VIDEO = 40 * 1024 * 1024;
 const MAX_OFFICE = 15 * 1024 * 1024;
 const MAX_IMAGE = 5 * 1024 * 1024;
+
+function toEquationDocs(latexList, source) {
+  return (latexList || [])
+    .map((latex) => String(latex || "").trim())
+    .filter(Boolean)
+    .map((latex) => ({ latex, source }));
+}
+
+function fileNameFromUrl(url, fallback) {
+  try {
+    const pathname = new URL(url).pathname;
+    const base = decodeURIComponent(pathname.split("/").pop() || "");
+    return base || fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
+async function fetchRemoteBuffer(url) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to download stored file (${response.status})`);
+  }
+  return Buffer.from(await response.arrayBuffer());
+}
+
+async function extractLessonDocuments({ pptBuffer, pptName, pdfBuffer, containsMath }) {
+  let pptText = "";
+  let pdfText = "";
+  const equations = [];
+
+  if (pptBuffer?.length) {
+    if (containsMath) {
+      const result = extractPptMathText(pptBuffer, pptName);
+      pptText = result.text || "";
+      equations.push(...toEquationDocs(result.equations, "ppt"));
+    } else {
+      pptText = extractPptText(pptBuffer, pptName);
+    }
+  }
+
+  if (pdfBuffer?.length) {
+    if (containsMath) {
+      const result = await extractPdfMathText(pdfBuffer);
+      pdfText = result.text || "";
+      equations.push(...toEquationDocs(result.equations, "pdf"));
+    } else {
+      pdfText = await extractPdfText(pdfBuffer);
+    }
+  }
+
+  if (containsMath && !equations.length) {
+    equations.push(
+      ...toEquationDocs(collectEquations(pptText), "ppt"),
+      ...toEquationDocs(collectEquations(pdfText), "pdf")
+    );
+  }
+
+  return { pptText, pdfText, equations: containsMath ? equations : [] };
+}
 
 function uploadBuffer(buffer, options) {
   return new Promise((resolve, reject) => {
@@ -99,6 +161,8 @@ const createSubSection = async (req, res) => {
     transcriptText: "",
     transcriptPreview: "",
     transcriptChunkCount: 0,
+    containsMath: parseContainsMath(req.body),
+    equations: [],
   };
 
   const rollbackIds = [];
@@ -128,7 +192,13 @@ const createSubSection = async (req, res) => {
     }
 
     if (pptFile?.buffer?.length) {
-      uploaded.pptText = extractPptText(pptFile.buffer, pptFile.originalname);
+      const extracted = await extractLessonDocuments({
+        pptBuffer: pptFile.buffer,
+        pptName: pptFile.originalname,
+        containsMath: uploaded.containsMath,
+      });
+      uploaded.pptText = extracted.pptText;
+      uploaded.equations.push(...extracted.equations);
       const r = await uploadBuffer(pptFile.buffer, {
         folder: "upload_section_subsections/ppt",
         resource_type: "raw",
@@ -139,7 +209,12 @@ const createSubSection = async (req, res) => {
     }
 
     if (pdfFile?.buffer?.length) {
-      uploaded.pdfText = await extractPdfText(pdfFile.buffer);
+      const extracted = await extractLessonDocuments({
+        pdfBuffer: pdfFile.buffer,
+        containsMath: uploaded.containsMath,
+      });
+      uploaded.pdfText = extracted.pdfText;
+      uploaded.equations.push(...extracted.equations);
       const r = await uploadBuffer(pdfFile.buffer, {
         folder: "upload_section_subsections/pdf",
         resource_type: "raw",
@@ -163,6 +238,7 @@ const createSubSection = async (req, res) => {
       pptText: uploaded.pptText,
       pdfText: uploaded.pdfText,
       transcriptText: uploaded.transcriptText,
+      protectMath: uploaded.containsMath,
     });
     uploaded.dedupedPptText = dedupeResult.ppt || "";
     uploaded.dedupedPdfText = dedupeResult.pdf || "";
@@ -219,6 +295,7 @@ const createSubSection = async (req, res) => {
           pdfUrl: doc.pdfUrl,
           pdfText: doc.pdfText,
           images: doc.images,
+          containsMath: doc.containsMath,
           transcriptText: doc.transcriptText,
           transcriptPreview: doc.transcriptPreview,
           transcriptChunkCount: doc.transcriptChunkCount,
@@ -282,16 +359,22 @@ const updateSubSection = async (req, res) => {
   const pdfFile = files.pdf?.[0];
   const imageFiles = files.images || [];
 
+  const nextContainsMath = hasContainsMathField(req.body)
+    ? parseContainsMath(req.body)
+    : Boolean(doc.containsMath);
+  const mathModeChanged = nextContainsMath !== Boolean(doc.containsMath);
+
   const hasAny =
     Boolean(videoFile?.buffer?.length) ||
     Boolean(pptFile?.buffer?.length) ||
     Boolean(pdfFile?.buffer?.length) ||
-    imageFiles.some((f) => f.buffer?.length);
+    imageFiles.some((f) => f.buffer?.length) ||
+    hasContainsMathField(req.body);
 
   if (!hasAny) {
     return res.status(400).json({
       message:
-        "Provide at least one new file (video, PPT, PDF, or images) to update this subsection.",
+        "Provide at least one new file (video, PPT, PDF, or images) or update the equations option.",
     });
   }
 
@@ -370,7 +453,12 @@ const updateSubSection = async (req, res) => {
       if (doc.pptPublicId) {
         cloudinary.uploader.destroy(doc.pptPublicId, { resource_type: "raw" }).catch(() => {});
       }
-      doc.pptText = extractPptText(pptFile.buffer, pptFile.originalname);
+      const extracted = await extractLessonDocuments({
+        pptBuffer: pptFile.buffer,
+        pptName: pptFile.originalname,
+        containsMath: nextContainsMath,
+      });
+      doc.pptText = extracted.pptText;
       const r = await uploadBuffer(pptFile.buffer, {
         folder: "upload_section_subsections/ppt",
         resource_type: "raw",
@@ -378,13 +466,29 @@ const updateSubSection = async (req, res) => {
       doc.pptUrl = r.secure_url;
       doc.pptPublicId = r.public_id;
       rollbackIds.push(r.public_id);
+    } else if (mathModeChanged && doc.pptUrl) {
+      try {
+        const remote = await fetchRemoteBuffer(doc.pptUrl);
+        const extracted = await extractLessonDocuments({
+          pptBuffer: remote,
+          pptName: fileNameFromUrl(doc.pptUrl, "lesson.pptx"),
+          containsMath: nextContainsMath,
+        });
+        doc.pptText = extracted.pptText;
+      } catch (error) {
+        console.warn("[math-extract] Could not re-parse stored PPT:", error.message);
+      }
     }
 
     if (pdfFile?.buffer?.length) {
       if (doc.pdfPublicId) {
         cloudinary.uploader.destroy(doc.pdfPublicId, { resource_type: "raw" }).catch(() => {});
       }
-      doc.pdfText = await extractPdfText(pdfFile.buffer);
+      const extracted = await extractLessonDocuments({
+        pdfBuffer: pdfFile.buffer,
+        containsMath: nextContainsMath,
+      });
+      doc.pdfText = extracted.pdfText;
       const r = await uploadBuffer(pdfFile.buffer, {
         folder: "upload_section_subsections/pdf",
         resource_type: "raw",
@@ -392,6 +496,26 @@ const updateSubSection = async (req, res) => {
       doc.pdfUrl = r.secure_url;
       doc.pdfPublicId = r.public_id;
       rollbackIds.push(r.public_id);
+    } else if (mathModeChanged && doc.pdfUrl) {
+      try {
+        const remote = await fetchRemoteBuffer(doc.pdfUrl);
+        const extracted = await extractLessonDocuments({
+          pdfBuffer: remote,
+          containsMath: nextContainsMath,
+        });
+        doc.pdfText = extracted.pdfText;
+      } catch (error) {
+        console.warn("[math-extract] Could not re-parse stored PDF:", error.message);
+      }
+    }
+
+    doc.containsMath = nextContainsMath;
+    if (nextContainsMath) {
+      const pptEq = toEquationDocs(collectEquations(doc.pptText), "ppt");
+      const pdfEq = toEquationDocs(collectEquations(doc.pdfText), "pdf");
+      doc.equations = [...pptEq, ...pdfEq];
+    } else {
+      doc.equations = [];
     }
 
     if (imageFiles.some((f) => f.buffer?.length)) {
@@ -419,6 +543,7 @@ const updateSubSection = async (req, res) => {
       pptText: doc.pptText,
       pdfText: doc.pdfText,
       transcriptText: doc.transcriptText,
+      protectMath: nextContainsMath,
     });
     doc.dedupedPptText = dedupeResult.ppt || "";
     doc.dedupedPdfText = dedupeResult.pdf || "";
@@ -445,6 +570,7 @@ const updateSubSection = async (req, res) => {
           pptUrl: doc.pptUrl,
           pdfUrl: doc.pdfUrl,
           images: doc.images,
+          containsMath: doc.containsMath,
           updatedAt: doc.updatedAt,
         },
       },

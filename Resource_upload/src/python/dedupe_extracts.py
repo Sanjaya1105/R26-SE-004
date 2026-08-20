@@ -21,6 +21,7 @@ MIN_CHARS = 40
 MAX_TRANSCRIPT_CHUNKS = 280
 QUOTE_RE = re.compile(r'"([^"]{12,})"')
 PAGE_MARK_RE = re.compile(r"\s*--\s*\d+\s+of\s+\d+\s*--")
+MATH_BLOCK_RE = re.compile(r"\$\$[\s\S]+?\$\$|\$[^$\n]+\$")
 
 
 def _collect_parts(text):
@@ -51,6 +52,26 @@ def split_chunks(text):
         chunks.append(piece)
     if buf:
         chunks.append(buf)
+    return chunks
+
+
+def is_math_chunk(text):
+    sample = str(text or "").strip()
+    return sample.startswith("$$") or (sample.startswith("$") and sample.endswith("$"))
+
+
+def split_math_aware(text):
+    source = str(text or "")
+    chunks = []
+    last = 0
+    for match in MATH_BLOCK_RE.finditer(source):
+        before = source[last:match.start()]
+        chunks.extend(split_chunks(before))
+        math_chunk = match.group(0).strip()
+        if math_chunk:
+            chunks.append(math_chunk)
+        last = match.end()
+    chunks.extend(split_chunks(source[last:]))
     return chunks
 
 
@@ -111,16 +132,17 @@ def downsample(chunks, limit):
     return start + middle + end
 
 
-def dedupe(ppt_text, pdf_text, transcript_text, threshold=THRESHOLD):
+def dedupe(ppt_text, pdf_text, transcript_text, threshold=THRESHOLD, protect_math=False):
+    splitter = split_math_aware if protect_math else split_chunks
     groups = [
-        ("ppt", split_chunks(ppt_text)),
-        ("pdf", split_chunks(pdf_text)),
-        ("video", downsample(split_chunks(transcript_text), MAX_TRANSCRIPT_CHUNKS)),
+        ("ppt", splitter(ppt_text)),
+        ("pdf", splitter(pdf_text)),
+        ("video", downsample(splitter(transcript_text), MAX_TRANSCRIPT_CHUNKS)),
     ]
     items = []
     for source, chunks in groups:
         for chunk in chunks:
-            items.append({"source": source, "text": chunk})
+            items.append({"source": source, "text": chunk, "math": protect_math and is_math_chunk(chunk)})
 
     if not items:
         return {
@@ -133,6 +155,7 @@ def dedupe(ppt_text, pdf_text, transcript_text, threshold=THRESHOLD):
                 "kept": 0,
                 "dropped": 0,
                 "threshold": threshold,
+                "protectMath": bool(protect_math),
             },
         }
 
@@ -148,25 +171,28 @@ def dedupe(ppt_text, pdf_text, transcript_text, threshold=THRESHOLD):
     dropped = 0
 
     for item, vec in zip(items, vectors):
-        max_sim = 0.0
-        for kept_vec in kept_vectors:
-            max_sim = max(max_sim, cosine(vec, kept_vec))
-        if max_sim >= threshold:
-            dropped += 1
-            continue
-        kept_vectors.append(vec)
+        if not item["math"]:
+            max_sim = 0.0
+            for kept_vec in kept_vectors:
+                max_sim = max(max_sim, cosine(vec, kept_vec))
+            if max_sim >= threshold:
+                dropped += 1
+                continue
+            kept_vectors.append(vec)
         kept[item["source"]].append(item["text"])
 
+    joiner = "\n\n" if protect_math else " "
     return {
-        "ppt": " ".join(kept["ppt"]),
-        "pdf": " ".join(kept["pdf"]),
-        "transcript": " ".join(kept["video"]),
+        "ppt": joiner.join(kept["ppt"]),
+        "pdf": joiner.join(kept["pdf"]),
+        "transcript": joiner.join(kept["video"]),
         "stats": {
             "method": method,
             "inputChunks": len(items),
             "kept": len(items) - dropped,
             "dropped": dropped,
             "threshold": threshold,
+            "protectMath": bool(protect_math),
         },
     }
 
@@ -178,6 +204,7 @@ def main():
         payload.get("pdfText") or "",
         payload.get("transcriptText") or "",
         float(payload.get("threshold") or THRESHOLD),
+        bool(payload.get("protectMath")),
     )
     json.dump(result, sys.stdout)
 

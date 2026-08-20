@@ -41,6 +41,27 @@ function splitChunks(text) {
   return chunks;
 }
 
+function isMathChunk(text) {
+  const sample = String(text || "").trim();
+  return sample.startsWith("$$") || (sample.startsWith("$") && sample.endsWith("$"));
+}
+
+function splitMathAware(text) {
+  const source = String(text || "");
+  const chunks = [];
+  let last = 0;
+  const mathRe = /\$\$[\s\S]+?\$\$|\$[^$\n]+\$/g;
+  for (const match of source.matchAll(mathRe)) {
+    const index = match.index || 0;
+    chunks.push(...splitChunks(source.slice(last, index)));
+    const mathChunk = String(match[0] || "").trim();
+    if (mathChunk) chunks.push(mathChunk);
+    last = index + match[0].length;
+  }
+  chunks.push(...splitChunks(source.slice(last)));
+  return chunks;
+}
+
 function tokenize(text) {
   return String(text || "")
     .toLowerCase()
@@ -91,15 +112,16 @@ function downsample(chunks, limit) {
   return [...start, ...middle, ...end];
 }
 
-function lexicalDedupe({ pptText, pdfText, transcriptText, threshold = THRESHOLD }) {
+function lexicalDedupe({ pptText, pdfText, transcriptText, threshold = THRESHOLD, protectMath = false }) {
+  const splitter = protectMath ? splitMathAware : splitChunks;
   const groups = [
-    ["ppt", splitChunks(pptText)],
-    ["pdf", splitChunks(pdfText)],
-    ["video", downsample(splitChunks(transcriptText), MAX_TRANSCRIPT_CHUNKS)],
+    ["ppt", splitter(pptText)],
+    ["pdf", splitter(pdfText)],
+    ["video", downsample(splitter(transcriptText), MAX_TRANSCRIPT_CHUNKS)],
   ];
   const items = [];
   for (const [source, chunks] of groups) {
-    for (const text of chunks) items.push({ source, text });
+    for (const text of chunks) items.push({ source, text, math: protectMath && isMathChunk(text) });
   }
   if (!items.length) {
     return {
@@ -112,6 +134,7 @@ function lexicalDedupe({ pptText, pdfText, transcriptText, threshold = THRESHOLD
         kept: 0,
         dropped: 0,
         threshold,
+        protectMath: Boolean(protectMath),
       },
     };
   }
@@ -123,25 +146,29 @@ function lexicalDedupe({ pptText, pdfText, transcriptText, threshold = THRESHOLD
 
   items.forEach((item, index) => {
     const vec = vectors[index];
-    const maxSim = keptVectors.reduce((best, other) => Math.max(best, cosine(vec, other)), 0);
-    if (maxSim >= threshold) {
-      dropped += 1;
-      return;
+    if (!item.math) {
+      const maxSim = keptVectors.reduce((best, other) => Math.max(best, cosine(vec, other)), 0);
+      if (maxSim >= threshold) {
+        dropped += 1;
+        return;
+      }
+      keptVectors.push(vec);
     }
-    keptVectors.push(vec);
     kept[item.source].push(item.text);
   });
 
+  const joiner = protectMath ? "\n\n" : " ";
   return {
-    ppt: kept.ppt.join(" "),
-    pdf: kept.pdf.join(" "),
-    transcript: kept.video.join(" "),
+    ppt: kept.ppt.join(joiner),
+    pdf: kept.pdf.join(joiner),
+    transcript: kept.video.join(joiner),
     stats: {
       method: "lexical_tf_cosine_fallback",
       inputChunks: items.length,
       kept: items.length - dropped,
       dropped,
       threshold,
+      protectMath: Boolean(protectMath),
     },
   };
 }
@@ -207,12 +234,18 @@ function runPythonDedupe(payload) {
  * Deduplicate PPT / PDF / transcript without changing original extracts.
  * Prefers SBERT MiniLM; falls back to lexical cosine so uploads never fail.
  */
-async function dedupeSubsectionExtracts({ pptText = "", pdfText = "", transcriptText = "" }) {
+async function dedupeSubsectionExtracts({
+  pptText = "",
+  pdfText = "",
+  transcriptText = "",
+  protectMath = false,
+}) {
   const payload = {
     pptText,
     pdfText,
     transcriptText,
     threshold: THRESHOLD,
+    protectMath: Boolean(protectMath),
   };
 
   try {
