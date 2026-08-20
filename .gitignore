@@ -2,3 +2,4 @@ CognitiveStyleBackend/.env
 __pycache__/
 *.pyc
 *.pyo
+sample.mp4
