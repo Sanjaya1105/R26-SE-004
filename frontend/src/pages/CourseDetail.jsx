@@ -118,6 +118,8 @@ function logOutputSelectionReasoning(data, { loadLevel, sourceChars } = {}) {
 
 const ABOUT_PREVIEW_WORDS = 20;
 const COGNITIVE_LOAD_WINDOW_MS = 120000;
+const SEEK_JUMP_THRESHOLD_SECONDS = 2;
+const SEEK_EVENT_DEBOUNCE_MS = 900;
 
 function getActiveStudentId() {
   try {
@@ -193,18 +195,6 @@ function getLivePredictionSummary(result) {
     timeOnContent:
       prediction?.time_on_content ?? featureWindow?.time_on_content ?? null,
   };
-}
-
-function getDisplayRawEventCount(summary, localRawEventCount) {
-  if (typeof localRawEventCount === 'number' && localRawEventCount > 0) {
-    return localRawEventCount;
-  }
-
-  if (typeof summary?.rawEventCount === 'number') {
-    return summary.rawEventCount;
-  }
-
-  return null;
 }
 
 function createEmptyRawEventStats() {
@@ -284,6 +274,16 @@ function getCompletedWindowInfo(sessionStart, sessionId, now = new Date()) {
   };
 }
 
+function getActiveWindowKey(sessionStart, sessionId, now = new Date()) {
+  if (!(sessionStart instanceof Date) || !sessionId) {
+    return '';
+  }
+
+  const elapsedMs = Math.max(0, now.getTime() - sessionStart.getTime());
+  const activeWindowIndex = Math.floor(elapsedMs / COGNITIVE_LOAD_WINDOW_MS) + 1;
+  return `${sessionId}:${activeWindowIndex}`;
+}
+
 const CourseDetail = () => {
   const { courseId } = useParams();
   const navigate = useNavigate();
@@ -330,7 +330,6 @@ const CourseDetail = () => {
   const [cognitiveLoadError, setCognitiveLoadError] = useState('');
   const [cognitiveLoadLoading, setCognitiveLoadLoading] = useState(false);
   const [videoSessionId, setVideoSessionId] = useState('');
-  const [localRawEventCount, setLocalRawEventCount] = useState(0);
   const [rawEventStats, setRawEventStats] = useState(createEmptyRawEventStats);
   const videoRef = useRef(null);
   const sessionStartRef = useRef(null);
@@ -347,10 +346,12 @@ const CourseDetail = () => {
   const seekGestureStartTimeRef = useRef(0);
   const seekDragActiveRef = useRef(false);
   const pendingSeekTargetRef = useRef(null);
+  const lastNavigationCommitTimeRef = useRef(0);
   const commitSeekTimeoutRef = useRef(null);
   const predictTimeoutRef = useRef(null);
   const lastPredictedWindowKeyRef = useRef('');
   const predictionInFlightWindowKeyRef = useRef('');
+  const activeRawEventWindowKeyRef = useRef('');
   const rawEventQueueRef = useRef(Promise.resolve());
 
   const toggleSection = (sectionId) => {
@@ -364,10 +365,6 @@ const CourseDetail = () => {
   };
 
   const livePredictionSummary = getLivePredictionSummary(cognitiveLoadResult);
-  const displayRawEventCount = getDisplayRawEventCount(
-    livePredictionSummary,
-    localRawEventCount
-  );
 
   useEffect(() => {
     setOpenSubsectionId(null);
@@ -388,10 +385,10 @@ const CourseDetail = () => {
     setCognitiveLoadError('');
     setCognitiveLoadLoading(false);
     setVideoSessionId('');
-    setLocalRawEventCount(0);
     setRawEventStats(createEmptyRawEventStats());
     lastPredictedWindowKeyRef.current = '';
     predictionInFlightWindowKeyRef.current = '';
+    activeRawEventWindowKeyRef.current = '';
   }, [courseId]);
 
   useEffect(() => {
@@ -412,7 +409,6 @@ const CourseDetail = () => {
     if (!mainVideo?.url) {
       sessionStartRef.current = null;
       setVideoSessionId('');
-      setLocalRawEventCount(0);
       setRawEventStats(createEmptyRawEventStats());
       lastVideoTimeRef.current = 0;
       lastPlaybackRateRef.current = 1;
@@ -425,8 +421,10 @@ const CourseDetail = () => {
       seekGestureStartTimeRef.current = 0;
       seekDragActiveRef.current = false;
       pendingSeekTargetRef.current = null;
+      lastNavigationCommitTimeRef.current = 0;
       lastPredictedWindowKeyRef.current = '';
       predictionInFlightWindowKeyRef.current = '';
+      activeRawEventWindowKeyRef.current = '';
       if (pauseConfirmTimeoutRef.current) {
         window.clearTimeout(pauseConfirmTimeoutRef.current);
         pauseConfirmTimeoutRef.current = null;
@@ -446,7 +444,6 @@ const CourseDetail = () => {
     const sessionId = `video-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     sessionStartRef.current = startedAt;
     setVideoSessionId(sessionId);
-    setLocalRawEventCount(0);
     setRawEventStats(createEmptyRawEventStats());
     lastVideoTimeRef.current = 0;
     lastPlaybackRateRef.current = 1;
@@ -459,16 +456,10 @@ const CourseDetail = () => {
     seekGestureStartTimeRef.current = 0;
     seekDragActiveRef.current = false;
     pendingSeekTargetRef.current = null;
+    lastNavigationCommitTimeRef.current = 0;
     lastPredictedWindowKeyRef.current = '';
     predictionInFlightWindowKeyRef.current = '';
-
-    enqueueRawEvent({
-      sessionIdOverride: sessionId,
-      payload: {
-      event_type: 'adaptation_navigation',
-      event_value: mainVideo.url,
-      },
-    }).catch(() => {});
+    activeRawEventWindowKeyRef.current = getActiveWindowKey(startedAt, sessionId);
 
     return () => {
       if (pauseConfirmTimeoutRef.current) {
@@ -552,6 +543,19 @@ const CourseDetail = () => {
     rawEventQueueRef.current = rawEventQueueRef.current
       .catch(() => {})
       .then(async () => {
+        const currentWindowKey = getActiveWindowKey(
+          sessionStartRef.current,
+          activeSessionId
+        );
+
+        if (
+          currentWindowKey &&
+          activeRawEventWindowKeyRef.current !== currentWindowKey
+        ) {
+          activeRawEventWindowKeyRef.current = currentWindowKey;
+          setRawEventStats(createEmptyRawEventStats());
+        }
+
         await axios.post(`${getGatewayBaseUrl()}/api/cognitive-load/events/raw`, {
           student_id: getActiveStudentId(),
           lesson_id: String(mainVideo.lessonId || mainVideo.subsectionId || courseId),
@@ -565,7 +569,6 @@ const CourseDetail = () => {
           is_correct: payload.is_correct ?? null,
           event_type: payload.event_type,
         });
-        setLocalRawEventCount((prev) => prev + 1);
         setRawEventStats((prev) => updateRawEventStats(prev, payload));
       });
 
@@ -577,7 +580,7 @@ const CourseDetail = () => {
 
     try {
       await enqueueRawEvent({ payload });
-    } catch (_) {
+    } catch {
       setCognitiveLoadError(
         'Could not send video interaction data to the cognitive load API.'
       );
@@ -626,6 +629,41 @@ const CourseDetail = () => {
       window.clearTimeout(commitSeekTimeoutRef.current);
       commitSeekTimeoutRef.current = null;
     }
+  };
+
+  const commitVideoNavigationEvent = ({ fromPosition, toPosition }) => {
+    const from = Number(fromPosition || 0);
+    const to = Number(toPosition || 0);
+    const moveDistance = Math.abs(to - from);
+
+    if (moveDistance < 0.5) {
+      return false;
+    }
+
+    const now = Date.now();
+    if (now - lastNavigationCommitTimeRef.current < SEEK_EVENT_DEBOUNCE_MS) {
+      return false;
+    }
+
+    const isBackwardSeek = to < from - 0.25;
+
+    lastNavigationCommitTimeRef.current = now;
+    lastSeekEventTimeRef.current = now;
+    suppressPauseCountUntilRef.current = now + 2500;
+    lastVideoTimeRef.current = to;
+
+    if (isBackwardSeek) {
+      lastRewatchEventTimeRef.current = now;
+    }
+
+    sendCognitiveLoadEvent({
+      event_type: isBackwardSeek ? 'seek_backward' : 'seek_forward',
+      from_position: Number(from.toFixed(2)),
+      to_position: Number(to.toFixed(2)),
+      video_time: Number(to.toFixed(2)),
+    });
+
+    return true;
   };
 
   const handleVideoPause = () => {
@@ -692,23 +730,11 @@ const CourseDetail = () => {
       const finalTarget = Number(
         pendingSeekTargetRef.current ?? videoRef.current?.currentTime?.toFixed(2) ?? 0
       );
-      const moveDistance = Math.abs(finalTarget - gestureStart);
 
-      if (moveDistance >= 0.5) {
-        const isBackwardSeek = finalTarget < gestureStart - 0.25;
-
-        if (isBackwardSeek) {
-          lastRewatchEventTimeRef.current = Date.now();
-          suppressPauseCountUntilRef.current = Date.now() + 2500;
-        }
-
-        sendCognitiveLoadEvent({
-          event_type: isBackwardSeek ? 'seek_backward' : 'seek_forward',
-          from_position: Number(gestureStart.toFixed(2)),
-          to_position: finalTarget,
-          video_time: finalTarget,
-        });
-      }
+      commitVideoNavigationEvent({
+        fromPosition: gestureStart,
+        toPosition: finalTarget,
+      });
 
       isSeekingRef.current = false;
       resetSeekGesture();
@@ -734,7 +760,18 @@ const CourseDetail = () => {
   };
 
   const handleVideoTimeUpdate = () => {
-    lastVideoTimeRef.current = Number(videoRef.current?.currentTime || 0);
+    const currentTime = Number(videoRef.current?.currentTime || 0);
+    const previousTime = Number(lastVideoTimeRef.current || 0);
+    const jumpDistance = Math.abs(currentTime - previousTime);
+
+    if (jumpDistance > SEEK_JUMP_THRESHOLD_SECONDS) {
+      commitVideoNavigationEvent({
+        fromPosition: previousTime,
+        toPosition: currentTime,
+      });
+    }
+
+    lastVideoTimeRef.current = currentTime;
   };
 
   useEffect(() => {
@@ -794,6 +831,11 @@ const CourseDetail = () => {
 
       predictTimeoutRef.current = window.setTimeout(async () => {
         await runCognitiveLoadPredictionForCompletedWindow();
+        activeRawEventWindowKeyRef.current = getActiveWindowKey(
+          sessionStart,
+          videoSessionId
+        );
+        setRawEventStats(createEmptyRawEventStats());
         scheduleNextWindowPrediction();
       }, delayMs);
     };
@@ -1833,7 +1875,7 @@ const CourseDetail = () => {
                         lineHeight: 1.45,
                       }}
                     >
-                      Raw events are collected live. A prediction appears after each
+                      Video interaction events are collected live. A prediction appears after each
                       completed 2-minute video window.
                     </p>
                   </div>
@@ -1879,11 +1921,11 @@ const CourseDetail = () => {
                     fontSize: '0.82rem',
                   }}
                 >
-                  <div>Pause count: {rawEventStats.pauseCount}</div>
-                  <div>Seek count: {rawEventStats.seekCount}</div>
-                  <div>Rewatch count: {rawEventStats.rewatchCount}</div>
-                  <div>Rate changes: {rawEventStats.rateChangeCount}</div>
-                  <div>Idle duration: {rawEventStats.idleDuration}s</div>
+                  <div>Pause events: {rawEventStats.pauseCount}</div>
+                  <div>Video seek events: {rawEventStats.seekCount}</div>
+                  <div>Rewatch events: {rawEventStats.rewatchCount}</div>
+                  <div>Playback speed changes: {rawEventStats.rateChangeCount}</div>
+                  <div>Video idle time: {rawEventStats.idleDuration}s</div>
                   <div>Last event: {rawEventStats.lastEvent || 'Waiting...'}</div>
                 </div>
 
@@ -1898,7 +1940,7 @@ const CourseDetail = () => {
                       }}
                     >
                       <div style={{ padding: '0.85rem', borderRadius: '10px', background: 'rgba(15, 23, 42, 0.65)', border: '1px solid rgba(255,255,255,0.12)' }}>
-                        <div style={{ fontSize: '0.74rem', color: '#cbd5e1', marginBottom: '0.28rem' }}>Predicted load</div>
+                        <div style={{ fontSize: '0.74rem', color: '#cbd5e1', marginBottom: '0.28rem' }}>Previous window predicted load</div>
                         <div style={{ fontSize: '1rem', fontWeight: 700, color: '#f8fafc' }}>{livePredictionSummary.predictedLoad}</div>
                       </div>
                       <div style={{ padding: '0.85rem', borderRadius: '10px', background: 'rgba(15, 23, 42, 0.65)', border: '1px solid rgba(255,255,255,0.12)' }}>
@@ -1908,10 +1950,6 @@ const CourseDetail = () => {
                             ? `#${livePredictionSummary.minuteIndex}`
                             : 'N/A'}
                         </div>
-                      </div>
-                      <div style={{ padding: '0.85rem', borderRadius: '10px', background: 'rgba(15, 23, 42, 0.65)', border: '1px solid rgba(255,255,255,0.12)' }}>
-                        <div style={{ fontSize: '0.74rem', color: '#cbd5e1', marginBottom: '0.28rem' }}>Raw events</div>
-                        <div style={{ fontSize: '1rem', fontWeight: 700, color: '#f8fafc' }}>{displayRawEventCount ?? 'N/A'}</div>
                       </div>
                     </div>
 
