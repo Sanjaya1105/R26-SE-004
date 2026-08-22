@@ -140,7 +140,19 @@ ${knowledgeChunk}
 
 Instructions:
 Assess Need: Analyze the knowledge chunk. If it is purely transitional or too simple, output it in its original form.
-Transformation Goal: If adaptation is needed, rewrite the knowledge chunk to reduce cognitive load and match the student's cognitive style while preserving the original meaning.${mathInstructions}`;
+Transformation Goal: If adaptation is needed, rewrite the knowledge chunk to reduce cognitive load and match the student's cognitive style while preserving the original meaning.
+
+Visual layout rules:
+- Prefer Markdown headings, short paragraphs, and bullet lists over dense prose.
+- For processes, cycles, comparisons, or concept maps, output a fenced Mermaid diagram, for example:
+
+\`\`\`mermaid
+flowchart LR
+  Water --> Reaction --> Glucose
+\`\`\`
+
+- Do not draw ASCII box tables with +---+ and | columns. Use a Markdown table or Mermaid instead.
+- Keep labels short so diagrams stay readable.${mathInstructions}`;
 }
 
 module.exports = {

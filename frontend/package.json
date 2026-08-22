@@ -15,6 +15,7 @@
     "axios": "^1.15.0",
     "jspdf": "^4.2.1",
     "katex": "^0.18.4",
+    "mermaid": "^11.17.0",
     "react": "^19.2.4",
     "react-apexcharts": "^2.1.0",
     "react-dom": "^19.2.4",

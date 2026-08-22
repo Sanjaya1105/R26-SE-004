@@ -1,10 +1,11 @@
 /* Assistant replies: CommonMark + GFM (bold, italic, headings, lists, tables, code, hr) */
 
 .assistant-md {
-  font-size: 0.88rem;
-  line-height: 1.55;
-  color: var(--text-muted);
+  font-size: 0.92rem;
+  line-height: 1.65;
+  color: #cbd5e1;
   word-wrap: break-word;
+  letter-spacing: 0.01em;
 }
 
 .assistant-md > *:first-child {
@@ -161,4 +162,103 @@
 
 .assistant-md .katex-error {
   color: #fca5a5;
+}
+
+.assistant-md-mermaid,
+.assistant-concept-board {
+  margin: 0.9rem 0;
+}
+
+.assistant-md-mermaid {
+  padding: 0.85rem;
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid rgba(129, 140, 248, 0.28);
+  background: linear-gradient(180deg, rgba(30, 27, 75, 0.55), rgba(15, 23, 42, 0.9));
+}
+
+.assistant-md-mermaid svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+
+.assistant-md-mermaid-loading {
+  margin: 0.5rem 0;
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.assistant-md-mermaid-fallback,
+.assistant-md-ascii-fallback {
+  white-space: pre-wrap;
+  font-size: 0.78rem;
+}
+
+.assistant-concept-board {
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid rgba(125, 211, 252, 0.22);
+  background: linear-gradient(180deg, rgba(8, 47, 73, 0.45), rgba(15, 23, 42, 0.88));
+}
+
+.assistant-concept-board-header {
+  padding: 0.95rem 1rem 0.7rem;
+  text-align: center;
+  background: rgba(14, 116, 144, 0.18);
+  border-bottom: 1px solid rgba(125, 211, 252, 0.16);
+}
+
+.assistant-concept-board-header h3 {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 1.05rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.assistant-concept-board-header p {
+  margin: 0.35rem 0 0;
+  color: #7dd3fc;
+  font-size: 0.82rem;
+}
+
+.assistant-concept-board-grid {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.85rem;
+}
+
+.assistant-concept-card {
+  min-width: 0;
+  padding: 0.75rem 0.8rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.assistant-concept-card h4 {
+  margin: 0 0 0.45rem;
+  color: #e0e7ff;
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+
+.assistant-concept-card ul {
+  margin: 0;
+  padding-left: 1.05rem;
+}
+
+.assistant-concept-card li {
+  margin: 0.2rem 0;
+  color: #cbd5e1;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 720px) {
+  .assistant-concept-board-grid {
+    grid-template-columns: 1fr !important;
+  }
 }

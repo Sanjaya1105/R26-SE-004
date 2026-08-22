@@ -546,6 +546,8 @@ const CourseDetail = () => {
   const [cognitiveStyle, setCognitiveStyle] = useState('Visual');
   const [loadLevel, setLoadLevel] = useState('Medium');
   const [frustration, setFrustration] = useState('Low');
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [promptBarOpen, setPromptBarOpen] = useState(false);
   const [playbackPrompt, setPlaybackPrompt] = useState(null);
   const [cognitiveLoadResult, setCognitiveLoadResult] = useState(null);
   const [cognitiveLoadError, setCognitiveLoadError] = useState('');
@@ -2304,20 +2306,74 @@ const CourseDetail = () => {
                   background: 'rgba(22, 101, 52, 0.12)',
                 }}
               >
-                <p
-                  className="form-label"
+                <button
+                  type="button"
+                  onClick={() => setProfileOpen((open) => !open)}
+                  aria-expanded={profileOpen}
                   style={{
-                    margin: 0,
-                    fontSize: '0.8rem',
-                    marginBottom: '0.5rem',
-                    letterSpacing: '0.02em',
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '0.75rem',
+                    padding: 0,
+                    border: 'none',
+                    background: 'transparent',
+                    color: 'inherit',
+                    cursor: 'pointer',
+                    textAlign: 'left',
                   }}
                 >
-                  Learning profile
-                </p>
+                  <span>
+                    <span
+                      className="form-label"
+                      style={{
+                        display: 'block',
+                        margin: 0,
+                        fontSize: '0.8rem',
+                        letterSpacing: '0.02em',
+                      }}
+                    >
+                      Learner profile
+                    </span>
+                    {!profileOpen ? (
+                      <span
+                        style={{
+                          display: 'block',
+                          marginTop: '0.25rem',
+                          fontSize: '0.75rem',
+                          color: 'var(--text-muted)',
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {[
+                          cognitiveStyle,
+                          `Load ${loadLevel}`,
+                          studentMajor,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      flexShrink: 0,
+                      fontSize: '0.7rem',
+                      color: '#86efac',
+                      transform: profileOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
+                      transition: 'transform 0.18s ease',
+                    }}
+                  >
+                    ▼
+                  </span>
+                </button>
+                {profileOpen ? (
+                  <>
                 <p
                   style={{
-                    margin: '0 0 0.65rem 0',
+                    margin: '0.65rem 0 0.65rem 0',
                     fontSize: '0.75rem',
                     color: 'var(--text-muted)',
                     lineHeight: 1.45,
@@ -2392,6 +2448,73 @@ const CourseDetail = () => {
                     <option value="High">Frustration: High</option>
                   </select>
                 </div>
+                  </>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setPromptBarOpen((open) => !open)}
+                  aria-expanded={promptBarOpen}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '0.75rem',
+                    marginTop: '0.85rem',
+                    paddingTop: '0.85rem',
+                    border: 'none',
+                    borderTop: '1px solid rgba(34, 197, 94, 0.18)',
+                    background: 'transparent',
+                    color: 'inherit',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  <span>
+                    <span
+                      className="form-label"
+                      style={{
+                        display: 'block',
+                        margin: 0,
+                        fontSize: '0.8rem',
+                        letterSpacing: '0.02em',
+                      }}
+                    >
+                      Full prompt
+                    </span>
+                    {!promptBarOpen ? (
+                      <span
+                        style={{
+                          display: 'block',
+                          marginTop: '0.25rem',
+                          fontSize: '0.75rem',
+                          color: 'var(--text-muted)',
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {promptLoading
+                          ? 'Building prompt…'
+                          : pedagogicalPrompt.trim()
+                            ? 'Knowledge chunk and pedagogical prompt are ready'
+                            : 'Open to review the knowledge chunk and prompt'}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      flexShrink: 0,
+                      fontSize: '0.7rem',
+                      color: '#86efac',
+                      transform: promptBarOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
+                      transition: 'transform 0.18s ease',
+                    }}
+                  >
+                    ▼
+                  </span>
+                </button>
+                {promptBarOpen ? (
+                  <>
                 {promptLoading ? (
                   <p
                     style={{
@@ -2499,6 +2622,8 @@ const CourseDetail = () => {
                     maxHeight: '360px',
                   }}
                 />
+                  </>
+                ) : null}
               </div>
 
               <div
@@ -2530,9 +2655,8 @@ const CourseDetail = () => {
                     lineHeight: 1.45,
                   }}
                 >
-                  Review the prompt above, then Ask. The same prompt is sent to
-                  Hugging Face and DeepSeek.{' '}
-                  You can also type an extra question.{' '}
+                  Ask sends the pedagogical prompt to Hugging Face and DeepSeek.
+                  Open Full prompt above to review it, or type an extra question.{' '}
                   <Link to="/login" style={{ color: '#93c5fd' }}>
                     Sign in
                   </Link>{' '}
@@ -2553,7 +2677,7 @@ const CourseDetail = () => {
                     onClick={() => setGptQuestion(pedagogicalPrompt)}
                     style={{ fontSize: '0.8rem' }}
                   >
-                    Use prompt above
+                    Use full prompt
                   </button>
                 </div>
                 <textarea

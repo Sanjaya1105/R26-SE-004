@@ -9,6 +9,13 @@ import {
   normalizeAssistantMath,
   restoreBrokenEquations,
 } from '../utils/assistantMath';
+import {
+  extractVisualSegments,
+  looksLikeAsciiTable,
+  looksLikeMermaid,
+} from '../utils/asciiDiagram';
+import MermaidChart from './MermaidChart';
+import ConceptBoard from './ConceptBoard';
 
 const assistantComponents = {
   table: ({ children, ...props }) => (
@@ -16,7 +23,38 @@ const assistantComponents = {
       <table {...props}>{children}</table>
     </div>
   ),
+  code({ className, children, ...props }) {
+    const language = /language-(\w+)/.exec(className || '')?.[1] || '';
+    const value = String(children || '').replace(/\n$/, '');
+    if (language === 'mermaid' || looksLikeMermaid(value)) {
+      return <MermaidChart definition={value} />;
+    }
+    if (looksLikeAsciiTable(value)) {
+      return <ConceptBoard block={value} />;
+    }
+    return (
+      <code className={className} {...props}>
+        {children}
+      </code>
+    );
+  },
 };
+
+function MarkdownBlock({ text, canonicalEquations }) {
+  const prepared = restoreBrokenEquations(
+    normalizeAssistantMath(text),
+    canonicalEquations
+  );
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkMath, remarkGfm, remarkBreaks]}
+      rehypePlugins={[[rehypeKatex, { throwOnError: false }]]}
+      components={assistantComponents}
+    >
+      {prepared}
+    </ReactMarkdown>
+  );
+}
 
 /**
  * @param {{
@@ -32,19 +70,21 @@ export default function AssistantMarkdown({
   style,
   canonicalEquations = [],
 }) {
-  const text = restoreBrokenEquations(
-    normalizeAssistantMath(children),
-    canonicalEquations
-  );
+  const segments = extractVisualSegments(String(children || ''));
   return (
     <div className={`assistant-md ${className}`.trim()} style={style}>
-      <ReactMarkdown
-        remarkPlugins={[remarkMath, remarkGfm, remarkBreaks]}
-        rehypePlugins={[[rehypeKatex, { throwOnError: false }]]}
-        components={assistantComponents}
-      >
-        {text}
-      </ReactMarkdown>
+      {segments.map((segment, index) => {
+        if (segment.type === 'ascii') {
+          return <ConceptBoard key={`ascii-${index}`} block={segment.content} />;
+        }
+        return (
+          <MarkdownBlock
+            key={`md-${index}`}
+            text={segment.content}
+            canonicalEquations={canonicalEquations}
+          />
+        );
+      })}
     </div>
   );
 }
