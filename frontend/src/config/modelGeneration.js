@@ -4,4 +4,4 @@
  *
  * Flip to `true` when you want dual-model testing again.
  */
-export const ENABLE_HUGGINGFACE_GENERATION = false;
+export const ENABLE_HUGGINGFACE_GENERATION = true;

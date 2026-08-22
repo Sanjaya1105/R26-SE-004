@@ -14,6 +14,16 @@ const { assertVideoDurationLimit } = require("../utils/videoDuration");
 const { parseContainsMath, hasContainsMathField } = require("../utils/parseContainsMath");
 const { collectEquations } = require("../utils/mathText");
 const { dedupeSubsectionExtracts } = require("../services/semanticDedupe.service");
+const {
+  extractAndStoreDocumentImages,
+  replaceExtractedBySource,
+  destroyCloudinaryImages,
+  mapExtractedImages,
+} = require("../services/documentImage.service");
+const {
+  originalOfficeFileName,
+  uploadRawDocument,
+} = require("../utils/officeFiles");
 
 const MAX_VIDEO = 40 * 1024 * 1024;
 const MAX_OFFICE = 15 * 1024 * 1024;
@@ -153,9 +163,12 @@ const createSubSection = async (req, res) => {
     videoPublicId: "",
     pptUrl: "",
     pptPublicId: "",
+    pptFileName: "",
     pdfUrl: "",
     pdfPublicId: "",
+    pdfFileName: "",
     images: [],
+    extractedImages: [],
     pptText: "",
     pdfText: "",
     transcriptText: "",
@@ -199,12 +212,15 @@ const createSubSection = async (req, res) => {
       });
       uploaded.pptText = extracted.pptText;
       uploaded.equations.push(...extracted.equations);
-      const r = await uploadBuffer(pptFile.buffer, {
-        folder: "upload_section_subsections/ppt",
-        resource_type: "raw",
-      });
+      const fileName = originalOfficeFileName("ppt", pptFile.originalname);
+      const r = await uploadRawDocument(
+        pptFile.buffer,
+        "upload_section_subsections/ppt",
+        fileName
+      );
       uploaded.pptUrl = r.secure_url;
       uploaded.pptPublicId = r.public_id;
+      uploaded.pptFileName = fileName;
       rollbackIds.push(r.public_id);
     }
 
@@ -215,14 +231,23 @@ const createSubSection = async (req, res) => {
       });
       uploaded.pdfText = extracted.pdfText;
       uploaded.equations.push(...extracted.equations);
-      const r = await uploadBuffer(pdfFile.buffer, {
-        folder: "upload_section_subsections/pdf",
-        resource_type: "raw",
-      });
+      const fileName = originalOfficeFileName("pdf", pdfFile.originalname);
+      const r = await uploadRawDocument(
+        pdfFile.buffer,
+        "upload_section_subsections/pdf",
+        fileName
+      );
       uploaded.pdfUrl = r.secure_url;
       uploaded.pdfPublicId = r.public_id;
+      uploaded.pdfFileName = fileName;
       rollbackIds.push(r.public_id);
     }
+
+    uploaded.extractedImages = await extractAndStoreDocumentImages({
+      pptBuffer: pptFile?.buffer,
+      pdfBuffer: pdfFile?.buffer,
+      rollbackIds,
+    });
 
     for (const img of imageFiles) {
       if (!img.buffer?.length) continue;
@@ -295,6 +320,7 @@ const createSubSection = async (req, res) => {
           pdfUrl: doc.pdfUrl,
           pdfText: doc.pdfText,
           images: doc.images,
+          extractedImages: mapExtractedImages(doc.extractedImages),
           containsMath: doc.containsMath,
           transcriptText: doc.transcriptText,
           transcriptPreview: doc.transcriptPreview,
@@ -459,13 +485,29 @@ const updateSubSection = async (req, res) => {
         containsMath: nextContainsMath,
       });
       doc.pptText = extracted.pptText;
-      const r = await uploadBuffer(pptFile.buffer, {
-        folder: "upload_section_subsections/ppt",
-        resource_type: "raw",
-      });
+      const fileName = originalOfficeFileName("ppt", pptFile.originalname);
+      const r = await uploadRawDocument(
+        pptFile.buffer,
+        "upload_section_subsections/ppt",
+        fileName
+      );
       doc.pptUrl = r.secure_url;
       doc.pptPublicId = r.public_id;
+      doc.pptFileName = fileName;
       rollbackIds.push(r.public_id);
+      const pptExtracted = await extractAndStoreDocumentImages({
+        pptBuffer: pptFile.buffer,
+        rollbackIds,
+      });
+      destroyCloudinaryImages(
+        (doc.extractedImages || []).filter((img) => img.source === "ppt")
+      );
+      doc.extractedImages = replaceExtractedBySource(
+        doc.extractedImages,
+        "ppt",
+        pptExtracted
+      );
+      doc.markModified("extractedImages");
     } else if (mathModeChanged && doc.pptUrl) {
       try {
         const remote = await fetchRemoteBuffer(doc.pptUrl);
@@ -489,13 +531,29 @@ const updateSubSection = async (req, res) => {
         containsMath: nextContainsMath,
       });
       doc.pdfText = extracted.pdfText;
-      const r = await uploadBuffer(pdfFile.buffer, {
-        folder: "upload_section_subsections/pdf",
-        resource_type: "raw",
-      });
+      const fileName = originalOfficeFileName("pdf", pdfFile.originalname);
+      const r = await uploadRawDocument(
+        pdfFile.buffer,
+        "upload_section_subsections/pdf",
+        fileName
+      );
       doc.pdfUrl = r.secure_url;
       doc.pdfPublicId = r.public_id;
+      doc.pdfFileName = fileName;
       rollbackIds.push(r.public_id);
+      const pdfExtracted = await extractAndStoreDocumentImages({
+        pdfBuffer: pdfFile.buffer,
+        rollbackIds,
+      });
+      destroyCloudinaryImages(
+        (doc.extractedImages || []).filter((img) => img.source === "pdf")
+      );
+      doc.extractedImages = replaceExtractedBySource(
+        doc.extractedImages,
+        "pdf",
+        pdfExtracted
+      );
+      doc.markModified("extractedImages");
     } else if (mathModeChanged && doc.pdfUrl) {
       try {
         const remote = await fetchRemoteBuffer(doc.pdfUrl);
@@ -570,6 +628,7 @@ const updateSubSection = async (req, res) => {
           pptUrl: doc.pptUrl,
           pdfUrl: doc.pdfUrl,
           images: doc.images,
+          extractedImages: mapExtractedImages(doc.extractedImages),
           containsMath: doc.containsMath,
           updatedAt: doc.updatedAt,
         },

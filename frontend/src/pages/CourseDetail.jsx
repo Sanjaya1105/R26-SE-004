@@ -47,6 +47,137 @@ function buildGptPromptUrls() {
   ].filter((url, i, arr) => arr.indexOf(url) === i);
 }
 
+function subsectionDownloadUrl(courseId, subsectionId, kind) {
+  return `${getGatewayBaseUrl()}/api/public/courses/${encodeURIComponent(
+    courseId
+  )}/subsections/${encodeURIComponent(subsectionId)}/${kind}`;
+}
+
+function collectSubsectionImages(sub) {
+  const seen = new Set();
+  const images = [];
+  const add = (img, fallbackSource) => {
+    const url = String(img?.url || '').trim();
+    if (!url || seen.has(url)) return;
+    seen.add(url);
+    images.push({
+      id: String(img?.id || img?.publicId || url),
+      url,
+      publicId: img?.publicId || '',
+      source: String(img?.source || fallbackSource || '').toLowerCase(),
+      filePath: img?.filePath || '',
+      pageNumber: Number(img?.pageNumber) || 0,
+    });
+  };
+  (Array.isArray(sub?.extractedImages) ? sub.extractedImages : []).forEach((img) =>
+    add(img, img?.source)
+  );
+  (Array.isArray(sub?.images) ? sub.images : []).forEach((img) => add(img, 'upload'));
+  return images;
+}
+
+function lessonImageCaption(img, index) {
+  if (img.source === 'ppt' && img.pageNumber) return `PPT · slide ${img.pageNumber}`;
+  if (img.source === 'pdf' && img.pageNumber) return `PDF · page ${img.pageNumber}`;
+  if (img.source === 'ppt') return 'PPT image';
+  if (img.source === 'pdf') return 'PDF image';
+  if (img.source === 'upload') return `Uploaded image ${index + 1}`;
+  return `Lesson image ${index + 1}`;
+}
+
+function LessonImageGallery({ images, afterGptOutput = false }) {
+  if (!Array.isArray(images) || images.length === 0) return null;
+  return (
+    <div
+      style={{
+        marginTop: '0.85rem',
+        padding: '0.85rem',
+        borderRadius: '10px',
+        border: '1px solid rgba(125, 211, 252, 0.28)',
+        background: 'rgba(14, 116, 144, 0.12)',
+      }}
+    >
+      <p
+        className="form-label"
+        style={{ marginBottom: '0.35rem', fontSize: '0.75rem' }}
+      >
+        {afterGptOutput
+          ? 'Figures from this lesson'
+          : 'Lesson images'}
+      </p>
+      <p
+        style={{
+          margin: '0 0 0.65rem 0',
+          fontSize: '0.75rem',
+          color: 'var(--text-muted)',
+          lineHeight: 1.45,
+        }}
+      >
+        These images were extracted from the PPT and PDF. They belong to the
+        lesson content, so they are shown for every cognitive style.
+      </p>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
+          gap: '0.65rem',
+        }}
+      >
+        {images.map((img, index) => {
+          const caption = lessonImageCaption(img, index);
+          return (
+            <a
+              key={img.id || `${img.url}-${index}`}
+              href={img.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.35rem',
+                textDecoration: 'none',
+                color: 'inherit',
+                minWidth: 0,
+              }}
+            >
+              <span
+                style={{
+                  display: 'block',
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  background: 'rgba(15, 23, 42, 0.55)',
+                  height: '140px',
+                }}
+              >
+                <img
+                  src={img.url}
+                  alt={caption}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                    display: 'block',
+                  }}
+                />
+              </span>
+              <span
+                style={{
+                  fontSize: '0.72rem',
+                  color: '#7dd3fc',
+                  lineHeight: 1.35,
+                }}
+              >
+                {caption}
+              </span>
+            </a>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /** Pretty-print dual-model selection reasoning in the browser console (for defense / debugging). */
 function logOutputSelectionReasoning(data, { loadLevel, sourceChars } = {}) {
   const hf = data?.scores?.huggingface;
@@ -1659,6 +1790,18 @@ const CourseDetail = () => {
                                                     containsMath: Boolean(
                                                       sub.containsMath
                                                     ),
+                                                    subsectionId: sub.id,
+                                                    extractedImages:
+                                                      Array.isArray(
+                                                        sub.extractedImages
+                                                      )
+                                                        ? sub.extractedImages
+                                                        : [],
+                                                    images: Array.isArray(
+                                                      sub.images
+                                                    )
+                                                      ? sub.images
+                                                      : [],
                                                   });
                                                 }}
                                               >
@@ -1676,22 +1819,32 @@ const CourseDetail = () => {
                                             ) : null}
                                             {sub.pptUrl ? (
                                               <a
-                                                href={sub.pptUrl}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
+                                                href={subsectionDownloadUrl(
+                                                  courseId,
+                                                  sub.id,
+                                                  'ppt'
+                                                )}
+                                                download={
+                                                  sub.pptFileName || 'lesson.pptx'
+                                                }
                                                 style={{ color: '#93c5fd' }}
                                               >
-                                                PPT link
+                                                Download PPT
                                               </a>
                                             ) : null}
                                             {sub.pdfUrl ? (
                                               <a
-                                                href={sub.pdfUrl}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
+                                                href={subsectionDownloadUrl(
+                                                  courseId,
+                                                  sub.id,
+                                                  'pdf'
+                                                )}
+                                                download={
+                                                  sub.pdfFileName || 'lesson.pdf'
+                                                }
                                                 style={{ color: '#93c5fd' }}
                                               >
-                                                PDF link
+                                                Download PDF
                                               </a>
                                             ) : null}
                                             {hasImages
@@ -2382,6 +2535,10 @@ const CourseDetail = () => {
                     >
                       {selectedAnswer}
                     </AssistantMarkdown>
+                    <LessonImageGallery
+                      afterGptOutput
+                      images={collectSubsectionImages(mainVideo)}
+                    />
                   </div>
                 ) : null}
 
@@ -2510,6 +2667,12 @@ const CourseDetail = () => {
                       ) : null}
                     </div>
                   </div>
+                ) : null}
+
+                {!selectedAnswer ? (
+                  <LessonImageGallery
+                    images={collectSubsectionImages(mainVideo)}
+                  />
                 ) : null}
               </div>
             </>

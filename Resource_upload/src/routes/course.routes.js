@@ -6,6 +6,7 @@ const {
   createCourse,
   listPublicCourses,
   getPublicCourseDetail,
+  downloadPublicSubsectionFile,
   listMyCourses,
   getCourseForEdit,
   updateCourse,
@@ -19,6 +20,22 @@ const {
 const router = express.Router();
 
 router.get("/public/courses", ensureGatewayAccess, listPublicCourses);
+router.get(
+  "/public/courses/:courseId/subsections/:subsectionId/ppt",
+  ensureGatewayAccess,
+  (req, res, next) => {
+    req.params.kind = "ppt";
+    return downloadPublicSubsectionFile(req, res, next);
+  }
+);
+router.get(
+  "/public/courses/:courseId/subsections/:subsectionId/pdf",
+  ensureGatewayAccess,
+  (req, res, next) => {
+    req.params.kind = "pdf";
+    return downloadPublicSubsectionFile(req, res, next);
+  }
+);
 router.get(
   "/public/courses/:courseId",
   ensureGatewayAccess,

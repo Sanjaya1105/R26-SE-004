@@ -8,6 +8,17 @@ const imageEntrySchema = new mongoose.Schema(
   { _id: false }
 );
 
+const extractedImageSchema = new mongoose.Schema(
+  {
+    url: { type: String, required: true },
+    publicId: { type: String, required: true },
+    source: { type: String, enum: ["ppt", "pdf"], required: true },
+    filePath: { type: String, default: "" },
+    pageNumber: { type: Number, default: 0 },
+  },
+  { _id: true }
+);
+
 const courseSubSectionSchema = new mongoose.Schema(
   {
     sectionId: {
@@ -32,9 +43,12 @@ const courseSubSectionSchema = new mongoose.Schema(
     videoPublicId: { type: String, default: "" },
     pptUrl: { type: String, default: "" },
     pptPublicId: { type: String, default: "" },
+    pptFileName: { type: String, default: "" },
     pdfUrl: { type: String, default: "" },
     pdfPublicId: { type: String, default: "" },
+    pdfFileName: { type: String, default: "" },
     images: { type: [imageEntrySchema], default: [] },
+    extractedImages: { type: [extractedImageSchema], default: [] },
     containsMath: { type: Boolean, default: false },
     equations: {
       type: [

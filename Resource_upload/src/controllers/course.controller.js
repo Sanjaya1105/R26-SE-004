@@ -4,6 +4,13 @@ const Course = require("../models/course.model");
 const CourseSection = require("../models/courseSection.model");
 const CourseSubSection = require("../models/courseSubSection.model");
 const { resolveEducatorNameFromRequest } = require("../utils/educatorDisplay");
+const { mapExtractedImages } = require("../services/documentImage.service");
+const {
+  mimeForFileName,
+  contentDispositionAttachment,
+  fileNameFromStoredUrl,
+  sniffOfficeFileName,
+} = require("../utils/officeFiles");
 
 function parseKeywords(raw) {
   if (!raw || typeof raw !== "string") return [];
@@ -138,7 +145,7 @@ const getPublicCourseDetail = async (req, res) => {
 
     const subs = await CourseSubSection.find({ courseId })
       .sort({ order: 1, createdAt: 1 })
-      .select("sectionId order videoUrl pptUrl pdfUrl images transcriptText pptText pdfText dedupedTranscriptText dedupedPptText dedupedPdfText containsMath equations")
+      .select("sectionId order videoUrl pptUrl pptFileName pdfUrl pdfFileName images extractedImages transcriptText pptText pdfText dedupedTranscriptText dedupedPptText dedupedPdfText containsMath equations")
       .lean();
 
     const subsectionsBySection = new Map();
@@ -171,12 +178,15 @@ const getPublicCourseDetail = async (req, res) => {
         order: sub.order,
         videoUrl: sub.videoUrl || "",
         pptUrl: sub.pptUrl || "",
+        pptFileName: sub.pptFileName || "",
         pdfUrl: sub.pdfUrl || "",
+        pdfFileName: sub.pdfFileName || "",
         containsMath: Boolean(sub.containsMath),
         knowledgeChunk,
         images: Array.isArray(sub.images)
           ? sub.images.map((img) => ({ url: img.url }))
           : [],
+        extractedImages: mapExtractedImages(sub.extractedImages),
       });
     }
 
@@ -202,6 +212,61 @@ const getPublicCourseDetail = async (req, res) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Failed to load course." });
+  }
+};
+
+const downloadPublicSubsectionFile = async (req, res) => {
+  const { courseId, subsectionId, kind } = req.params;
+  const type = String(kind || "").toLowerCase();
+
+  if (!courseId || !mongoose.Types.ObjectId.isValid(courseId)) {
+    return res.status(400).json({ message: "Invalid course id." });
+  }
+  if (!subsectionId || !mongoose.Types.ObjectId.isValid(subsectionId)) {
+    return res.status(400).json({ message: "Invalid subsection id." });
+  }
+  if (type !== "ppt" && type !== "pdf") {
+    return res.status(400).json({ message: "File type must be ppt or pdf." });
+  }
+
+  try {
+    const doc = await CourseSubSection.findById(subsectionId)
+      .select("courseId pptUrl pptFileName pdfUrl pdfFileName")
+      .lean();
+
+    if (!doc || String(doc.courseId) !== String(courseId)) {
+      return res.status(404).json({ message: "File not found." });
+    }
+
+    const storedUrl = type === "ppt" ? doc.pptUrl : doc.pdfUrl;
+    if (!storedUrl) {
+      return res.status(404).json({ message: `No ${type.toUpperCase()} is stored for this subsection.` });
+    }
+
+    const storedName = type === "ppt" ? doc.pptFileName : doc.pdfFileName;
+    const fromUrl = fileNameFromStoredUrl(storedUrl, "");
+    const preferredName = storedName || fromUrl;
+
+    const remote = await fetch(storedUrl);
+    if (!remote.ok) {
+      return res.status(502).json({
+        message: `Could not fetch the stored ${type.toUpperCase()} (${remote.status}).`,
+      });
+    }
+
+    const buffer = Buffer.from(await remote.arrayBuffer());
+    const fileName = sniffOfficeFileName(buffer, type, preferredName);
+    res.writeHead(200, {
+      "Content-Type": mimeForFileName(fileName),
+      "Content-Disposition": contentDispositionAttachment(fileName),
+      "Content-Length": String(buffer.length),
+      "X-Content-Type-Options": "nosniff",
+      "Cache-Control": "private, max-age=120",
+    });
+    return res.end(buffer);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Failed to download the file." });
   }
 };
 
@@ -268,7 +333,7 @@ const getCourseForEdit = async (req, res) => {
 
     const subs = await CourseSubSection.find({ courseId: cid })
       .sort({ order: 1, createdAt: 1 })
-      .select("sectionId order videoUrl pptUrl pdfUrl images containsMath")
+      .select("sectionId order videoUrl pptUrl pdfUrl images extractedImages containsMath")
       .lean();
 
     const subsectionsBySection = new Map();
@@ -287,6 +352,7 @@ const getCourseForEdit = async (req, res) => {
         images: Array.isArray(sub.images)
           ? sub.images.map((img) => ({ url: img.url }))
           : [],
+        extractedImages: mapExtractedImages(sub.extractedImages),
       });
     }
 
@@ -423,6 +489,7 @@ module.exports = {
   createCourse,
   listPublicCourses,
   getPublicCourseDetail,
+  downloadPublicSubsectionFile,
   listMyCourses,
   getCourseForEdit,
   updateCourse,
