@@ -4,7 +4,6 @@ import axios from 'axios';
 import { getGatewayBaseUrl } from '../config/gateway';
 import AssistantMarkdown from '../components/AssistantMarkdown';
 import { selectBestOutputLocally } from '../utils/selectBestOutputLocal';
-import { ENABLE_HUGGINGFACE_GENERATION } from '../config/modelGeneration';
 import { parseCanonicalEquations } from '../utils/assistantMath';
 
 function buildGptAskUrls() {
@@ -45,6 +44,96 @@ function buildGptPromptUrls() {
     'http://127.0.0.1:4000/api/gpt/build-prompt',
     'http://localhost:5002/api/gpt/build-prompt',
   ].filter((url, i, arr) => arr.indexOf(url) === i);
+}
+
+const PLAYBACK_PROMPT_COPY = {
+  mid: {
+    title: 'Lesson suggestion',
+    body: 'Do you need any suggestion?',
+    extraInstruction:
+      'The student is halfway through the lesson video and asked for a suggestion. Adapt the knowledge chunk again for this student.',
+  },
+  end: {
+    title: 'Lesson suggestion',
+    body: 'Do you need any suggestion in another way?',
+    extraInstruction:
+      'The student finished the lesson video and asked for a suggestion in another way. Explain the same knowledge chunk using a different method than a first pass, such as a worked example, analogy, or step-by-step recap.',
+  },
+};
+
+function PlaybackPersonalizationPrompt({ kind, onYes, onNo, busy }) {
+  const copy = PLAYBACK_PROMPT_COPY[kind];
+  if (!copy) return null;
+  return (
+    <aside
+      role="status"
+      aria-live="polite"
+      aria-labelledby="playback-personalization-title"
+      style={{
+        position: 'fixed',
+        right: '1.1rem',
+        bottom: '1.1rem',
+        width: 'min(360px, calc(100vw - 2rem))',
+        zIndex: 40,
+        padding: '0.9rem 1rem',
+        borderRadius: '12px',
+        border: '1px solid rgba(148, 163, 184, 0.35)',
+        background: '#1e293b',
+        boxShadow: '0 12px 32px rgba(0, 0, 0, 0.38)',
+        color: '#e2e8f0',
+      }}
+    >
+      <p
+        id="playback-personalization-title"
+        style={{
+          margin: 0,
+          fontSize: '0.72rem',
+          fontWeight: 600,
+          letterSpacing: '0.04em',
+          textTransform: 'uppercase',
+          color: '#93c5fd',
+        }}
+      >
+        {copy.title}
+      </p>
+      <p
+        style={{
+          margin: '0.4rem 0 0.75rem 0',
+          fontSize: '0.9rem',
+          lineHeight: 1.45,
+          color: '#f8fafc',
+        }}
+      >
+        {copy.body}
+      </p>
+      <div style={{ display: 'flex', gap: '0.45rem' }}>
+        <button
+          type="button"
+          className="btn btn-primary"
+          disabled={busy}
+          onClick={onYes}
+          style={{ flex: 1, fontSize: '0.8rem', padding: '0.4rem 0.6rem' }}
+        >
+          {busy ? 'Working…' : 'Yes'}
+        </button>
+        <button
+          type="button"
+          className="btn"
+          disabled={busy}
+          onClick={onNo}
+          style={{
+            flex: 1,
+            fontSize: '0.8rem',
+            padding: '0.4rem 0.6rem',
+            background: 'rgba(15, 23, 42, 0.7)',
+            border: '1px solid rgba(255,255,255,0.12)',
+          }}
+        >
+          No
+        </button>
+      </div>
+    </aside>
+  );
 }
 
 function subsectionDownloadUrl(courseId, subsectionId, kind) {
@@ -457,12 +546,17 @@ const CourseDetail = () => {
   const [cognitiveStyle, setCognitiveStyle] = useState('Visual');
   const [loadLevel, setLoadLevel] = useState('Medium');
   const [frustration, setFrustration] = useState('Low');
+  const [playbackPrompt, setPlaybackPrompt] = useState(null);
   const [cognitiveLoadResult, setCognitiveLoadResult] = useState(null);
   const [cognitiveLoadError, setCognitiveLoadError] = useState('');
   const [cognitiveLoadLoading, setCognitiveLoadLoading] = useState(false);
   const [videoSessionId, setVideoSessionId] = useState('');
   const [rawEventStats, setRawEventStats] = useState(createEmptyRawEventStats);
   const videoRef = useRef(null);
+  const askPanelRef = useRef(null);
+  const playbackPromptRef = useRef(null);
+  const midpointPromptShownRef = useRef(false);
+  const endPromptShownRef = useRef(false);
   const sessionStartRef = useRef(null);
   const lastVideoTimeRef = useRef(0);
   const seekStartTimeRef = useRef(0);
@@ -512,6 +606,10 @@ const CourseDetail = () => {
     setDeepseekError('');
     setPedagogicalPrompt('');
     setPromptError('');
+    setPlaybackPrompt(null);
+    playbackPromptRef.current = null;
+    midpointPromptShownRef.current = false;
+    endPromptShownRef.current = false;
     setCognitiveLoadResult(null);
     setCognitiveLoadError('');
     setCognitiveLoadLoading(false);
@@ -534,6 +632,10 @@ const CourseDetail = () => {
     setDeepseekError('');
     setPedagogicalPrompt('');
     setPromptError('');
+    setPlaybackPrompt(null);
+    playbackPromptRef.current = null;
+    midpointPromptShownRef.current = false;
+    endPromptShownRef.current = false;
   }, [mainVideo?.url]);
 
   useEffect(() => {
@@ -878,6 +980,22 @@ const CourseDetail = () => {
     }, 0);
   };
 
+  const openPlaybackPersonalizationPrompt = (kind) => {
+    if (kind !== 'mid' && kind !== 'end') return;
+    if (kind === 'mid' && midpointPromptShownRef.current) return;
+    if (kind === 'end' && endPromptShownRef.current) return;
+    if (kind === 'mid' && playbackPromptRef.current) return;
+    if (kind === 'mid') midpointPromptShownRef.current = true;
+    if (kind === 'end') endPromptShownRef.current = true;
+    playbackPromptRef.current = kind;
+    setPlaybackPrompt(kind);
+  };
+
+  const dismissPlaybackPersonalizationPrompt = () => {
+    playbackPromptRef.current = null;
+    setPlaybackPrompt(null);
+  };
+
   const handleVideoRateChange = () => {
     const currentRate = Number(videoRef.current?.playbackRate || 1);
     if (currentRate === lastPlaybackRateRef.current) return;
@@ -903,6 +1021,23 @@ const CourseDetail = () => {
     }
 
     lastVideoTimeRef.current = currentTime;
+
+    const duration = Number(videoRef.current?.duration || 0);
+    if (!Number.isFinite(duration) || duration <= 0) {
+      return;
+    }
+    if (currentTime >= duration - 0.35) {
+      openPlaybackPersonalizationPrompt('end');
+      return;
+    }
+    if (duration >= 8 && currentTime >= duration * 0.5) {
+      openPlaybackPersonalizationPrompt('mid');
+    }
+  };
+
+  const handleVideoEnded = () => {
+    openPlaybackPersonalizationPrompt('end');
+    markInteraction();
   };
 
   useEffect(() => {
@@ -1115,7 +1250,7 @@ const CourseDetail = () => {
       : [];
   const canonicalEquations = parseCanonicalEquations(mainVideo?.knowledgeChunk);
 
-  const askCourseGpt = async () => {
+  const askCourseGpt = async (extraInstruction) => {
     setGptError('');
     setDeepseekError('');
     setSelectionError('');
@@ -1133,9 +1268,11 @@ const CourseDetail = () => {
 
     const prompt = pedagogicalPrompt.trim();
     const studentQuestion = gptQuestion.trim();
-    const q = studentQuestion
-      ? `${prompt}\n\nStudent question: ${studentQuestion}`
-      : prompt;
+    const extra =
+      typeof extraInstruction === 'string' ? extraInstruction.trim() : '';
+    const q = [prompt, studentQuestion ? `Student question: ${studentQuestion}` : '', extra]
+      .filter(Boolean)
+      .join('\n\n');
     if (!q) {
       setGptError('Wait for the subsection prompt to load, or type a question.');
       return;
@@ -1163,12 +1300,8 @@ const CourseDetail = () => {
     try {
       setGptLoading(true);
 
-      const hfRequest = ENABLE_HUGGINGFACE_GENERATION
-        ? postWithFallback(buildGptAskUrls(), { question: q })
-        : Promise.resolve({ data: { data: { answer: '', skipped: true } } });
-
       const [hfResult, deepseekResult] = await Promise.allSettled([
-        hfRequest,
+        postWithFallback(buildGptAskUrls(), { question: q }),
         postWithFallback(buildDeepseekChatUrls(), {
           message: q,
           history: [],
@@ -1179,8 +1312,18 @@ const CourseDetail = () => {
       let dsText = '';
 
       if (hfResult.status === 'fulfilled') {
-        hfText = String(hfResult.value.data?.data?.answer || '').trim();
-        setGptAnswer(hfText);
+        const payload = hfResult.value.data?.data;
+        if (payload?.skipped) {
+          setGptError(
+            'Hugging Face did not generate a reply. Set HF_GENERATION_ENABLED=true in gpt-service/.env and restart gpt-service.'
+          );
+        } else {
+          hfText = String(payload?.answer || '').trim();
+          setGptAnswer(hfText);
+          if (!hfText) {
+            setGptError('Hugging Face returned an empty answer.');
+          }
+        }
       } else {
         const err = hfResult.reason;
         if (err?.response?.status === 401 || err?.response?.status === 403) {
@@ -1968,6 +2111,7 @@ const CourseDetail = () => {
                   onSeeked={handleVideoSeeked}
                   onRateChange={handleVideoRateChange}
                   onTimeUpdate={handleVideoTimeUpdate}
+                  onEnded={handleVideoEnded}
                   style={{
                     width: '100%',
                     height: '100%',
@@ -2358,6 +2502,7 @@ const CourseDetail = () => {
               </div>
 
               <div
+                ref={askPanelRef}
                 style={{
                   marginTop: '0.75rem',
                   padding: '1rem',
@@ -2385,10 +2530,8 @@ const CourseDetail = () => {
                     lineHeight: 1.45,
                   }}
                 >
-                  Review the prompt above, then Ask.{' '}
-                  {ENABLE_HUGGINGFACE_GENERATION
-                    ? 'The same prompt is sent to Hugging Face and DeepSeek.'
-                    : 'Hugging Face generation is paused to save credits; the prompt is sent to DeepSeek only. Scoring still runs.'}{' '}
+                  Review the prompt above, then Ask. The same prompt is sent to
+                  Hugging Face and DeepSeek.{' '}
                   You can also type an extra question.{' '}
                   <Link to="/login" style={{ color: '#93c5fd' }}>
                     Sign in
@@ -2424,15 +2567,13 @@ const CourseDetail = () => {
                 <button
                   type="button"
                   className="btn btn-primary"
-                  onClick={askCourseGpt}
+                  onClick={() => askCourseGpt()}
                   disabled={gptLoading || !pedagogicalPrompt.trim()}
                   style={{ marginTop: '0.5rem', width: '100%', fontSize: '0.85rem' }}
                 >
                   {gptLoading
                     ? 'Generating + selecting best output…'
-                    : ENABLE_HUGGINGFACE_GENERATION
-                      ? 'Ask both models'
-                      : 'Ask DeepSeek'}
+                    : 'Ask both models'}
                 </button>
 
                 {selectionError ? (
@@ -2694,6 +2835,18 @@ const CourseDetail = () => {
           )}
         </main>
       </div>
+      {mainVideo && playbackPrompt ? (
+        <PlaybackPersonalizationPrompt
+          kind={playbackPrompt}
+          busy={gptLoading}
+          onNo={dismissPlaybackPersonalizationPrompt}
+          onYes={async () => {
+            const copy = PLAYBACK_PROMPT_COPY[playbackPrompt];
+            dismissPlaybackPersonalizationPrompt();
+            await askCourseGpt(copy?.extraInstruction || '');
+          }}
+        />
+      ) : null}
     </div>
   );
 };

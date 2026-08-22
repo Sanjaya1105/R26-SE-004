@@ -79,13 +79,10 @@ router.post("/build-prompt", (req, res) => {
 
 router.post("/ask", verifyToken, async (req, res) => {
   if (!isHfGenerationEnabled()) {
-    return res.status(200).json({
-      success: true,
-      data: {
-        answer: "",
-        model: "disabled",
-        skipped: true,
-      },
+    return res.status(503).json({
+      message:
+        "Hugging Face generation is disabled. Set HF_GENERATION_ENABLED=true in gpt-service/.env and restart gpt-service.",
+      data: { skipped: true, model: "disabled" },
     });
   }
 
@@ -118,7 +115,7 @@ router.post("/ask", verifyToken, async (req, res) => {
             },
             { role: "user", content: question },
           ],
-          max_tokens: 512,
+          max_tokens: 2048,
         },
         {
           headers: {

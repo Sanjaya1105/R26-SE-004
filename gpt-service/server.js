@@ -8,7 +8,7 @@ const app = express();
 const port = process.env.PORT || 5002;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "2mb" }));
 
 app.get("/health", (req, res) => {
   res.json({ ok: true, service: "gpt-service" });
@@ -32,7 +32,15 @@ mongoose
   .then(() => {
     console.log(`Connected to MongoDB database: ${dbName}`);
     app.listen(port, () => {
-      console.log(`gpt-service listening on http://localhost:${port}`);
+      const hfOn =
+        String(process.env.HF_GENERATION_ENABLED ?? "true")
+          .trim()
+          .toLowerCase() !== "false";
+      console.log(
+        `gpt-service listening on http://localhost:${port} (HF generation ${
+          hfOn ? "ON" : "OFF"
+        })`
+      );
     });
   })
   .catch((error) => {
