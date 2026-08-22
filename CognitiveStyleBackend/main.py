@@ -13,7 +13,7 @@ from routes.AssistQuestionRoute import router as assist_question_runner_gaze_rou
 from routes.LearnerProfileRoute import router as learner_profile_router
 from routes.aiModelRoutes.VisualVerbalRoute import router as visual_verbal_ml_router
 from routes.AhsQuestionnaireRouter import router as ahs_questionnaire_router
-from routes.OSVQuestionnaireRouter import router as osv_questionnaire_router
+from routes.VVDQuestionnaireRouter import router as osv_questionnaire_router
 
 app = FastAPI()
 
