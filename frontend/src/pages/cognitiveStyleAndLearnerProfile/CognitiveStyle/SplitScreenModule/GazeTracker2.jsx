@@ -668,22 +668,263 @@
 // }
 
 
-import React, { useMemo, useEffect, useRef, useState } from "react";
+
+/////////////////////////////////////IMEEEEEEEEEEEEEEEEEEEEEEEESSHHHHH DOUBLE SUBMISSION
+// import React, { useMemo, useEffect, useRef, useState } from "react";
+// import Webcam from "react-webcam";
+// import { FilesetResolver, FaceLandmarker } from "@mediapipe/tasks-vision";
+
+// const BACKEND_URL = "http://localhost:4000/cognitive-style/gaze/event";
+
+// export default function GazeTracker({ sessionActive = true }) {
+//   const webcamRef = useRef(null);
+//   const faceLandmarkerRef = useRef(null);
+//   const animationRef = useRef(null);
+//   const hasSubmittedRef = useRef(false);
+  
+//   // 1. ADDED: A ref to directly manipulate the circle's position for high performance
+//   const gazeCircleRef = useRef(null);
+  
+//   const [isReady, setIsReady] = useState(false);
+  
+//   const rules = JSON.parse(localStorage.getItem('customGazeRules'));
+
+//   const userPayload = useMemo(() => {
+//     try { return JSON.parse(atob(localStorage.getItem("token").split(".")[1])); } 
+//     catch { return null; }
+//   }, []);
+
+//   const trackerRef = useRef({
+//     lastFrameTime: Date.now(),
+//     visualGazeTimeMs: 0,
+//     textGazeTimeMs: 0,
+//     firstInteractionPreference: null,
+//   });
+
+//   useEffect(() => {
+//     async function setup() {
+//       const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm");
+//       faceLandmarkerRef.current = await FaceLandmarker.createFromOptions(vision, {
+//         baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task", delegate: "GPU" },
+//         runningMode: "VIDEO", numFaces: 1,
+//       });
+//       setIsReady(true);
+//     }
+//     setup();
+//   }, []);
+
+//   const average = (points) => {
+//     const sum = points.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+//     return { x: sum.x / points.length, y: sum.y / points.length };
+//   };
+//   const getGazeFeatures = (landmarks) => {
+//   // 1. Head Pose (Yaw & Pitch)
+//   const nose = landmarks[1], leftFace = landmarks[234], rightFace = landmarks[454];
+//   const topFace = landmarks[10], botFace = landmarks[152];
+  
+//   const faceW = Math.abs(rightFace.x - leftFace.x) || 1;
+//   const faceH = Math.abs(botFace.y - topFace.y) || 1;
+  
+//   const yaw = ((nose.x - ((leftFace.x + rightFace.x) / 2)) / faceW) * 80;
+//   const pitch = ((nose.y - ((topFace.y + botFace.y) / 2)) / faceH) * 80;
+  
+//   // 2. Iris Centers
+//   const leftIris = average([468, 469, 470, 471, 472].map(i => landmarks[i]));
+//   const rightIris = average([473, 474, 475, 476, 477].map(i => landmarks[i]));
+  
+//   // 3. Compensated Vertical Eye Centers
+//   // Looking down causes the upper eyelid to drop rapidly. We give slightly more weight 
+//   // to the lower eyelid landmark (145/374) to prevent the vertical center from collapsing downward.
+//   const leftEye = {
+//     x: (landmarks[33].x + landmarks[133].x) / 2,
+//     y: (landmarks[159].y * 0.4) + (landmarks[145].y * 0.6)
+//   };
+//   const rightEye = {
+//     x: (landmarks[362].x + landmarks[263].x) / 2,
+//     y: (landmarks[386].y * 0.4) + (landmarks[374].y * 0.6)
+//   };
+
+//   // 4. Calculate physical eye boundaries
+//   const leftEyeWidth = Math.abs(landmarks[133].x - landmarks[33].x) || 0.01;
+//   const rightEyeWidth = Math.abs(landmarks[263].x - landmarks[362].x) || 0.01;
+  
+//   const leftEyeHeight = Math.abs(landmarks[145].y - landmarks[159].y) || 0.01;
+//   const rightEyeHeight = Math.abs(landmarks[374].y - landmarks[386].y) || 0.01;
+
+//   // 5. Normalize and CLAMP the Iris offset
+//   const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
+  
+//   const leftIrisOffsetX = clamp((leftIris.x - leftEye.x) / leftEyeWidth, -0.4, 0.4);
+//   const rightIrisOffsetX = clamp((rightIris.x - rightEye.x) / rightEyeWidth, -0.4, 0.4);
+//   const avgIrisOffsetX = (leftIrisOffsetX + rightIrisOffsetX) / 2;
+
+//   const leftIrisOffsetY = clamp((leftIris.y - leftEye.y) / leftEyeHeight, -0.4, 0.4);
+//   const rightIrisOffsetY = clamp((rightIris.y - rightEye.y) / rightEyeHeight, -0.4, 0.4);
+//   const avgIrisOffsetY = (leftIrisOffsetY + rightIrisOffsetY) / 2;
+  
+//   // 6. Exponential Edge Boosting
+//   const boostCurve = (val) => Math.sign(val) * Math.pow(Math.abs(val), 1.2);
+
+//   const eyeSensitivityX = 240; 
+//   const eyeSensitivityY = 260; // Slightly bumped vertical sensitivity to cover full height
+
+//   // 7. DYNAMIC Webcam Angle & Eyelid Drop Compensation
+//   // Base offset handles the camera angle looking down at you.
+//   let dynamicVerticalCorrection = 12; 
+
+//   // Progressive push downward: If looking lower than center (avgIrisOffsetY is positive),
+//   // aggressively scale the downward offset to counter the upward drift.
+//   if (avgIrisOffsetY > 0) {
+//     dynamicVerticalCorrection += Math.pow(avgIrisOffsetY, 1.5) * 85;
+//   }
+
+//   return { 
+//     gazeX: yaw + (boostCurve(avgIrisOffsetX) * eyeSensitivityX),
+//     gazeY: pitch + (boostCurve(avgIrisOffsetY) * eyeSensitivityY) + dynamicVerticalCorrection
+//   };
+// };
+
+
+//   useEffect(() => {
+//     if (!isReady || !sessionActive || !rules) return;
+//     let running = true;
+//     trackerRef.current.lastFrameTime = Date.now();
+
+//     const loop = () => {
+//       if (!running) return;
+//       const video = webcamRef.current?.video;
+      
+//       if (video && video.readyState >= 2) {
+//         const now = Date.now();
+//         const deltaMs = now - trackerRef.current.lastFrameTime;
+//         trackerRef.current.lastFrameTime = now;
+
+//         const result = faceLandmarkerRef.current.detectForVideo(video, performance.now());
+        
+//         if (result.faceLandmarks && result.faceLandmarks.length > 0 && deltaMs < 1000) {
+//           const features = getGazeFeatures(result.faceLandmarks[0]);
+          
+//           let screenX = ((features.gazeX - rules.minX) / (rules.maxX - rules.minX)) * window.innerWidth;
+//           let screenY = ((features.gazeY - rules.minY) / (rules.maxY - rules.minY)) * window.innerHeight;
+
+//           screenX = window.innerWidth - screenX;
+          
+//           screenX = Math.max(0, Math.min(window.innerWidth, screenX));
+//           screenY = Math.max(0, Math.min(window.innerHeight, screenY));
+
+//           // 2. ADDED: Update the circle's position directly on the DOM
+//           if (gazeCircleRef.current) {
+//             // Subtract half the width/height (15px) to center the dot exactly on the coordinate
+//             gazeCircleRef.current.style.transform = `translate(${screenX - 15}px, ${screenY - 15}px)`;
+//             gazeCircleRef.current.style.opacity = "1"; // Ensure it becomes visible once tracking starts
+//           }
+
+//           const el = document.elementFromPoint(screenX, screenY);
+//           const zoneEl = el ? el.closest("[data-zone]") : null;
+//           const zone = zoneEl ? zoneEl.getAttribute("data-zone") : "UNKNOWN";
+
+//           if (zone === "VISUAL") {
+//             trackerRef.current.visualGazeTimeMs += deltaMs;
+//             if (!trackerRef.current.firstInteractionPreference) trackerRef.current.firstInteractionPreference = "VISUAL";
+//           } else if (zone === "TEXT") {
+//             trackerRef.current.textGazeTimeMs += deltaMs;
+//             if (!trackerRef.current.firstInteractionPreference) trackerRef.current.firstInteractionPreference = "TEXT";
+//           }
+//         }
+//       }
+//       animationRef.current = requestAnimationFrame(loop);
+//     };
+
+//     animationRef.current = requestAnimationFrame(loop);
+//     return () => { running = false; };
+//   }, [isReady, sessionActive, rules]);
+
+
+//   //IMESHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
+//   // useEffect(() => {
+//   //   return () => {
+//   //     const totals = trackerRef.current;
+//   //     const finalPayload = {
+//   //       userId: userPayload?.id || "session-demo-1",
+//   //       totalActiveTimeMs: totals.visualGazeTimeMs + totals.textGazeTimeMs,
+//   //       visualGazeTimeMs: totals.visualGazeTimeMs,
+//   //       textGazeTimeMs: totals.textGazeTimeMs,
+//   //       firstInteractionPreference: totals.firstInteractionPreference || "NONE",
+//   //     };
+
+//   //     console.log("Sending Custom Gaze Data:", finalPayload);
+//   //     fetch(BACKEND_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(finalPayload), keepalive: true });
+//   //   };
+//   // }, [userPayload]);
+
+//   useEffect(() => {
+//     return () => {
+//       // Prevent duplicate triggers if unmounting happens multiple times
+//       if (hasSubmittedRef.current) return;
+//       hasSubmittedRef.current = true;
+
+//       const totals = trackerRef.current;
+//       const finalPayload = {
+//         userId: userPayload?.id || "session-demo-1",
+//         totalActiveTimeMs: totals.visualGazeTimeMs + totals.textGazeTimeMs,
+//         visualGazeTimeMs: totals.visualGazeTimeMs,
+//         textGazeTimeMs: totals.textGazeTimeMs,
+//         firstInteractionPreference: totals.firstInteractionPreference || "NONE",
+//       };
+
+//       console.log("Sending Custom Gaze Data:", finalPayload);
+//       fetch(BACKEND_URL, { 
+//         method: "POST", 
+//         headers: { "Content-Type": "application/json" }, 
+//         body: JSON.stringify(finalPayload), 
+//         keepalive: true 
+//       }).catch(err => {
+//         console.error("Failed to send gaze summary:", err);
+//       });
+//     };
+//   }, [userPayload]);
+
+//   return (
+//     <>
+//       <Webcam ref={webcamRef} audio={false} mirrored={true} style={{ position: "absolute", opacity: 0 }} />
+      
+//       {/* 3. ADDED: The Visual Gaze Circle */}
+//       <div 
+//         ref={gazeCircleRef}
+//         style={{
+//           position: "fixed",
+//           top: 0,
+//           left: 0,
+//           width: "30px",
+//           height: "30px",
+//           borderRadius: "50%",
+//           backgroundColor: "rgba(255, 0, 0, 0.4)",
+//           border: "2px solid red",
+//           zIndex: 9999,
+//           opacity: 0, // Hidden until the first tracking frame
+//           pointerEvents: "none", // CRUCIAL
+//           transition: "transform 0.05s linear", // Adds a slight smoothing effect to the micro-jitters
+//           boxShadow: "0 0 10px rgba(255, 0, 0, 0.5)"
+//         }}
+//       />
+//     </>
+//   );
+// }
+
+import React, { useMemo, useEffect, useRef, useState, useImperativeHandle, forwardRef } from "react";
 import Webcam from "react-webcam";
 import { FilesetResolver, FaceLandmarker } from "@mediapipe/tasks-vision";
 
 const BACKEND_URL = "http://localhost:4000/cognitive-style/gaze/event";
 
-export default function GazeTracker({ sessionActive = true }) {
+const GazeTracker = forwardRef(({ sessionActive = true }, ref) => {
   const webcamRef = useRef(null);
   const faceLandmarkerRef = useRef(null);
   const animationRef = useRef(null);
-  
-  // 1. ADDED: A ref to directly manipulate the circle's position for high performance
+  const hasSubmittedRef = useRef(false);
   const gazeCircleRef = useRef(null);
   
   const [isReady, setIsReady] = useState(false);
-  
   const rules = JSON.parse(localStorage.getItem('customGazeRules'));
 
   const userPayload = useMemo(() => {
@@ -697,6 +938,35 @@ export default function GazeTracker({ sessionActive = true }) {
     textGazeTimeMs: 0,
     firstInteractionPreference: null,
   });
+
+  // Expose a manual submit function to the parent component via ref
+  useImperativeHandle(ref, () => ({
+    submitGazeData: async () => {
+      if (hasSubmittedRef.current) return;
+      hasSubmittedRef.current = true;
+
+      const totals = trackerRef.current;
+      const finalPayload = {
+        userId: userPayload?.id || "session-demo-1",
+        totalActiveTimeMs: totals.visualGazeTimeMs + totals.textGazeTimeMs,
+        visualGazeTimeMs: totals.visualGazeTimeMs,
+        textGazeTimeMs: totals.textGazeTimeMs,
+        firstInteractionPreference: totals.firstInteractionPreference || "NONE",
+      };
+
+      console.log("Sending Custom Gaze Data on Finish:", finalPayload);
+      try {
+        await fetch(BACKEND_URL, { 
+          method: "POST", 
+          headers: { "Content-Type": "application/json" }, 
+          body: JSON.stringify(finalPayload), 
+          keepalive: true 
+        });
+      } catch (err) {
+        console.error("Failed to send gaze summary:", err);
+      }
+    }
+  }));
 
   useEffect(() => {
     async function setup() {
@@ -715,255 +985,48 @@ export default function GazeTracker({ sessionActive = true }) {
     return { x: sum.x / points.length, y: sum.y / points.length };
   };
 
-  // const getGazeFeatures = (landmarks) => {
-  //   const nose = landmarks[1], leftFace = landmarks[234], rightFace = landmarks[454];
-  //   const topFace = landmarks[10], botFace = landmarks[152];
-  //   const faceW = Math.abs(rightFace.x - leftFace.x) || 1, faceH = Math.abs(botFace.y - topFace.y) || 1;
-  //   const yaw = ((nose.x - ((leftFace.x + rightFace.x) / 2)) / faceW) * 100;
-  //   const pitch = ((nose.y - ((topFace.y + botFace.y) / 2)) / faceH) * 100;
-
-  //   const leftIris = average([468, 469, 470, 471, 472].map(i => landmarks[i]));
-  //   const rightIris = average([473, 474, 475, 476, 477].map(i => landmarks[i]));
-  //   const leftEye = average([33, 133].map(i => landmarks[i]));
-  //   const rightEye = average([362, 263].map(i => landmarks[i]));
-    
-  //   return {
-  //     gazeX: yaw + ((((leftIris.x - leftEye.x) + (rightIris.x - rightEye.x)) / 2) * 50),
-  //     gazeY: pitch + ((((leftIris.y - leftEye.y) + (rightIris.y - rightEye.y)) / 2) * 50)
-  //   };
-  // };
-
-  // const getGazeFeatures = (landmarks) => {
-  //   // 1. Head Pose (Yaw & Pitch)
-  //   const nose = landmarks[1], leftFace = landmarks[234], rightFace = landmarks[454];
-  //   const topFace = landmarks[10], botFace = landmarks[152];
-    
-  //   const faceW = Math.abs(rightFace.x - leftFace.x) || 1;
-  //   const faceH = Math.abs(botFace.y - topFace.y) || 1;
-    
-  //   const yaw = ((nose.x - ((leftFace.x + rightFace.x) / 2)) / faceW) * 100;
-  //   const pitch = ((nose.y - ((topFace.y + botFace.y) / 2)) / faceH) * 100;
-    
-  //   // 2. Iris Centers
-  //   const leftIris = average([468, 469, 470, 471, 472].map(i => landmarks[i]));
-  //   const rightIris = average([473, 474, 475, 476, 477].map(i => landmarks[i]));
-    
-  //   // 3. Eye Centers
-  //   const leftEye = average([33, 133].map(i => landmarks[i]));
-  //   const rightEye = average([362, 263].map(i => landmarks[i]));
-
-  //   // 4. NEW: Calculate the physical boundaries of the eyes
-  //   // Landmarks 33/133 & 362/263 are inner/outer eye corners. 145/159 & 374/386 are top/bottom eyelids.
-  //   const leftEyeWidth = Math.abs(landmarks[133].x - landmarks[33].x) || 0.01;
-  //   const rightEyeWidth = Math.abs(landmarks[263].x - landmarks[362].x) || 0.01;
-    
-  //   const leftEyeHeight = Math.abs(landmarks[145].y - landmarks[159].y) || 0.01;
-  //   const rightEyeHeight = Math.abs(landmarks[374].y - landmarks[386].y) || 0.01;
-
-  //   // 5. NEW: Normalize the Iris offset relative to the eye size
-  //   // This gives us a much larger, usable ratio (usually between -0.4 and +0.4)
-  //   const leftIrisOffsetX = (leftIris.x - leftEye.x) / leftEyeWidth;
-  //   const rightIrisOffsetX = (rightIris.x - rightEye.x) / rightEyeWidth;
-  //   const avgIrisOffsetX = (leftIrisOffsetX + rightIrisOffsetX) / 2;
-
-  //   const leftIrisOffsetY = (leftIris.y - leftEye.y) / leftEyeHeight;
-  //   const rightIrisOffsetY = (rightIris.y - rightEye.y) / rightEyeHeight;
-  //   const avgIrisOffsetY = (leftIrisOffsetY + rightIrisOffsetY) / 2;
-    
-  //   // 6. Combine Head movement + Amplified Eye movement
-  //   // By multiplying the eye ratio by 150, pure eye movement overrides head movement.
-  //   return { 
-  //     gazeX: yaw + (avgIrisOffsetX * 150),
-  //     gazeY: pitch + (avgIrisOffsetY * 150) 
-  //   };
-  // };
-
-  // const getGazeFeatures = (landmarks) => {
-  //   // 1. Head Pose (Yaw & Pitch)
-  //   const nose = landmarks[1], leftFace = landmarks[234], rightFace = landmarks[454];
-  //   const topFace = landmarks[10], botFace = landmarks[152];
-    
-  //   const faceW = Math.abs(rightFace.x - leftFace.x) || 1;
-  //   const faceH = Math.abs(botFace.y - topFace.y) || 1;
-    
-  //   // Tweak: Lowered head movement influence from 100 to 80 so eyes dominate more
-  //   const yaw = ((nose.x - ((leftFace.x + rightFace.x) / 2)) / faceW) * 80;
-  //   const pitch = ((nose.y - ((topFace.y + botFace.y) / 2)) / faceH) * 80;
-    
-  //   // 2. Iris Centers
-  //   const leftIris = average([468, 469, 470, 471, 472].map(i => landmarks[i]));
-  //   const rightIris = average([473, 474, 475, 476, 477].map(i => landmarks[i]));
-    
-  //   // 3. Eye Centers
-  //   const leftEye = average([33, 133].map(i => landmarks[i]));
-  //   const rightEye = average([362, 263].map(i => landmarks[i]));
-
-  //   // 4. Calculate physical eye boundaries
-  //   const leftEyeWidth = Math.abs(landmarks[133].x - landmarks[33].x) || 0.01;
-  //   const rightEyeWidth = Math.abs(landmarks[263].x - landmarks[362].x) || 0.01;
-    
-  //   const leftEyeHeight = Math.abs(landmarks[145].y - landmarks[159].y) || 0.01;
-  //   const rightEyeHeight = Math.abs(landmarks[374].y - landmarks[386].y) || 0.01;
-
-  //   // 5. Normalize and CLAMP the Iris offset
-  //   // Clamping to -0.4 and 0.4 prevents the dot from flying off-screen if MediaPipe glitches during a blink
-  //   const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
-    
-  //   const leftIrisOffsetX = clamp((leftIris.x - leftEye.x) / leftEyeWidth, -0.4, 0.4);
-  //   const rightIrisOffsetX = clamp((rightIris.x - rightEye.x) / rightEyeWidth, -0.4, 0.4);
-  //   const avgIrisOffsetX = (leftIrisOffsetX + rightIrisOffsetX) / 2;
-
-  //   const leftIrisOffsetY = clamp((leftIris.y - leftEye.y) / leftEyeHeight, -0.4, 0.4);
-  //   const rightIrisOffsetY = clamp((rightIris.y - rightEye.y) / rightEyeHeight, -0.4, 0.4);
-  //   const avgIrisOffsetY = (leftIrisOffsetY + rightIrisOffsetY) / 2;
-    
-  //   // 6. Exponential Edge Boosting
-  //   // This curve keeps small eye movements smooth in the center, 
-  //   // but aggressively accelerates the cursor when you look hard to the edges.
-  //   const boostCurve = (val) => Math.sign(val) * Math.pow(Math.abs(val), 1.2);
-
-  //   // 7. Final Sensitivity Multipliers
-  //   // TWEAK THESE: Increase to 300 if it's too hard to reach the edges, decrease to 150 if it's too wild.
-  //   const eyeSensitivityX = 240; 
-  //   const eyeSensitivityY = 240; 
-
-  //   return { 
-  //     gazeX: yaw + (boostCurve(avgIrisOffsetX) * eyeSensitivityX),
-  //     gazeY: pitch + (boostCurve(avgIrisOffsetY) * eyeSensitivityY) 
-  //   };
-  // };
-
-  // const getGazeFeatures = (landmarks) => {
-  //   // 1. Head Pose (Yaw & Pitch)
-  //   const nose = landmarks[1], leftFace = landmarks[234], rightFace = landmarks[454];
-  //   const topFace = landmarks[10], botFace = landmarks[152];
-    
-  //   const faceW = Math.abs(rightFace.x - leftFace.x) || 1;
-  //   const faceH = Math.abs(botFace.y - topFace.y) || 1;
-    
-  //   const yaw = ((nose.x - ((leftFace.x + rightFace.x) / 2)) / faceW) * 80;
-  //   const pitch = ((nose.y - ((topFace.y + botFace.y) / 2)) / faceH) * 80;
-    
-  //   // 2. Iris Centers
-  //   const leftIris = average([468, 469, 470, 471, 472].map(i => landmarks[i]));
-  //   const rightIris = average([473, 474, 475, 476, 477].map(i => landmarks[i]));
-    
-  //   // 3. FIX: True Vertical Eye Centers
-  //   // The corners of the eyes (33/133) don't represent the true vertical middle.
-  //   // We now use the top eyelids (159/386) and bottom eyelids (145/374) to find the exact Y-center.
-  //   const leftEye = {
-  //     x: (landmarks[33].x + landmarks[133].x) / 2,
-  //     y: (landmarks[159].y + landmarks[145].y) / 2
-  //   };
-  //   const rightEye = {
-  //     x: (landmarks[362].x + landmarks[263].x) / 2,
-  //     y: (landmarks[386].y + landmarks[374].y) / 2
-  //   };
-
-  //   // 4. Calculate physical eye boundaries
-  //   const leftEyeWidth = Math.abs(landmarks[133].x - landmarks[33].x) || 0.01;
-  //   const rightEyeWidth = Math.abs(landmarks[263].x - landmarks[362].x) || 0.01;
-    
-  //   const leftEyeHeight = Math.abs(landmarks[145].y - landmarks[159].y) || 0.01;
-  //   const rightEyeHeight = Math.abs(landmarks[374].y - landmarks[386].y) || 0.01;
-
-  //   // 5. Normalize and CLAMP the Iris offset
-  //   const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
-    
-  //   const leftIrisOffsetX = clamp((leftIris.x - leftEye.x) / leftEyeWidth, -0.4, 0.4);
-  //   const rightIrisOffsetX = clamp((rightIris.x - rightEye.x) / rightEyeWidth, -0.4, 0.4);
-  //   const avgIrisOffsetX = (leftIrisOffsetX + rightIrisOffsetX) / 2;
-
-  //   const leftIrisOffsetY = clamp((leftIris.y - leftEye.y) / leftEyeHeight, -0.4, 0.4);
-  //   const rightIrisOffsetY = clamp((rightIris.y - rightEye.y) / rightEyeHeight, -0.4, 0.4);
-  //   const avgIrisOffsetY = (leftIrisOffsetY + rightIrisOffsetY) / 2;
-    
-  //   // 6. Exponential Edge Boosting
-  //   const boostCurve = (val) => Math.sign(val) * Math.pow(Math.abs(val), 1.2);
-
-  //   const eyeSensitivityX = 240; 
-  //   const eyeSensitivityY = 240; 
-
-  //   // 7. FIX: Webcam Angle Compensation
-  //   // Pushes the resting tracking point lower to account for the webcam looking down at you.
-  //   // TWEAK THIS: If the dot is still too high, increase this to 25 or 30. 
-  //   // If it overcorrects and points too low, drop it to 5 or 10.
-  //   const verticalOffset = 15; 
-
-  //   return { 
-  //     gazeX: yaw + (boostCurve(avgIrisOffsetX) * eyeSensitivityX),
-  //     gazeY: pitch + (boostCurve(avgIrisOffsetY) * eyeSensitivityY) + verticalOffset
-  //   };
-  // };
-
-
   const getGazeFeatures = (landmarks) => {
-  // 1. Head Pose (Yaw & Pitch)
-  const nose = landmarks[1], leftFace = landmarks[234], rightFace = landmarks[454];
-  const topFace = landmarks[10], botFace = landmarks[152];
-  
-  const faceW = Math.abs(rightFace.x - leftFace.x) || 1;
-  const faceH = Math.abs(botFace.y - topFace.y) || 1;
-  
-  const yaw = ((nose.x - ((leftFace.x + rightFace.x) / 2)) / faceW) * 80;
-  const pitch = ((nose.y - ((topFace.y + botFace.y) / 2)) / faceH) * 80;
-  
-  // 2. Iris Centers
-  const leftIris = average([468, 469, 470, 471, 472].map(i => landmarks[i]));
-  const rightIris = average([473, 474, 475, 476, 477].map(i => landmarks[i]));
-  
-  // 3. Compensated Vertical Eye Centers
-  // Looking down causes the upper eyelid to drop rapidly. We give slightly more weight 
-  // to the lower eyelid landmark (145/374) to prevent the vertical center from collapsing downward.
-  const leftEye = {
-    x: (landmarks[33].x + landmarks[133].x) / 2,
-    y: (landmarks[159].y * 0.4) + (landmarks[145].y * 0.6)
+    const nose = landmarks[1], leftFace = landmarks[234], rightFace = landmarks[454];
+    const topFace = landmarks[10], botFace = landmarks[152];
+    const faceW = Math.abs(rightFace.x - leftFace.x) || 1;
+    const faceH = Math.abs(botFace.y - topFace.y) || 1;
+    const yaw = ((nose.x - ((leftFace.x + rightFace.x) / 2)) / faceW) * 80;
+    const pitch = ((nose.y - ((topFace.y + botFace.y) / 2)) / faceH) * 80;
+    
+    const leftIris = average([468, 469, 470, 471, 472].map(i => landmarks[i]));
+    const rightIris = average([473, 474, 475, 476, 477].map(i => landmarks[i]));
+    
+    const leftEye = { x: (landmarks[33].x + landmarks[133].x) / 2, y: (landmarks[159].y * 0.4) + (landmarks[145].y * 0.6) };
+    const rightEye = { x: (landmarks[362].x + landmarks[263].x) / 2, y: (landmarks[386].y * 0.4) + (landmarks[374].y * 0.6) };
+
+    const leftEyeWidth = Math.abs(landmarks[133].x - landmarks[33].x) || 0.01;
+    const rightEyeWidth = Math.abs(landmarks[263].x - landmarks[362].x) || 0.01;
+    const leftEyeHeight = Math.abs(landmarks[145].y - landmarks[159].y) || 0.01;
+    const rightEyeHeight = Math.abs(landmarks[374].y - landmarks[386].y) || 0.01;
+
+    const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
+    const leftIrisOffsetX = clamp((leftIris.x - leftEye.x) / leftEyeWidth, -0.4, 0.4);
+    const rightIrisOffsetX = clamp((rightIris.x - rightEye.x) / rightEyeWidth, -0.4, 0.4);
+    const avgIrisOffsetX = (leftIrisOffsetX + rightIrisOffsetX) / 2;
+
+    const leftIrisOffsetY = clamp((leftIris.y - leftEye.y) / leftEyeHeight, -0.4, 0.4);
+    const rightIrisOffsetY = clamp((rightIris.y - rightEye.y) / rightEyeHeight, -0.4, 0.4);
+    const avgIrisOffsetY = (leftIrisOffsetY + rightIrisOffsetY) / 2;
+    
+    const boostCurve = (val) => Math.sign(val) * Math.pow(Math.abs(val), 1.2);
+    const eyeSensitivityX = 240; 
+    const eyeSensitivityY = 260; 
+
+    let dynamicVerticalCorrection = 12; 
+    if (avgIrisOffsetY > 0) {
+      dynamicVerticalCorrection += Math.pow(avgIrisOffsetY, 1.5) * 85;
+    }
+
+    return { 
+      gazeX: yaw + (boostCurve(avgIrisOffsetX) * eyeSensitivityX),
+      gazeY: pitch + (boostCurve(avgIrisOffsetY) * eyeSensitivityY) + dynamicVerticalCorrection
+    };
   };
-  const rightEye = {
-    x: (landmarks[362].x + landmarks[263].x) / 2,
-    y: (landmarks[386].y * 0.4) + (landmarks[374].y * 0.6)
-  };
-
-  // 4. Calculate physical eye boundaries
-  const leftEyeWidth = Math.abs(landmarks[133].x - landmarks[33].x) || 0.01;
-  const rightEyeWidth = Math.abs(landmarks[263].x - landmarks[362].x) || 0.01;
-  
-  const leftEyeHeight = Math.abs(landmarks[145].y - landmarks[159].y) || 0.01;
-  const rightEyeHeight = Math.abs(landmarks[374].y - landmarks[386].y) || 0.01;
-
-  // 5. Normalize and CLAMP the Iris offset
-  const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
-  
-  const leftIrisOffsetX = clamp((leftIris.x - leftEye.x) / leftEyeWidth, -0.4, 0.4);
-  const rightIrisOffsetX = clamp((rightIris.x - rightEye.x) / rightEyeWidth, -0.4, 0.4);
-  const avgIrisOffsetX = (leftIrisOffsetX + rightIrisOffsetX) / 2;
-
-  const leftIrisOffsetY = clamp((leftIris.y - leftEye.y) / leftEyeHeight, -0.4, 0.4);
-  const rightIrisOffsetY = clamp((rightIris.y - rightEye.y) / rightEyeHeight, -0.4, 0.4);
-  const avgIrisOffsetY = (leftIrisOffsetY + rightIrisOffsetY) / 2;
-  
-  // 6. Exponential Edge Boosting
-  const boostCurve = (val) => Math.sign(val) * Math.pow(Math.abs(val), 1.2);
-
-  const eyeSensitivityX = 240; 
-  const eyeSensitivityY = 260; // Slightly bumped vertical sensitivity to cover full height
-
-  // 7. DYNAMIC Webcam Angle & Eyelid Drop Compensation
-  // Base offset handles the camera angle looking down at you.
-  let dynamicVerticalCorrection = 12; 
-
-  // Progressive push downward: If looking lower than center (avgIrisOffsetY is positive),
-  // aggressively scale the downward offset to counter the upward drift.
-  if (avgIrisOffsetY > 0) {
-    dynamicVerticalCorrection += Math.pow(avgIrisOffsetY, 1.5) * 85;
-  }
-
-  return { 
-    gazeX: yaw + (boostCurve(avgIrisOffsetX) * eyeSensitivityX),
-    gazeY: pitch + (boostCurve(avgIrisOffsetY) * eyeSensitivityY) + dynamicVerticalCorrection
-  };
-};
-
 
   useEffect(() => {
     if (!isReady || !sessionActive || !rules) return;
@@ -988,15 +1051,12 @@ export default function GazeTracker({ sessionActive = true }) {
           let screenY = ((features.gazeY - rules.minY) / (rules.maxY - rules.minY)) * window.innerHeight;
 
           screenX = window.innerWidth - screenX;
-          
           screenX = Math.max(0, Math.min(window.innerWidth, screenX));
           screenY = Math.max(0, Math.min(window.innerHeight, screenY));
 
-          // 2. ADDED: Update the circle's position directly on the DOM
           if (gazeCircleRef.current) {
-            // Subtract half the width/height (15px) to center the dot exactly on the coordinate
             gazeCircleRef.current.style.transform = `translate(${screenX - 15}px, ${screenY - 15}px)`;
-            gazeCircleRef.current.style.opacity = "1"; // Ensure it becomes visible once tracking starts
+            gazeCircleRef.current.style.opacity = "1";
           }
 
           const el = document.elementFromPoint(screenX, screenY);
@@ -1016,48 +1076,23 @@ export default function GazeTracker({ sessionActive = true }) {
     };
 
     animationRef.current = requestAnimationFrame(loop);
-    return () => { running = false; };
+    return () => { running = false; cancelAnimationFrame(animationRef.current); };
   }, [isReady, sessionActive, rules]);
-
-  useEffect(() => {
-    return () => {
-      const totals = trackerRef.current;
-      const finalPayload = {
-        userId: userPayload?.id || "session-demo-1",
-        totalActiveTimeMs: totals.visualGazeTimeMs + totals.textGazeTimeMs,
-        visualGazeTimeMs: totals.visualGazeTimeMs,
-        textGazeTimeMs: totals.textGazeTimeMs,
-        firstInteractionPreference: totals.firstInteractionPreference || "NONE",
-      };
-
-      console.log("Sending Custom Gaze Data:", finalPayload);
-      fetch(BACKEND_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(finalPayload), keepalive: true });
-    };
-  }, [userPayload]);
 
   return (
     <>
       <Webcam ref={webcamRef} audio={false} mirrored={true} style={{ position: "absolute", opacity: 0 }} />
-      
-      {/* 3. ADDED: The Visual Gaze Circle */}
       <div 
         ref={gazeCircleRef}
         style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          width: "30px",
-          height: "30px",
-          borderRadius: "50%",
-          backgroundColor: "rgba(255, 0, 0, 0.4)",
-          border: "2px solid red",
-          zIndex: 9999,
-          opacity: 0, // Hidden until the first tracking frame
-          pointerEvents: "none", // CRUCIAL
-          transition: "transform 0.05s linear", // Adds a slight smoothing effect to the micro-jitters
-          boxShadow: "0 0 10px rgba(255, 0, 0, 0.5)"
+          position: "fixed", top: 0, left: 0, width: "30px", height: "30px",
+          borderRadius: "50%", backgroundColor: "rgba(255, 0, 0, 0.4)",
+          border: "2px solid red", zIndex: 9999, opacity: 0, pointerEvents: "none",
+          transition: "transform 0.05s linear", boxShadow: "0 0 10px rgba(255, 0, 0, 0.5)"
         }}
       />
     </>
   );
-}
+});
+
+export default GazeTracker;

@@ -1,25 +1,23 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+
 # ==========================================
 # 2. PYDANTIC MODELS
 # ==========================================
-class OSIVQAnswer(BaseModel):
+class VVQAnswer(BaseModel):
     questionId: int
-    rawScore: int = Field(..., ge=1, le=5)
+    rawScore: str  # Will capture "True" or "False" from the frontend
 
-class OSIVQCreate(BaseModel):
+class VVQCreate(BaseModel):
     userId: str
-    answers: List[OSIVQAnswer]
+    answers: List[VVQAnswer]
     visualTaskData: Optional[Dict[str, Any]] = None # Captures the payload passed from Module 2
 
-class OSIVQResponse(BaseModel):
+class VVQResponse(BaseModel):
     id: str
     userId: str
-    answers: List[Dict[str, Any]]  # Will contain the score + category
-    object_score: int
-    spatial_score: int
-    verbal_score: int
-    total_visual_score: int
+    answers: List[Dict[str, Any]]  # Will contain the raw answer and calculated score
+    total_score: int
     dominant_profile: str
     created_at: datetime

@@ -510,7 +510,7 @@
 
 // export default Module2;
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import CursorTracker from "./CursorTracker";
 import GazeTracker from "./GazeTracker2";
@@ -523,6 +523,19 @@ function Module2() {
 
   const handleChoice = (type) => {
     console.log(`Selected: ${type}`);
+  };
+  const gazeTrackerRef = useRef(null);
+  const cursorTrackerRef = useRef(null);
+
+  const handleFinishModule = async () => {
+    // Manually trigger gaze data submission before leaving
+    if (gazeTrackerRef.current) {
+      await gazeTrackerRef.current.submitGazeData();
+    }
+    if (cursorTrackerRef.current) {
+      await cursorTrackerRef.current.submitCursorData();
+    }
+    navigate("/visualverbalquestionnaire");
   };
 
   const cardStyle = {
@@ -822,8 +835,8 @@ function Module2() {
       {/* PHASE 3: MAIN MODULE TEST */}
       {appPhase === "TEST" && (
         <>
-          <CursorTracker />
-          <GazeTracker />
+          <CursorTracker ref={cursorTrackerRef} />
+          <GazeTracker ref={gazeTrackerRef} />
 
           {/* VISUAL SCREEN */}
           <div
@@ -892,7 +905,7 @@ function Module2() {
                 }}
               >
                 <button
-                  onClick={() => navigate("/visualverbalquestionnaire")}
+                  onClick={handleFinishModule}
                   style={{
                     padding: "12px 24px",
                     border: "none",
@@ -990,7 +1003,7 @@ function Module2() {
                 }}
               >
                 <button
-                  onClick={() => navigate("/visualverbalquestionnaire")}
+                  onClick={handleFinishModule}
                   style={{
                     padding: "12px 24px",
                     border: "none",
