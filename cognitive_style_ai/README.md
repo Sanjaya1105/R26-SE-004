@@ -26,8 +26,12 @@ The service creates the `cognitive-style-explanations` database and `cognitive-s
 2. The background synchronizer checks MongoDB every two seconds and creates or refreshes a pending MySQL row containing the four model inputs.
 3. `POST .../analyse` finds that student's latest pending row and assigns the selected lesson.
 4. The saved values are passed to the Visual/Verbal model.
-5. The top three are converted into a teacher-facing prompt and sent to the configured Gemini model.
+5. The top three are translated into non-technical classroom language and sent to the configured Gemini model to explain only why the reported cognitive style was selected, without recommendations or teaching actions.
 6. Prediction, confidence, LIME output, SHAP output, top three, prompt, and human-readable explanation are written to that same row with status `completed`.
+
+The frontend shows the teacher-friendly explanation by default. Prediction confidence,
+combined feature importance, and raw LIME/SHAP values remain available under the separate
+`View Technical Evidence` control and do not require another Gemini request.
 
 A completed row is never overwritten. New MongoDB source documents produce a new pending row.
 

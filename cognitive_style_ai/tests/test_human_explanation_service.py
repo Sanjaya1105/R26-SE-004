@@ -1,6 +1,6 @@
 import unittest
 
-from services.human_explanation_service import build_explanation_prompt
+from services.human_explanation_service import EXPLANATION_PROMPT_VERSION, build_explanation_prompt
 
 
 class HumanExplanationPromptTests(unittest.TestCase):
@@ -25,6 +25,11 @@ class HumanExplanationPromptTests(unittest.TestCase):
         self.assertIn("supports the Visual result", prompt)
         self.assertIn("slightly opposes the Visual result", prompt)
         self.assertNotIn("ImageGazeRatio", prompt)
+        self.assertIn(EXPLANATION_PROMPT_VERSION, prompt)
+        self.assertIn("non-technical teacher", prompt)
+        self.assertIn("Explain only why this style was selected", prompt)
+        self.assertIn("do not tell the teacher or student what to do next", prompt)
+        self.assertNotIn("may benefit from", prompt)
 
 
 if __name__ == "__main__":

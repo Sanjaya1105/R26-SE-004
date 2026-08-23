@@ -602,10 +602,100 @@
   text-transform: capitalize;
 }
 
+.style-human-explanation {
+  padding: 1.15rem;
+  border-color: #c4b5fd;
+  background: linear-gradient(145deg, #ffffff, #faf8ff);
+  box-shadow: 0 12px 30px -24px rgba(91, 33, 182, 0.8);
+}
+
+.teacher-explanation-sections {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 0.9rem;
+}
+
+.teacher-explanation-section {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.8rem;
+  align-items: flex-start;
+  padding: 0.95rem;
+  border: 1px solid #e9d5ff;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.teacher-explanation-step {
+  display: grid;
+  width: 1.85rem;
+  height: 1.85rem;
+  place-items: center;
+  border-radius: 999px;
+  background: #ede9fe;
+  color: #6d28d9;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.teacher-explanation-section-title {
+  margin: 0 0 0.35rem;
+  color: #4c1d95;
+  font-size: 0.83rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.teacher-explanation-section .human-explanation-text {
+  margin: 0;
+  color: #334155;
+  font-size: 0.96rem;
+  line-height: 1.75;
+}
+
 .style-feature-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1rem;
+}
+
+.technical-evidence-panel {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid #c4b5fd;
+  border-radius: 14px;
+  background: #faf8ff;
+}
+
+.technical-evidence-heading,
+.technical-evidence-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.technical-evidence-heading h3,
+.technical-evidence-panel h4 {
+  margin: 0;
+}
+
+.technical-evidence-summary {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  color: #4c1d95;
+  font-size: 0.88rem;
+}
+
+.technical-evidence-note {
+  margin: 0.75rem 0 1rem;
+  color: #64748b;
+  font-size: 0.88rem;
+}
+
+.technical-evidence-panel h4 {
+  margin-bottom: 0.75rem;
 }
 
 .style-feature-card {
@@ -661,5 +751,11 @@
   .style-feature-grid,
   .style-raw-grid {
     grid-template-columns: 1fr;
+  }
+
+  .technical-evidence-heading,
+  .technical-evidence-summary {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

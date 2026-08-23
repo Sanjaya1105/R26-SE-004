@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from config.database import get_db
 from models.analysis import CognitiveStyleAnalysis
 from services.explanation_service import explain_in_parallel
-from services.human_explanation_service import generate_human_explanation
+from services.human_explanation_service import EXPLANATION_PROMPT_VERSION, generate_human_explanation
 from services.model_client import BatchPredictor, ModelClientError, get_model_metadata
 from services.mongo_sync_service import sync_mongo_inputs_once
 from services.gemini_client import GeminiServiceError
@@ -58,10 +58,44 @@ def analyse_student_style(
         .first()
     )
     if completed is not None:
+        explanation_refreshed = False
+        if (
+            EXPLANATION_PROMPT_VERSION not in str(completed.explanation_prompt or "")
+            and completed.cognitive_style
+            and completed.top_features
+        ):
+            try:
+                prompt, explanation, model = generate_human_explanation(
+                    student_id=student_id,
+                    lesson_id=lesson_id,
+                    cognitive_style=completed.cognitive_style,
+                    confidence=float(completed.confidence or 0),
+                    top_features=completed.top_features,
+                )
+            except GeminiServiceError as exc:
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"Teacher-friendly explanation refresh failed: {exc}",
+                ) from exc
+            completed.explanation_prompt = prompt
+            completed.human_explanation = explanation
+            completed.explanation_model = model
+            db.commit()
+            db.refresh(completed)
+            explanation_refreshed = True
+
         return {
             "success": True,
-            "message": "Saved cognitive-style analysis loaded without rerunning LIME, SHAP, or Gemini.",
-            "data": {**_serialize(completed), "cached": True},
+            "message": (
+                "Saved LIME and SHAP analysis loaded; the teacher-friendly explanation was refreshed."
+                if explanation_refreshed
+                else "Saved cognitive-style analysis loaded without rerunning LIME, SHAP, or Gemini."
+            ),
+            "data": {
+                **_serialize(completed),
+                "cached": True,
+                "explanation_refreshed": explanation_refreshed,
+            },
             "errors": [],
         }
 
