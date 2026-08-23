@@ -3,7 +3,7 @@ import unittest
 from unittest.mock import patch
 
 from services.gemini_client import GeminiServiceError
-from services.student_guidance_service import generate_student_guidance
+from services.student_guidance_service import GUIDANCE_VERSION, generate_student_guidance
 
 
 class StudentGuidanceServiceTests(unittest.TestCase):
@@ -41,9 +41,12 @@ class StudentGuidanceServiceTests(unittest.TestCase):
             "application/json",
         )
         self.assertEqual(result["study_technique"]["source"], "gemini")
+        self.assertEqual(result["study_technique"]["guidance_version"], GUIDANCE_VERSION)
         self.assertEqual(len(result["study_technique"]["techniques"]), 2)
         self.assertEqual(result["lecture_support"]["strategies"].count("\n"), 3)
         self.assertTrue(result["human_explanation"].startswith("This student has High"))
+        self.assertIn("explain only why", generate_text.call_args.args[0])
+        self.assertIn("must contain no advice", generate_text.call_args.args[1])
 
     @patch("services.student_guidance_service.generate_gemini_text")
     def test_rejects_malformed_json(self, generate_text):

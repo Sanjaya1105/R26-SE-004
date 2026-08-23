@@ -6,11 +6,17 @@ from services.gemini_client import GeminiServiceError, generate_gemini_text
 from services.study_technique_service import TECHNIQUES
 
 
+GUIDANCE_VERSION = "teacher-friendly-load-v2"
+
+
 SYSTEM_PROMPT = (
     "You are an expert educational assistant. Produce teacher-facing cognitive-load reasoning and "
     "student-facing learning guidance from only the supplied result and observed behaviors. Never "
-    "mention LIME, SHAP, features, drivers, signals, pressure, relief, or model analysis. Return only "
-    "valid JSON matching the requested structure."
+    "mention LIME, SHAP, algorithms, models, features, drivers, signals, weights, scores, confidence, "
+    "formulas, IDs, raw field names, pressure, relief, or analysis terminology. The teacher explanation "
+    "must be understandable without technical or data-science knowledge and must explain only why the "
+    "reported cognitive-load level was selected. Keep advice exclusively in the separate student-guidance "
+    "fields. Return only valid JSON matching the requested structure."
 )
 
 USER_PROMPT_TEMPLATE = """Student ID: {student_id}
@@ -31,8 +37,11 @@ Return this JSON object:
 
 Requirements:
 - teacher_explanation must start exactly with "This student has {predicted_label} cognitive load because",
-  use professional third-person language, explain cause and effect without inventing facts, contain 45-80
-  words, and contain no advice, IDs, raw behavior names, numbers, percentages, or technical terminology.
+  use clear everyday third-person language, connect the observed lesson actions into a simple reason for
+  the selected load level without inventing facts, and contain 65-100 words. It must contain no advice,
+  recommendations, study strategies, IDs, raw behavior names, numbers, percentages, or technical terms.
+  Use cautious wording such as "suggests" or "may indicate" and describe only this lesson, not a permanent
+  condition or diagnosis. End by restating why the combined behaviour supports the reported load level.
 - Select one or two study_techniques only from: Mind Map, Short Notes, Concept Map, Flowchart, Cornell Notes.
 - Provide exactly four short lecture_recommendations addressed directly to the student using "you" or
   "your". Each must start with a direct action verb, explain briefly how it helps, and be one sentence.
@@ -123,12 +132,17 @@ def generate_student_guidance(
 
     return {
         "human_explanation": explanation,
-        "study_technique": {"techniques": techniques, "source": "gemini"},
+        "study_technique": {
+            "techniques": techniques,
+            "source": "gemini",
+            "guidance_version": GUIDANCE_VERSION,
+        },
         "lecture_support": {
             "strategies": "\n".join(
                 f"{index + 1}) {recommendation}"
                 for index, recommendation in enumerate(recommendations)
             ),
             "source": "gemini",
+            "guidance_version": GUIDANCE_VERSION,
         },
     }

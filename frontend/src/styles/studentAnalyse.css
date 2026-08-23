@@ -609,6 +609,27 @@
   box-shadow: 0 12px 30px -24px rgba(91, 33, 182, 0.8);
 }
 
+.load-human-explanation {
+  padding: 1.15rem;
+  border-color: #bfdbfe;
+  background: linear-gradient(145deg, #ffffff, #f8fbff);
+  box-shadow: 0 12px 30px -24px rgba(30, 64, 175, 0.7);
+}
+
+.load-meaning-section {
+  border-color: #bfdbfe;
+  background: #f8fbff;
+}
+
+.load-meaning-section .teacher-explanation-step {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.load-meaning-section .teacher-explanation-section-title {
+  color: #1e40af;
+}
+
 .teacher-explanation-sections {
   display: grid;
   gap: 0.85rem;
@@ -696,6 +717,15 @@
 
 .technical-evidence-panel h4 {
   margin-bottom: 0.75rem;
+}
+
+.load-technical-evidence {
+  border-color: #bfdbfe;
+  background: #f8fbff;
+}
+
+.technical-subheading {
+  margin-top: 1.25rem !important;
 }
 
 .style-feature-card {

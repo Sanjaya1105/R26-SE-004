@@ -14,7 +14,7 @@ from schemas.prediction import AggregateExplanationRequest, CognitiveLoadInput
 from services.local_model import LocalModelError, predict_scores
 from services.model_client import ModelClientError, request_prediction
 from services.gemini_client import GeminiServiceError
-from services.student_guidance_service import generate_student_guidance
+from services.student_guidance_service import GUIDANCE_VERSION, generate_student_guidance
 
 
 RAW_FEATURE_FIELDS = [
@@ -214,6 +214,20 @@ def _top_signals_from_record(record: StudentLessonTopSignals) -> list[dict[str, 
     return signals
 
 
+def _guidance_inputs(top_signals: list[dict[str, Any]]) -> tuple[list[str], list[str]]:
+    signals = [_signal_to_teacher_phrase(item["signal"]) for item in top_signals]
+    impact_phrases = {
+        "positive": "behavior associated with increased cognitive load",
+        "negative": "behavior that helped reduce cognitive load",
+        "neutral": "observed behavior",
+    }
+    human_signals = [
+        f"{impact_phrases[item['impact']]}: {_signal_to_teacher_phrase(item['signal'])}"
+        for item in top_signals
+    ]
+    return signals, human_signals
+
+
 def get_cached_student_lesson_analysis(
     db: Session,
     lesson_id: str,
@@ -248,11 +262,51 @@ def get_cached_student_lesson_analysis(
             "errors": [],
         }
 
+    guidance_version = (
+        record.study_technique.get("guidance_version")
+        if isinstance(record.study_technique, dict)
+        else None
+    )
+    guidance_refreshed = False
+    if guidance_version != GUIDANCE_VERSION:
+        top_signals = _top_signals_from_record(record)
+        signals, human_signals = _guidance_inputs(top_signals)
+        try:
+            guidance = generate_student_guidance(
+                student_id=record.student_id,
+                lesson_id=record.lesson_id,
+                predicted_label=record.predicted_cognitive_load,
+                signals=signals,
+                human_signals=human_signals,
+            )
+        except GeminiServiceError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "success": False,
+                    "message": str(exc),
+                    "data": None,
+                    "errors": ["Gemini could not refresh the teacher-friendly explanation."],
+                },
+            ) from exc
+        record.human_explanation = guidance["human_explanation"]
+        record.explanation_source = "gemini"
+        record.study_technique = guidance["study_technique"]
+        record.lecture_support = guidance["lecture_support"]
+        db.commit()
+        db.refresh(record)
+        guidance_refreshed = True
+
     return {
         "success": True,
-        "message": "Saved analysis retrieved successfully.",
+        "message": (
+            "Saved LIME and SHAP analysis loaded; teacher guidance was refreshed."
+            if guidance_refreshed
+            else "Saved analysis retrieved successfully."
+        ),
         "data": {
             "cached": True,
+            "guidance_refreshed": guidance_refreshed,
             "lesson_id": record.lesson_id,
             "prediction_id": record.prediction_id,
             "student_id": record.student_id,
@@ -372,16 +426,7 @@ def generate_aggregate_explanation(
         limit=3,
     )
 
-    signals = [_signal_to_teacher_phrase(item["signal"]) for item in top_signals]
-    impact_phrases = {
-        "positive": "behavior associated with increased cognitive load",
-        "negative": "behavior that helped reduce cognitive load",
-        "neutral": "observed behavior",
-    }
-    human_signals = [
-        f"{impact_phrases[item['impact']]}: {_signal_to_teacher_phrase(item['signal'])}"
-        for item in top_signals
-    ]
+    signals, human_signals = _guidance_inputs(top_signals)
 
     try:
         guidance = generate_student_guidance(

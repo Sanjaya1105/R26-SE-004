@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -7,6 +8,7 @@ from config.database import Base
 from models.student_lesson_top_signals import StudentLessonTopSignals
 from models.prediction import CognitiveLoadPrediction
 from schemas.prediction import AggregateExplanationRequest
+from services.student_guidance_service import GUIDANCE_VERSION
 from services.prediction_service import (
     _save_top_aggregate_signals,
     _top_aggregate_signals,
@@ -179,8 +181,16 @@ class AggregateSignalPersistenceTests(unittest.TestCase):
             [{"signal": "pause_frequency", "raw_value": 2.0, "normalized_value": 1.0}],
             human_explanation="The student paused frequently while working through the lesson.",
             explanation_source="gemini",
-            study_technique={"techniques": [{"technique": "Pomodoro"}], "source": "gemini"},
-            lecture_support={"strategies": "1. Pause after each concept.", "source": "gemini"},
+            study_technique={
+                "techniques": [{"technique": "Pomodoro"}],
+                "source": "gemini",
+                "guidance_version": GUIDANCE_VERSION,
+            },
+            lecture_support={
+                "strategies": "1. Pause after each concept.",
+                "source": "gemini",
+                "guidance_version": GUIDANCE_VERSION,
+            },
         )
 
         result = get_cached_student_lesson_analysis(self.db, "lesson-7", "student-9")
@@ -195,6 +205,46 @@ class AggregateSignalPersistenceTests(unittest.TestCase):
         self.assertEqual(
             result["data"]["aggregate_explanation"]["top_signals"][0]["signal"],
             "pause_frequency",
+        )
+        self.assertFalse(result["data"]["guidance_refreshed"])
+
+    @patch("services.prediction_service.generate_student_guidance")
+    def test_refreshes_old_guidance_without_rerunning_saved_lime_or_shap(self, generate):
+        self.payload.lime_explanation = {"factors": [{"rule": "pause_frequency", "weight": 0.4}]}
+        self.payload.shap_explanation = {
+            "shap_values": [{"feature": "pause_frequency", "shap_value": 0.5}]
+        }
+        _save_top_aggregate_signals(
+            self.db,
+            self.payload,
+            [{"signal": "pause_frequency", "raw_value": 1.0, "normalized_value": 1.0}],
+            human_explanation="Old technical explanation",
+            explanation_source="gemini",
+            study_technique={"techniques": [{"technique": "short notes"}]},
+            lecture_support={"strategies": "1) Old recommendation."},
+        )
+        generate.return_value = {
+            "human_explanation": "This student has High cognitive load because frequent pauses suggest the lesson required extra effort.",
+            "study_technique": {
+                "techniques": [{"technique": "short notes"}],
+                "source": "gemini",
+                "guidance_version": GUIDANCE_VERSION,
+            },
+            "lecture_support": {
+                "strategies": "1) Review one idea at a time.",
+                "source": "gemini",
+                "guidance_version": GUIDANCE_VERSION,
+            },
+        }
+
+        result = get_cached_student_lesson_analysis(self.db, "lesson-7", "student-9")
+
+        generate.assert_called_once()
+        self.assertTrue(result["data"]["cached"])
+        self.assertTrue(result["data"]["guidance_refreshed"])
+        self.assertEqual(
+            result["data"]["aggregate_explanation"]["human_explanation"],
+            generate.return_value["human_explanation"],
         )
 
     def test_top_signals_only_is_not_treated_as_complete_cache(self):

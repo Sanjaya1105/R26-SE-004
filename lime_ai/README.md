@@ -58,3 +58,8 @@ If you prefer manual setup, you can still run [db/init.sql](db/init.sql).
 - `GET /api/v1/health` - health check
 - `POST /api/v1/aggregate-explanation` - uses Gemini to
   generate a human explanation, lecture support, and personalized study-technique suggestions
+
+The aggregate response keeps two audiences separate. The default teacher-friendly explanation
+uses non-technical language to explain only why the cognitive-load level was selected. Confidence,
+combined signal values, and raw LIME/SHAP evidence are displayed only under the frontend's
+`View Technical Evidence` control. Opening that control does not make another Gemini request.
