@@ -66,37 +66,25 @@ def sync_mongo_inputs_once() -> dict[str, int]:
                 ):
                     continue
 
-                pending = (
-                    db.query(CognitiveStyleAnalysis)
-                    .filter(
-                        CognitiveStyleAnalysis.student_id == student_id,
-                        CognitiveStyleAnalysis.lesson_id.is_(None),
-                        CognitiveStyleAnalysis.analysis_status == "pending",
-                    )
-                    .order_by(CognitiveStyleAnalysis.created_at.desc(), CognitiveStyleAnalysis.id.desc())
-                    .first()
+                # Each distinct MongoDB cursor/gaze pair is an analysis input
+                # snapshot. Keep it as a new MySQL row instead of overwriting an
+                # earlier pending row for the same student. The fingerprint check
+                # above still makes the repeating background sync idempotent.
+                pending = CognitiveStyleAnalysis(
+                    lesson_id=None,
+                    student_id=student_id,
+                    session_id=student_id,
+                    source_fingerprint=source_fingerprint,
+                    analysis_status="pending",
+                    cognitive_style=None,
+                    confidence=None,
+                    feature_values=features,
+                    lime_output=None,
+                    shap_output=None,
+                    top_features=None,
                 )
-                if pending is None:
-                    pending = CognitiveStyleAnalysis(
-                        lesson_id=None,
-                        student_id=student_id,
-                        session_id=student_id,
-                        source_fingerprint=source_fingerprint,
-                        analysis_status="pending",
-                        cognitive_style=None,
-                        confidence=None,
-                        feature_values=features,
-                        lime_output=None,
-                        shap_output=None,
-                        top_features=None,
-                    )
-                    db.add(pending)
-                    inserted += 1
-                else:
-                    pending.session_id = student_id
-                    pending.source_fingerprint = source_fingerprint
-                    pending.feature_values = features
-                    updated += 1
+                db.add(pending)
+                inserted += 1
             db.commit()
     finally:
         mongo_client.close()

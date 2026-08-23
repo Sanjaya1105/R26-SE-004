@@ -81,6 +81,8 @@ export default function StudentAnalyse() {
   const [styleLoading, setStyleLoading] = useState(false);
   const [styleError, setStyleError] = useState('');
   const [sharingGuidance, setSharingGuidance] = useState(false);
+  const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
+  const [showStyleTopFeatures, setShowStyleTopFeatures] = useState(false);
 
   const recommendationItems = formatRecommendationItems(
     aggregateExplanation?.human_explanation || limeExplanation?.human_explanation || '',
@@ -107,6 +109,7 @@ export default function StudentAnalyse() {
     setAggregateExplanation(null);
     setAggregateError('');
     setShapError('');
+    setShowTechnicalDetails(false);
     setSelectedAnalysisRowId(null);
     setStatusMessage('Select a student and click "Show High Cognitive Load".');
   }, [selectedLessonId]);
@@ -114,6 +117,7 @@ export default function StudentAnalyse() {
   useEffect(() => {
     setStyleAnalysis(null);
     setStyleError('');
+    setShowStyleTopFeatures(false);
   }, [selectedLessonId, selectedStudentId]);
 
   async function loadLessons() {
@@ -207,6 +211,7 @@ export default function StudentAnalyse() {
       setError('');
       setAggregateError('');
       setShapError('');
+      setShowTechnicalDetails(false);
 
       // Fixed sample sizes for all cognitive load levels
       const limeSamples = 50;   // LIME: 50 samples
@@ -300,6 +305,7 @@ export default function StudentAnalyse() {
       setStyleLoading(true);
       setStyleError('');
       setStyleAnalysis(null);
+      setShowStyleTopFeatures(false);
       const result = await analyseCognitiveStyle(selectedLessonId, selectedStudentId);
       setStyleAnalysis(result);
       setStatusMessage(
@@ -404,10 +410,6 @@ export default function StudentAnalyse() {
                   <span className="style-summary-label">Predicted style</span>
                   <strong className="style-name">{styleAnalysis.cognitive_style}</strong>
                 </div>
-                <div>
-                  <span className="style-summary-label">Confidence</span>
-                  <strong>{(Number(styleAnalysis.confidence) * 100).toFixed(1)}%</strong>
-                </div>
               </div>
 
               {styleAnalysis.human_explanation ? (
@@ -420,18 +422,31 @@ export default function StudentAnalyse() {
                 </div>
               ) : null}
 
-              <h3>Top 3 Combined Features</h3>
-              <div className="style-feature-grid">
-                {(styleAnalysis.top_features ?? []).map((feature, index) => (
-                  <article className="style-feature-card" key={feature.feature}>
-                    <span className="feature-rank">#{index + 1}</span>
-                    <h4>{feature.feature}</h4>
-                    <p>Combined importance: {(Number(feature.importance) * 100).toFixed(2)}%</p>
-                    <p>Feature value: {Number(feature.feature_value).toFixed(4)}</p>
-                    <span className={`impact-badge ${feature.direction}`}>{feature.direction}</span>
-                  </article>
-                ))}
-              </div>
+              <button
+                type="button"
+                className={`raw-analyse-btn ${showStyleTopFeatures ? 'active' : ''}`}
+                onClick={() => setShowStyleTopFeatures(current => !current)}
+                aria-expanded={showStyleTopFeatures}
+              >
+                {showStyleTopFeatures ? 'Hide Top 3 Combined Features' : 'Show Top 3 Combined Features'}
+              </button>
+
+              {showStyleTopFeatures ? (
+                <>
+                  <h3>Top 3 Combined Features</h3>
+                  <div className="style-feature-grid">
+                    {(styleAnalysis.top_features ?? []).map((feature, index) => (
+                      <article className="style-feature-card" key={feature.feature}>
+                        <span className="feature-rank">#{index + 1}</span>
+                        <h4>{feature.feature}</h4>
+                        <p>Combined importance: {(Number(feature.importance) * 100).toFixed(2)}%</p>
+                        <p>Feature value: {Number(feature.feature_value).toFixed(4)}</p>
+                        <span className={`impact-badge ${feature.direction}`}>{feature.direction}</span>
+                      </article>
+                    ))}
+                  </div>
+                </>
+              ) : null}
 
               <div className="style-raw-grid">
                 <details>
@@ -522,19 +537,11 @@ export default function StudentAnalyse() {
       </section>
 
       <section className="student-analyse-results glass-panel lime-panel">
-        <h2>Raw LIME Explanation</h2>
+        <h2>Analysis Explanation and Recommendations</h2>
         {!limeExplanation ? (
           <p className="empty-state">Click Raw Analyse on a row to generate real LIME output.</p>
         ) : (
           <div className="lime-content">
-            <p>
-              <strong>Record:</strong> #{limeExplanation.prediction_id} | <strong>Student:</strong> {limeExplanation.student_id} |{' '}
-              <strong>Cognitive Load:</strong> {limeExplanation.predicted_cognitive_load}
-            </p>
-            <p>
-              <strong>Intercept:</strong> {Number(limeExplanation.intercept).toFixed(4)}
-            </p>
-
             {aggregateExplanation ? (
               <button
                 type="button"
@@ -590,13 +597,13 @@ export default function StudentAnalyse() {
               </div>
 
               {aggregateError ? <p className="aggregate-error-text">{aggregateError}</p> : null}
-              {aggregateExplanation?.top_signals?.length ? (
+              {showTechnicalDetails && aggregateExplanation?.top_signals?.length ? (
                 <div className="aggregate-top-signals">
                   <p className="aggregate-top-signals-title">Top 3 Combined Signals</p>
                   <ul>
                     {aggregateExplanation.top_signals.map((signal, index) => (
                       <li key={`${signal.source}-${signal.signal}-${index}`}>
-                        {signal.source.toUpperCase()}: {signal.signal} ({Number(signal.raw_value).toFixed(6)})
+                        {signal.source.toUpperCase()}: {signal.signal}
                       </li>
                     ))}
                   </ul>
@@ -633,75 +640,90 @@ export default function StudentAnalyse() {
               </div>
             ) : null}
 
-            <div className="results-table-wrapper">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Rule</th>
-                    <th>Weight</th>
-                    <th>Impact</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(limeExplanation.factors ?? []).map((factor, index) => (
-                    <tr key={`${factor.rule}-${index}`}>
-                      <td>{factor.rule}</td>
-                      <td>{Number(factor.weight).toFixed(6)}</td>
-                      <td>
-                        <span className={`impact-badge ${factor.impact}`}>{factor.impact}</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <button
+              type="button"
+              className={`raw-analyse-btn ${showTechnicalDetails ? 'active' : ''}`}
+              onClick={() => setShowTechnicalDetails(current => !current)}
+              aria-expanded={showTechnicalDetails}
+            >
+              {showTechnicalDetails ? 'Hide LIME & SHAP Details' : 'Show LIME & SHAP Details'}
+            </button>
+
+            {showTechnicalDetails ? (
+              <div className="technical-explanation-details">
+                <h3>LIME Details</h3>
+                <p>
+                  <strong>Student:</strong> {limeExplanation.student_id} |{' '}
+                  <strong>Cognitive Load:</strong> {limeExplanation.predicted_cognitive_load}
+                </p>
+                <div className="results-table-wrapper">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Rule</th>
+                        <th>Weight</th>
+                        <th>Impact</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(limeExplanation.factors ?? []).map((factor, index) => (
+                        <tr key={`${factor.rule}-${index}`}>
+                          <td>{factor.rule}</td>
+                          <td>{Number(factor.weight).toFixed(6)}</td>
+                          <td>
+                            <span className={`impact-badge ${factor.impact}`}>{factor.impact}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : null}
           </div>
         )}
       </section>
 
-      <section className="student-analyse-results glass-panel shap-panel">
-        <h2>Raw SHAP Explanation</h2>
-        {shapError ? <div className="alert error shap-alert">{shapError}</div> : null}
-        {!shapExplanation ? (
-          <p className="empty-state">Click Raw Analyse on a row to generate real SHAP output.</p>
-        ) : (
-          <div className="lime-content">
-            <p>
-              <strong>Record:</strong> #{shapExplanation.prediction_id} | <strong>Student:</strong> {shapExplanation.student_id} |{' '}
-              <strong>Cognitive Load:</strong> {shapExplanation.predicted_cognitive_load}
-            </p>
-            <p>
-              <strong>Base Value:</strong> {Number(shapExplanation.expected_value).toFixed(4)}
-            </p>
-            <p className="shap-summary">{shapExplanation.summary}</p>
-
-            <div className="results-table-wrapper">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Feature</th>
-                    <th>Feature Value</th>
-                    <th>SHAP Value</th>
-                    <th>Impact</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(shapExplanation.shap_values ?? []).map((item, index) => (
-                    <tr key={`${item.feature}-${index}`}>
-                      <td>{item.feature}</td>
-                      <td>{Number(item.value).toFixed(4)}</td>
-                      <td>{Number(item.shap_value).toFixed(6)}</td>
-                      <td>
-                        <span className={`impact-badge ${item.impact}`}>{item.impact}</span>
-                      </td>
+      {showTechnicalDetails ? (
+        <section className="student-analyse-results glass-panel shap-panel">
+          <h2>SHAP Details</h2>
+          {shapError ? <div className="alert error shap-alert">{shapError}</div> : null}
+          {!shapExplanation ? (
+            <p className="empty-state">SHAP output is unavailable for this analysis.</p>
+          ) : (
+            <div className="lime-content">
+              <p>
+                <strong>Student:</strong> {shapExplanation.student_id} |{' '}
+                <strong>Cognitive Load:</strong> {shapExplanation.predicted_cognitive_load}
+              </p>
+              <div className="results-table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Feature</th>
+                      <th>Feature Value</th>
+                      <th>SHAP Value</th>
+                      <th>Impact</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {(shapExplanation.shap_values ?? []).map((item, index) => (
+                      <tr key={`${item.feature}-${index}`}>
+                        <td>{item.feature}</td>
+                        <td>{Number(item.value).toFixed(4)}</td>
+                        <td>{Number(item.shap_value).toFixed(6)}</td>
+                        <td>
+                          <span className={`impact-badge ${item.impact}`}>{item.impact}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        )}
-      </section>
+          )}
+        </section>
+      ) : null}
     </div>
   );
 }
