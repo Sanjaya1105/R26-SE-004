@@ -1,13 +1,18 @@
 import unittest
 from unittest.mock import patch
 
+from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from config.database import Base
 from models.student_lesson_top_signals import StudentLessonTopSignals
 from models.prediction import CognitiveLoadPrediction
-from schemas.prediction import AggregateExplanationRequest
+from schemas.prediction import (
+    AggregateExplanationRequest,
+    TechniqueFeedbackRequest,
+    TeacherGuidanceDecision,
+)
 from services.student_guidance_service import GUIDANCE_VERSION
 from services.prediction_service import (
     _save_top_aggregate_signals,
@@ -15,6 +20,9 @@ from services.prediction_service import (
     get_cached_student_lesson_analysis,
     get_student_lesson_cognitive_load_counts,
     list_shared_student_lesson_guidance,
+    regenerate_student_lesson_guidance,
+    reject_student_lesson_guidance,
+    save_student_technique_feedback,
     share_student_lesson_guidance,
 )
 
@@ -267,7 +275,11 @@ class AggregateSignalPersistenceTests(unittest.TestCase):
             [{"signal": "pause_frequency", "raw_value": 1.0, "normalized_value": 1.0}],
             human_explanation="Saved explanation",
             explanation_source="gemini",
-            study_technique={"techniques": [{"technique": "Pomodoro"}]},
+            study_technique={
+                "techniques": [{"technique": "short notes"}],
+                "teacher_review": {"status": "pending", "regeneration_count": 0},
+                "student_feedback": {},
+            },
             lecture_support={"strategies": "1) Pause after each concept."},
         )
 
@@ -275,12 +287,116 @@ class AggregateSignalPersistenceTests(unittest.TestCase):
         listed = list_shared_student_lesson_guidance(self.db, "student-9")
 
         self.assertTrue(shared["data"]["shared_to_student"])
+        self.assertEqual(shared["data"]["teacher_review"]["status"], "approved")
         self.assertEqual(len(listed["data"]), 1)
         self.assertEqual(listed["data"][0]["lesson_id"], "lesson-7")
         self.assertEqual(
             listed["data"][0]["study_technique"]["techniques"][0]["technique"],
-            "Pomodoro",
+            "short notes",
         )
+
+    def test_student_feedback_is_saved_only_for_a_shared_recommendation(self):
+        self.payload.lime_explanation = {"factors": []}
+        self.payload.shap_explanation = {"shap_values": []}
+        _save_top_aggregate_signals(
+            self.db,
+            self.payload,
+            [{"signal": "pause_frequency", "raw_value": 1.0, "normalized_value": 1.0}],
+            human_explanation="Saved explanation",
+            study_technique={
+                "techniques": [{"technique": "short notes"}],
+                "teacher_review": {"status": "pending", "regeneration_count": 0},
+                "student_feedback": {},
+            },
+            lecture_support={"strategies": "1) Pause after each concept."},
+        )
+        feedback = TechniqueFeedbackRequest(
+            technique="short notes",
+            used=True,
+            helpfulness=4,
+            ease_of_use=5,
+            comment="Easy to review.",
+        )
+
+        with self.assertRaises(HTTPException) as error:
+            save_student_technique_feedback(self.db, "lesson-7", "student-9", feedback)
+        self.assertEqual(error.exception.status_code, 404)
+
+        share_student_lesson_guidance(self.db, "lesson-7", "student-9")
+        saved = save_student_technique_feedback(self.db, "lesson-7", "student-9", feedback)
+
+        self.assertEqual(saved["data"]["helpfulness"], 4)
+        listed = list_shared_student_lesson_guidance(self.db, "student-9")
+        self.assertEqual(
+            listed["data"][0]["study_technique"]["student_feedback"]["short notes"]["ease_of_use"],
+            5,
+        )
+
+    def test_teacher_can_reject_and_withhold_guidance(self):
+        self.payload.lime_explanation = {"factors": []}
+        self.payload.shap_explanation = {"shap_values": []}
+        _save_top_aggregate_signals(
+            self.db,
+            self.payload,
+            [{"signal": "pause_frequency", "raw_value": 1.0, "normalized_value": 1.0}],
+            human_explanation="Saved explanation",
+            study_technique={
+                "techniques": [{"technique": "short notes"}],
+                "teacher_review": {"status": "pending", "regeneration_count": 0},
+            },
+            lecture_support={"strategies": "1) Pause after each concept."},
+        )
+        share_student_lesson_guidance(self.db, "lesson-7", "student-9")
+
+        rejected = reject_student_lesson_guidance(
+            self.db,
+            "lesson-7",
+            "student-9",
+            TeacherGuidanceDecision(reason="Not suitable for this lesson."),
+        )
+
+        self.assertFalse(rejected["data"]["shared_to_student"])
+        self.assertEqual(rejected["data"]["teacher_review"]["status"], "rejected")
+        self.assertEqual(list_shared_student_lesson_guidance(self.db, "student-9")["data"], [])
+
+    @patch("services.prediction_service.generate_student_guidance")
+    def test_regeneration_resets_review_and_archives_existing_feedback(self, generate):
+        self.payload.lime_explanation = {"factors": []}
+        self.payload.shap_explanation = {"shap_values": []}
+        _save_top_aggregate_signals(
+            self.db,
+            self.payload,
+            [{"signal": "pause_frequency", "raw_value": 1.0, "normalized_value": 1.0}],
+            human_explanation="Old explanation",
+            study_technique={
+                "techniques": [{"technique": "short notes"}],
+                "teacher_review": {"status": "approved", "regeneration_count": 1},
+                "student_feedback": {"short notes": {"used": True, "helpfulness": 4}},
+            },
+            lecture_support={"strategies": "1) Old strategy."},
+        )
+        share_student_lesson_guidance(self.db, "lesson-7", "student-9")
+        generate.return_value = {
+            "human_explanation": "New explanation",
+            "study_technique": {
+                "techniques": [{"technique": "flowchart"}],
+                "source": "constrained gemini",
+                "guidance_version": GUIDANCE_VERSION,
+                "teacher_review": {"status": "pending", "regeneration_count": 0},
+                "student_feedback": {},
+            },
+            "lecture_support": {"strategies": "1) New strategy."},
+        }
+
+        result = regenerate_student_lesson_guidance(self.db, "lesson-7", "student-9")
+
+        self.assertFalse(result["data"]["shared_to_student"])
+        self.assertEqual(result["data"]["study_technique"]["teacher_review"]["status"], "pending")
+        self.assertEqual(
+            result["data"]["study_technique"]["teacher_review"]["regeneration_count"],
+            2,
+        )
+        self.assertEqual(len(result["data"]["study_technique"]["feedback_history"]), 1)
 
 
 class CognitiveLoadCountTests(unittest.TestCase):

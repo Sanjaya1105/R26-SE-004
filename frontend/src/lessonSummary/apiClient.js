@@ -30,6 +30,27 @@ export function shareLessonGuidance(studentId, lessonId) {
   });
 }
 
+export function rejectLessonGuidance(studentId, lessonId, reason = '') {
+  return request('/reject', {
+    method: 'POST',
+    body: JSON.stringify({ studentId, lessonId, reason }),
+  });
+}
+
+export function regenerateLessonGuidance(studentId, lessonId) {
+  return request('/regenerate', {
+    method: 'POST',
+    body: JSON.stringify({ studentId, lessonId }),
+  });
+}
+
 export function fetchMySharedLessonGuidance() {
   return request('/me');
+}
+
+export function submitTechniqueFeedback(lessonId, feedback) {
+  return request('/feedback', {
+    method: 'POST',
+    body: JSON.stringify({ lessonId, ...feedback }),
+  });
 }

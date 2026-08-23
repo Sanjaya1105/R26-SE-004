@@ -2,7 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { getGatewayBaseUrl } from '../../config/gateway';
-import { fetchMySharedLessonGuidance } from '../../lessonSummary/apiClient';
+import StudyTechniqueCards from '../../components/StudyTechniqueCards';
+import {
+  fetchMySharedLessonGuidance,
+  submitTechniqueFeedback,
+} from '../../lessonSummary/apiClient';
 import '../../styles/studentAnalyse.css';
 
 function recommendationItems(text) {
@@ -24,6 +28,9 @@ export default function PreviousLessonSummary() {
   const [selectedLessonId, setSelectedLessonId] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [feedbackMessage, setFeedbackMessage] = useState('');
+  const [feedbackError, setFeedbackError] = useState('');
+  const [submittingTechnique, setSubmittingTechnique] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -58,6 +65,33 @@ export default function PreviousLessonSummary() {
     [selectedLessonId, summaries],
   );
   const strategies = recommendationItems(selectedSummary?.lecture_support?.strategies);
+
+  async function handleTechniqueFeedback(feedback) {
+    try {
+      setSubmittingTechnique(feedback.technique);
+      setFeedbackMessage('');
+      setFeedbackError('');
+      const saved = await submitTechniqueFeedback(selectedLessonId, feedback);
+      setSummaries((current) => current.map((summary) => {
+        if (String(summary.lesson_id) !== selectedLessonId) return summary;
+        return {
+          ...summary,
+          study_technique: {
+            ...summary.study_technique,
+            student_feedback: {
+              ...(summary.study_technique?.student_feedback ?? {}),
+              [feedback.technique]: saved,
+            },
+          },
+        };
+      }));
+      setFeedbackMessage('Thank you. Your feedback was saved.');
+    } catch (requestError) {
+      setFeedbackError(requestError.message);
+    } finally {
+      setSubmittingTechnique('');
+    }
+  }
 
   return (
     <div className="student-analyse-shell">
@@ -114,23 +148,15 @@ export default function PreviousLessonSummary() {
             </div>
           </div>
 
-          <div className="student-support-card study-technique-card">
-            <p className="support-card-title">Recommended Study Techniques</p>
-            <div className="techniques-list">
-              {(selectedSummary.study_technique?.techniques ?? []).map((technique, index) => (
-                <div className="technique-item" key={`${technique.technique}-${index}`}>
-                  <span className="technique-emoji-title">
-                    {technique.emoji} {technique.title || technique.technique}
-                  </span>
-                  {technique.link ? (
-                    <a className="technique-link-btn" href={technique.link} target="_blank" rel="noreferrer">
-                      {technique.link_text || 'Learn more'}
-                    </a>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          </div>
+          <StudyTechniqueCards
+            studyTechnique={selectedSummary.study_technique}
+            showSource={false}
+            onFeedbackSubmit={handleTechniqueFeedback}
+            feedbackKey={selectedSummary.lesson_id}
+            submittingTechnique={submittingTechnique}
+          />
+          {feedbackMessage ? <div className="alert success">{feedbackMessage}</div> : null}
+          {feedbackError ? <div className="alert error">{feedbackError}</div> : null}
         </section>
       ) : null}
     </div>

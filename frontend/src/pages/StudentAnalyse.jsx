@@ -13,7 +13,12 @@ import {
 } from '../lime/apiClient';
 import { fetchShapExplanation } from '../shap/apiClient';
 import { analyseCognitiveStyle } from '../cognitiveStyle/apiClient';
-import { shareLessonGuidance } from '../lessonSummary/apiClient';
+import {
+  regenerateLessonGuidance,
+  rejectLessonGuidance,
+  shareLessonGuidance,
+} from '../lessonSummary/apiClient';
+import StudyTechniqueCards from '../components/StudyTechniqueCards';
 import '../styles/studentAnalyse.css';
 
 function formatRecommendationItems(text) {
@@ -80,7 +85,8 @@ export default function StudentAnalyse() {
   const [styleAnalysis, setStyleAnalysis] = useState(null);
   const [styleLoading, setStyleLoading] = useState(false);
   const [styleError, setStyleError] = useState('');
-  const [sharingGuidance, setSharingGuidance] = useState(false);
+  const [guidanceAction, setGuidanceAction] = useState('');
+  const [guidanceRejectionReason, setGuidanceRejectionReason] = useState('');
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
   const [showStyleTopFeatures, setShowStyleTopFeatures] = useState(false);
 
@@ -322,19 +328,69 @@ export default function StudentAnalyse() {
   async function handleShareGuidance() {
     if (!aggregateExplanation || !selectedLessonId || !selectedStudentId) return;
     try {
-      setSharingGuidance(true);
+      setGuidanceAction('approve');
       setError('');
       const shared = await shareLessonGuidance(selectedStudentId, selectedLessonId);
       setAggregateExplanation((current) => ({
         ...current,
         shared_to_student: true,
         shared_at: shared.shared_at,
+        study_technique: {
+          ...current.study_technique,
+          teacher_review: shared.teacher_review,
+        },
       }));
       setStatusMessage('Recommendation and study techniques sent to the student.');
     } catch (err) {
       setError(err.message);
     } finally {
-      setSharingGuidance(false);
+      setGuidanceAction('');
+    }
+  }
+
+  async function handleRejectGuidance() {
+    if (!aggregateExplanation || !selectedLessonId || !selectedStudentId) return;
+    try {
+      setGuidanceAction('reject');
+      setError('');
+      const rejected = await rejectLessonGuidance(
+        selectedStudentId,
+        selectedLessonId,
+        guidanceRejectionReason,
+      );
+      setAggregateExplanation((current) => ({
+        ...current,
+        shared_to_student: false,
+        shared_at: null,
+        study_technique: {
+          ...current.study_technique,
+          teacher_review: rejected.teacher_review,
+        },
+      }));
+      setStatusMessage('Guidance rejected and withheld from the student.');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGuidanceAction('');
+    }
+  }
+
+  async function handleRegenerateGuidance() {
+    if (!aggregateExplanation || !selectedLessonId || !selectedStudentId) return;
+    try {
+      setGuidanceAction('regenerate');
+      setError('');
+      const regenerated = await regenerateLessonGuidance(selectedStudentId, selectedLessonId);
+      setAggregateExplanation((current) => ({
+        ...current,
+        ...regenerated,
+      }));
+      setGuidanceRejectionReason('');
+      setStatusMessage('New guidance generated. Review it before approving and sending.');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGuidanceAction('');
     }
   }
 
@@ -569,18 +625,58 @@ export default function StudentAnalyse() {
         ) : (
           <div className="lime-content">
             {aggregateExplanation ? (
-              <button
-                type="button"
-                className="support-button"
-                onClick={handleShareGuidance}
-                disabled={sharingGuidance || aggregateExplanation.shared_to_student}
-              >
-                {sharingGuidance
-                  ? 'Sending...'
-                  : aggregateExplanation.shared_to_student
-                    ? 'Sent to Student'
-                    : 'Send Recommendation and Techniques to Student'}
-              </button>
+              <div className="teacher-guidance-review">
+                <div className="teacher-guidance-review-heading">
+                  <div>
+                    <p className="support-card-title">Teacher Review</p>
+                    <p className="support-card-subtitle">
+                      Review the AI guidance before it becomes visible to the student.
+                    </p>
+                  </div>
+                  <span className={`review-status ${aggregateExplanation.study_technique?.teacher_review?.status || 'pending'}`}>
+                    {aggregateExplanation.study_technique?.teacher_review?.status || 'pending'}
+                  </span>
+                </div>
+                <label className="guidance-rejection-field">
+                  Rejection reason (optional)
+                  <input
+                    value={guidanceRejectionReason}
+                    onChange={(event) => setGuidanceRejectionReason(event.target.value)}
+                    maxLength={500}
+                    placeholder="Example: The technique does not fit this lesson."
+                  />
+                </label>
+                <div className="teacher-guidance-actions">
+                  <button
+                    type="button"
+                    className="support-button approve-guidance-btn"
+                    onClick={handleShareGuidance}
+                    disabled={Boolean(guidanceAction) || aggregateExplanation.shared_to_student}
+                  >
+                    {guidanceAction === 'approve'
+                      ? 'Approving...'
+                      : aggregateExplanation.shared_to_student
+                        ? 'Approved and Sent'
+                        : 'Approve and Send'}
+                  </button>
+                  <button
+                    type="button"
+                    className="support-button regenerate-guidance-btn"
+                    onClick={handleRegenerateGuidance}
+                    disabled={Boolean(guidanceAction)}
+                  >
+                    {guidanceAction === 'regenerate' ? 'Regenerating...' : 'Regenerate'}
+                  </button>
+                  <button
+                    type="button"
+                    className="support-button reject-guidance-btn"
+                    onClick={handleRejectGuidance}
+                    disabled={Boolean(guidanceAction)}
+                  >
+                    {guidanceAction === 'reject' ? 'Rejecting...' : 'Reject'}
+                  </button>
+                </div>
+              </div>
             ) : null}
 
             <div className="human-explanation-card load-human-explanation">
@@ -632,34 +728,7 @@ export default function StudentAnalyse() {
               {aggregateError ? <p className="aggregate-error-text">{aggregateError}</p> : null}
             </div>
 
-            {aggregateExplanation?.study_technique ? (
-              <div className="student-support-card study-technique-card">
-                <div className="support-card-header">
-                  <p className="support-card-title">Recommended Study Techniques</p>
-                  <p className="support-source">AI (Source: {aggregateExplanation.study_technique.source?.toUpperCase() || 'AI'})</p>
-                </div>
-
-                {aggregateExplanation.study_technique.techniques?.length ? (
-                  <div className="techniques-list">
-                    {aggregateExplanation.study_technique.techniques.map((tech, index) => (
-                      <div key={`${tech.technique}-${index}`} className="technique-item">
-                        <span className="technique-emoji-title">
-                          {tech.emoji} {tech.title}
-                        </span>
-                        <a
-                          href={tech.link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="technique-link-btn"
-                        >
-                          {tech.link_text}
-                        </a>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
+            <StudyTechniqueCards studyTechnique={aggregateExplanation?.study_technique} />
 
             <button
               type="button"
@@ -694,6 +763,96 @@ export default function StudentAnalyse() {
                 <p className="technical-evidence-note">
                   The values below show how the combined LIME and SHAP evidence supported the result.
                 </p>
+
+                {aggregateExplanation?.study_technique?.selection_evidence ? (
+                  <section className="technique-selection-evidence">
+                    <h4>Study Technique Selection Evidence</h4>
+                    <div className="technique-evidence-metadata">
+                      <span>
+                        Method:{' '}
+                        <strong>{aggregateExplanation.study_technique.selection_evidence.selection_method}</strong>
+                      </span>
+                      <span>
+                        Model:{' '}
+                        <strong>{aggregateExplanation.study_technique.selection_evidence.model_name}</strong>
+                      </span>
+                      <span>
+                        Prompt version:{' '}
+                        <strong>{aggregateExplanation.study_technique.selection_evidence.prompt_version}</strong>
+                      </span>
+                      <span>
+                        Temperature:{' '}
+                        <strong>{aggregateExplanation.study_technique.selection_evidence.temperature}</strong>
+                      </span>
+                      <span>
+                        Max output tokens:{' '}
+                        <strong>{aggregateExplanation.study_technique.selection_evidence.max_output_tokens}</strong>
+                      </span>
+                    </div>
+
+                    <h5>Selected recommendations</h5>
+                    <div className="results-table-wrapper">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Technique</th>
+                            <th>Method</th>
+                            <th>Matched behaviours</th>
+                            <th>Selection reason</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(aggregateExplanation.study_technique.techniques ?? []).map((technique, index) => (
+                            <tr key={`${technique.technique}-selection-${index}`}>
+                              <td>{technique.title || technique.technique}</td>
+                              <td>{technique.selection_method || 'Legacy recommendation'}</td>
+                              <td>{technique.matched_signals?.join(', ') || 'Cognitive-load level only'}</td>
+                              <td>{technique.selection_reason || 'Not recorded for this legacy result.'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="technique-evidence-scope">
+                      <strong>Allowed catalogue:</strong>{' '}
+                      {(aggregateExplanation.study_technique.selection_evidence.allowed_techniques ?? []).join(', ')}
+                      <br />
+                      <strong>Teacher decision:</strong>{' '}
+                      {aggregateExplanation.study_technique.teacher_review?.status || 'pending'}
+                    </div>
+
+                    {Object.keys(aggregateExplanation.study_technique.student_feedback ?? {}).length ? (
+                      <>
+                        <h5>Student feedback</h5>
+                        <div className="results-table-wrapper">
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>Technique</th>
+                                <th>Used</th>
+                                <th>Helpfulness</th>
+                                <th>Ease</th>
+                                <th>Comment</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {Object.values(aggregateExplanation.study_technique.student_feedback).map((feedback) => (
+                                <tr key={feedback.technique}>
+                                  <td>{feedback.technique}</td>
+                                  <td>{feedback.used ? 'Yes' : 'No'}</td>
+                                  <td>{feedback.helpfulness || 'Not rated'}</td>
+                                  <td>{feedback.ease_of_use || 'Not rated'}</td>
+                                  <td>{feedback.comment || 'No comment'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
+                    ) : null}
+                  </section>
+                ) : null}
 
                 <h4>Top 3 Combined Signals</h4>
                 <div className="results-table-wrapper">

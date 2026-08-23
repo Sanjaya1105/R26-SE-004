@@ -14,14 +14,20 @@ def generate_gemini_text(
     user_prompt: str,
     *,
     response_mime_type: str | None = None,
+    temperature: float | None = None,
+    max_output_tokens: int | None = None,
 ) -> str:
     if not settings.GEMINI_API_KEY.strip():
         raise GeminiServiceError("GEMINI_API_KEY must be configured.")
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.GEMINI_MODEL}:generateContent"
     generation_config: dict[str, Any] = {
-        "temperature": settings.GEMINI_TEMPERATURE,
-        "maxOutputTokens": settings.GEMINI_MAX_OUTPUT_TOKENS,
+        "temperature": settings.GEMINI_TEMPERATURE if temperature is None else temperature,
+        "maxOutputTokens": (
+            settings.GEMINI_MAX_OUTPUT_TOKENS
+            if max_output_tokens is None
+            else max_output_tokens
+        ),
     }
     if response_mime_type:
         generation_config["responseMimeType"] = response_mime_type

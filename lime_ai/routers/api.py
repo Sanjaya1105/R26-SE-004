@@ -2,7 +2,12 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from config.database import get_db
-from schemas.prediction import AggregateExplanationRequest, CognitiveLoadInput
+from schemas.prediction import (
+    AggregateExplanationRequest,
+    CognitiveLoadInput,
+    TechniqueFeedbackRequest,
+    TeacherGuidanceDecision,
+)
 from services.prediction_service import (
     aggregate_and_save_student_lesson_summary,
     generate_aggregate_explanation,
@@ -15,6 +20,9 @@ from services.prediction_service import (
     list_predictions_filtered,
     list_students_for_lesson,
     predict_and_store,
+    regenerate_student_lesson_guidance,
+    reject_student_lesson_guidance,
+    save_student_technique_feedback,
     share_student_lesson_guidance,
 )
 
@@ -107,9 +115,38 @@ def share_student_guidance(
     return share_student_lesson_guidance(db, lesson_id, student_id)
 
 
+@router.post("/lessons/{lesson_id}/students/{student_id}/reject-guidance")
+def reject_student_guidance(
+    lesson_id: str,
+    student_id: str,
+    decision: TeacherGuidanceDecision,
+    db: Session = Depends(get_db),
+):
+    return reject_student_lesson_guidance(db, lesson_id, student_id, decision)
+
+
+@router.post("/lessons/{lesson_id}/students/{student_id}/regenerate-guidance")
+def regenerate_student_guidance(
+    lesson_id: str,
+    student_id: str,
+    db: Session = Depends(get_db),
+):
+    return regenerate_student_lesson_guidance(db, lesson_id, student_id)
+
+
 @router.get("/students/{student_id}/shared-guidance")
 def get_shared_student_guidance(student_id: str, db: Session = Depends(get_db)):
     return list_shared_student_lesson_guidance(db, student_id)
+
+
+@router.post("/students/{student_id}/lessons/{lesson_id}/technique-feedback")
+def submit_student_technique_feedback(
+    student_id: str,
+    lesson_id: str,
+    feedback: TechniqueFeedbackRequest,
+    db: Session = Depends(get_db),
+):
+    return save_student_technique_feedback(db, lesson_id, student_id, feedback)
 
 
 @router.get("/lessons/{lesson_id}/predictions/{prediction_id}/lime")

@@ -10,11 +10,17 @@ from sqlalchemy.orm import Session
 from models.prediction import CognitiveLoadPrediction
 from models.student_lesson_summary import StudentLessonSummary
 from models.student_lesson_top_signals import StudentLessonTopSignals
-from schemas.prediction import AggregateExplanationRequest, CognitiveLoadInput
+from schemas.prediction import (
+    AggregateExplanationRequest,
+    CognitiveLoadInput,
+    TechniqueFeedbackRequest,
+    TeacherGuidanceDecision,
+)
 from services.local_model import LocalModelError, predict_scores
 from services.model_client import ModelClientError, request_prediction
 from services.gemini_client import GeminiServiceError
 from services.student_guidance_service import GUIDANCE_VERSION, generate_student_guidance
+from services.study_technique_service import enrich_study_technique_payload
 
 
 RAW_FEATURE_FIELDS = [
@@ -184,6 +190,10 @@ def _save_top_aggregate_signals(
         saved.explanation_source = explanation_source
     if study_technique is not None:
         saved.study_technique = study_technique
+        teacher_status = (study_technique.get("teacher_review") or {}).get("status")
+        if teacher_status == "pending":
+            saved.shared_to_student = False
+            saved.shared_at = None
     if lecture_support is not None:
         saved.lecture_support = lecture_support
 
@@ -293,6 +303,8 @@ def get_cached_student_lesson_analysis(
         record.explanation_source = "gemini"
         record.study_technique = guidance["study_technique"]
         record.lecture_support = guidance["lecture_support"]
+        record.shared_to_student = False
+        record.shared_at = None
         db.commit()
         db.refresh(record)
         guidance_refreshed = True
@@ -327,7 +339,7 @@ def get_cached_student_lesson_analysis(
                 "top_signals_record_id": record.id,
                 "human_explanation": record.human_explanation,
                 "explanation_source": record.explanation_source or "gemini",
-                "study_technique": record.study_technique,
+                "study_technique": enrich_study_technique_payload(record.study_technique),
                 "lecture_support": record.lecture_support,
                 "shared_to_student": bool(record.shared_to_student),
                 "shared_at": record.shared_at.isoformat() if record.shared_at else None,
@@ -364,8 +376,20 @@ def share_student_lesson_guidance(
             },
         )
 
+    now = datetime.now(timezone.utc)
+    technique_payload = dict(record.study_technique)
+    review = dict(technique_payload.get("teacher_review") or {})
+    review.update(
+        {
+            "status": "approved",
+            "reviewed_at": now.isoformat(),
+            "rejection_reason": None,
+        }
+    )
+    technique_payload["teacher_review"] = review
+    record.study_technique = technique_payload
     record.shared_to_student = True
-    record.shared_at = datetime.now(timezone.utc)
+    record.shared_at = now
     db.commit()
     db.refresh(record)
     return {
@@ -376,7 +400,181 @@ def share_student_lesson_guidance(
             "lesson_id": record.lesson_id,
             "shared_to_student": True,
             "shared_at": record.shared_at.isoformat() if record.shared_at else None,
+            "teacher_review": review,
         },
+        "errors": [],
+    }
+
+
+def reject_student_lesson_guidance(
+    db: Session,
+    lesson_id: str,
+    student_id: str,
+    decision: TeacherGuidanceDecision,
+) -> dict[str, Any]:
+    record = (
+        db.query(StudentLessonTopSignals)
+        .filter(
+            StudentLessonTopSignals.student_id == student_id,
+            StudentLessonTopSignals.lesson_id == lesson_id,
+        )
+        .one_or_none()
+    )
+    if record is None or not isinstance(record.study_technique, dict):
+        raise HTTPException(status_code=404, detail={"message": "No generated guidance was found."})
+
+    now = datetime.now(timezone.utc)
+    technique_payload = dict(record.study_technique)
+    review = dict(technique_payload.get("teacher_review") or {})
+    review.update(
+        {
+            "status": "rejected",
+            "reviewed_at": now.isoformat(),
+            "rejection_reason": decision.reason.strip() or None,
+        }
+    )
+    technique_payload["teacher_review"] = review
+    record.study_technique = technique_payload
+    record.shared_to_student = False
+    record.shared_at = None
+    db.commit()
+    db.refresh(record)
+    return {
+        "success": True,
+        "message": "Guidance rejected and withheld from the student.",
+        "data": {
+            "student_id": record.student_id,
+            "lesson_id": record.lesson_id,
+            "shared_to_student": False,
+            "shared_at": None,
+            "teacher_review": review,
+        },
+        "errors": [],
+    }
+
+
+def regenerate_student_lesson_guidance(
+    db: Session,
+    lesson_id: str,
+    student_id: str,
+) -> dict[str, Any]:
+    record = (
+        db.query(StudentLessonTopSignals)
+        .filter(
+            StudentLessonTopSignals.student_id == student_id,
+            StudentLessonTopSignals.lesson_id == lesson_id,
+        )
+        .one_or_none()
+    )
+    if record is None:
+        raise HTTPException(status_code=404, detail={"message": "No saved analysis was found."})
+
+    top_signals = _top_signals_from_record(record)
+    signals, human_signals = _guidance_inputs(top_signals)
+    try:
+        guidance = generate_student_guidance(
+            student_id=record.student_id,
+            lesson_id=record.lesson_id,
+            predicted_label=record.predicted_cognitive_load,
+            signals=signals,
+            human_signals=human_signals,
+        )
+    except GeminiServiceError as exc:
+        raise HTTPException(status_code=503, detail={"message": str(exc)}) from exc
+
+    previous_payload = record.study_technique if isinstance(record.study_technique, dict) else {}
+    previous_review = dict(previous_payload.get("teacher_review") or {})
+    regeneration_count = int(previous_review.get("regeneration_count") or 0) + 1
+    new_payload = dict(guidance["study_technique"])
+    new_review = dict(new_payload["teacher_review"])
+    new_review["regeneration_count"] = regeneration_count
+    new_payload["teacher_review"] = new_review
+
+    feedback_history = list(previous_payload.get("feedback_history") or [])
+    previous_feedback = dict(previous_payload.get("student_feedback") or {})
+    if previous_feedback:
+        feedback_history.append(
+            {
+                "archived_at": datetime.now(timezone.utc).isoformat(),
+                "guidance_version": previous_payload.get("guidance_version"),
+                "feedback": previous_feedback,
+            }
+        )
+    new_payload["feedback_history"] = feedback_history
+
+    record.human_explanation = guidance["human_explanation"]
+    record.explanation_source = "gemini"
+    record.study_technique = new_payload
+    record.lecture_support = guidance["lecture_support"]
+    record.shared_to_student = False
+    record.shared_at = None
+    db.commit()
+    db.refresh(record)
+    return {
+        "success": True,
+        "message": "Guidance regenerated and is waiting for teacher review.",
+        "data": {
+            "human_explanation": record.human_explanation,
+            "study_technique": enrich_study_technique_payload(record.study_technique),
+            "lecture_support": record.lecture_support,
+            "shared_to_student": False,
+            "shared_at": None,
+        },
+        "errors": [],
+    }
+
+
+def save_student_technique_feedback(
+    db: Session,
+    lesson_id: str,
+    student_id: str,
+    feedback: TechniqueFeedbackRequest,
+) -> dict[str, Any]:
+    record = (
+        db.query(StudentLessonTopSignals)
+        .filter(
+            StudentLessonTopSignals.student_id == student_id,
+            StudentLessonTopSignals.lesson_id == lesson_id,
+            StudentLessonTopSignals.shared_to_student.is_(True),
+        )
+        .one_or_none()
+    )
+    if record is None or not isinstance(record.study_technique, dict):
+        raise HTTPException(status_code=404, detail={"message": "No approved guidance was found."})
+
+    technique_name = feedback.technique.strip().lower()
+    selected_names = {
+        str(item.get("technique") or item.get("title") or "").strip().lower()
+        for item in record.study_technique.get("techniques") or []
+        if isinstance(item, dict)
+    }
+    if technique_name not in selected_names:
+        raise HTTPException(status_code=400, detail={"message": "Feedback technique was not recommended."})
+    if feedback.used and (feedback.helpfulness is None or feedback.ease_of_use is None):
+        raise HTTPException(
+            status_code=422,
+            detail={"message": "Helpfulness and ease ratings are required after using a technique."},
+        )
+
+    submitted = {
+        "technique": technique_name,
+        "used": feedback.used,
+        "helpfulness": feedback.helpfulness if feedback.used else None,
+        "ease_of_use": feedback.ease_of_use if feedback.used else None,
+        "comment": feedback.comment.strip() or None,
+        "submitted_at": datetime.now(timezone.utc).isoformat(),
+    }
+    technique_payload = dict(record.study_technique)
+    feedback_by_technique = dict(technique_payload.get("student_feedback") or {})
+    feedback_by_technique[technique_name] = submitted
+    technique_payload["student_feedback"] = feedback_by_technique
+    record.study_technique = technique_payload
+    db.commit()
+    db.refresh(record)
+    return {
+        "success": True,
+        "message": "Thank you. Your study-technique feedback was saved.",
+        "data": submitted,
         "errors": [],
     }
 
@@ -404,7 +602,7 @@ def list_shared_student_lesson_guidance(
                 "predicted_cognitive_load": record.predicted_cognitive_load,
                 "human_explanation": record.human_explanation,
                 "lecture_support": record.lecture_support,
-                "study_technique": record.study_technique,
+                "study_technique": enrich_study_technique_payload(record.study_technique),
                 "top_signals": _top_signals_from_record(record),
                 "shared_at": record.shared_at.isoformat() if record.shared_at else None,
             }
