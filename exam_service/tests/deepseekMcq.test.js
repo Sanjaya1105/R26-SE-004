@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { generateMcqs, validateQuiz } = require('../src/services/ollamaMcq');
+const { generateMcqs, validateQuiz } = require('../src/services/deepseekMcq');
 
 function validPayload() {
   return {
@@ -27,17 +27,22 @@ test('validateQuiz rejects an invalid question count and duplicate options', () 
   assert.throws(() => validateQuiz(payload), /duplicate options/);
 });
 
-test('generateMcqs requests structured non-streaming output from gemma3:12b', async (context) => {
+test('generateMcqs requests structured non-streaming output from DeepSeek', async (context) => {
   const originalFetch = global.fetch;
   context.after(() => { global.fetch = originalFetch; });
+  let requestUrl;
   let requestBody;
-  global.fetch = async (_url, options) => {
+  global.fetch = async (url, options) => {
+    requestUrl = url;
     requestBody = JSON.parse(options.body);
     return new Response(JSON.stringify({
-      message: { content: JSON.stringify(validPayload()) },
+      choices: [{ message: { content: JSON.stringify(validPayload()) } }],
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   };
 
+  const originalKey = process.env.DEEPSEEK_API_KEY;
+  process.env.DEEPSEEK_API_KEY = 'test-key';
+  context.after(() => { process.env.DEEPSEEK_API_KEY = originalKey; });
   const result = await generateMcqs({
     lessonName: 'Algorithms',
     unitNo: '1',
@@ -45,10 +50,11 @@ test('generateMcqs requests structured non-streaming output from gemma3:12b', as
     context: '[Page 1]\nA sorting algorithm arranges values.',
   });
 
-  assert.equal(result.model, 'gemma3:12b');
+  assert.equal(result.model, 'deepseek-v4-flash');
   assert.equal(result.questions.length, 10);
+  assert.equal(requestUrl, 'https://api.deepseek.com/chat/completions');
   assert.equal(requestBody.stream, false);
-  assert.equal(requestBody.format.properties.questions.minItems, 10);
+  assert.equal(requestBody.response_format.type, 'json_object');
   assert.match(requestBody.messages[1].content, /sorting algorithm/);
   assert.match(requestBody.messages[1].content, /dominant cognitive-load level.*"High"/);
 });

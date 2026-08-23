@@ -1,4 +1,4 @@
-from services.ollama_client import generate_ollama_text
+from services.gemini_client import generate_gemini_text
 
 
 SYSTEM_PROMPT = (
@@ -36,4 +36,4 @@ def generate_human_explanation(
         predicted_label=predicted_label,
         signals_text=signals_text or "- no strong behavioral signal was detected",
     )
-    return generate_ollama_text(SYSTEM_PROMPT, prompt)
+    return generate_gemini_text(SYSTEM_PROMPT, prompt)

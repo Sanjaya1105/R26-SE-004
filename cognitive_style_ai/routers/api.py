@@ -7,7 +7,7 @@ from services.explanation_service import explain_in_parallel
 from services.human_explanation_service import generate_human_explanation
 from services.model_client import BatchPredictor, ModelClientError, get_model_metadata
 from services.mongo_sync_service import sync_mongo_inputs_once
-from services.ollama_client import OllamaServiceError
+from services.gemini_client import GeminiServiceError
 
 
 router = APIRouter()
@@ -60,7 +60,7 @@ def analyse_student_style(
     if completed is not None:
         return {
             "success": True,
-            "message": "Saved cognitive-style analysis loaded without rerunning LIME, SHAP, or Ollama.",
+            "message": "Saved cognitive-style analysis loaded without rerunning LIME, SHAP, or Gemini.",
             "data": {**_serialize(completed), "cached": True},
             "errors": [],
         }
@@ -148,7 +148,7 @@ def analyse_student_style(
             confidence=probability,
             top_features=top_features,
         )
-    except OllamaServiceError as exc:
+    except GeminiServiceError as exc:
         db.rollback()
         raise HTTPException(status_code=503, detail=f"Human explanation generation failed: {exc}") from exc
 
@@ -165,7 +165,7 @@ def analyse_student_style(
     db.refresh(record)
     return {
         "success": True,
-        "message": "LIME, SHAP, top-three aggregation, and Ollama explanation completed.",
+        "message": "LIME, SHAP, top-three aggregation, and Gemini explanation completed.",
         "data": {**_serialize(record), "cached": False},
         "errors": [],
     }

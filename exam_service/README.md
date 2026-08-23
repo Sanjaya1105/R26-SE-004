@@ -34,19 +34,12 @@ npm run test:pdf
 Both endpoints require the same `x-teacher-id` ownership header as the existing
 material routes. The backend gateway exposes them under `/api/exam`.
 
-## Ollama exam generation
-
-Start Ollama and make sure the configured model is installed:
-
-```powershell
-ollama pull gemma3:12b
-ollama serve
-```
+## DeepSeek exam generation
 
 `POST /quizzes/generate` loads extracted chunks for the selected lesson and asks
-Ollama for exactly ten schema-validated MCQs. Correct answers remain in MySQL and
+DeepSeek for exactly ten schema-validated MCQs. Correct answers remain in MySQL and
 are not returned with the generated questions. `POST /quizzes/:id/check` accepts
 all ten answers and returns the score, correct choices, and explanations.
 
-The Ollama URL, model, timeout, output limit, and lecture-context size are
-configurable through the `OLLAMA_*` entries in `.env.example`.
+Configure `DEEPSEEK_API_KEY`, model, timeout, output limit, and lecture-context
+size through the `DEEPSEEK_*` entries in `.env.example`.

@@ -1,4 +1,4 @@
-from services.ollama_client import generate_ollama_text
+from services.gemini_client import generate_gemini_text
 
 
 FEATURE_DESCRIPTIONS = {
@@ -55,5 +55,5 @@ def generate_human_explanation(
         confidence=confidence,
         top_features=top_features,
     )
-    explanation, model = generate_ollama_text(SYSTEM_PROMPT, prompt)
+    explanation, model = generate_gemini_text(SYSTEM_PROMPT, prompt)
     return prompt, explanation, model

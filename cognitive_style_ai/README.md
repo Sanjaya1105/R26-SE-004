@@ -26,14 +26,14 @@ The service creates the `cognitive-style-explanations` database and `cognitive-s
 2. The background synchronizer checks MongoDB every two seconds and creates or refreshes a pending MySQL row containing the four model inputs.
 3. `POST .../analyse` finds that student's latest pending row and assigns the selected lesson.
 4. The saved values are passed to the Visual/Verbal model.
-5. The top three are converted into a teacher-facing prompt and sent to the configured Ollama model.
+5. The top three are converted into a teacher-facing prompt and sent to the configured Gemini model.
 6. Prediction, confidence, LIME output, SHAP output, top three, prompt, and human-readable explanation are written to that same row with status `completed`.
 
 A completed row is never overwritten. New MongoDB source documents produce a new pending row.
 
-If Ollama is unavailable, the request returns HTTP 503 and the row remains `pending`, allowing the teacher to retry without losing the synchronized model input.
+If Gemini is unavailable, the request returns HTTP 503 and the row remains `pending`, allowing the teacher to retry without losing the synchronized model input.
 
-The default Ollama model is `gemma3:12b`, with `tinyllama:latest` as a configurable fallback. The exact model that generated each explanation is stored in `explanation_model`.
+The default Gemini model is `gemini-3.5-flash-lite`. The exact model that generated each explanation is stored in `explanation_model`.
 
 ## API
 

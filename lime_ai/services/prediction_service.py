@@ -11,12 +11,10 @@ from models.prediction import CognitiveLoadPrediction
 from models.student_lesson_summary import StudentLessonSummary
 from models.student_lesson_top_signals import StudentLessonTopSignals
 from schemas.prediction import AggregateExplanationRequest, CognitiveLoadInput
-from services.human_explanation_service import generate_human_explanation
-from services.lecture_support_service import generate_lecture_support
 from services.local_model import LocalModelError, predict_scores
 from services.model_client import ModelClientError, request_prediction
-from services.ollama_client import OllamaServiceError
-from services.study_technique_service import generate_study_techniques
+from services.gemini_client import GeminiServiceError
+from services.student_guidance_service import generate_student_guidance
 
 
 RAW_FEATURE_FIELDS = [
@@ -274,7 +272,7 @@ def get_cached_student_lesson_analysis(
                 "top_signals": _top_signals_from_record(record),
                 "top_signals_record_id": record.id,
                 "human_explanation": record.human_explanation,
-                "explanation_source": record.explanation_source or "ollama",
+                "explanation_source": record.explanation_source or "gemini",
                 "study_technique": record.study_technique,
                 "lecture_support": record.lecture_support,
                 "shared_to_student": bool(record.shared_to_student),
@@ -386,30 +384,24 @@ def generate_aggregate_explanation(
     ]
 
     try:
-        explanation_text = generate_human_explanation(
-            student_id=payload.student_id,
-            lesson_id=payload.lesson_id,
-            predicted_label=payload.predicted_cognitive_load,
-            signals=human_signals,
-        )
-        study_technique = generate_study_techniques(
-            predicted_label=payload.predicted_cognitive_load,
-            signals=signals,
-        )
-        lecture_support = generate_lecture_support(
+        guidance = generate_student_guidance(
             student_id=payload.student_id,
             lesson_id=payload.lesson_id,
             predicted_label=payload.predicted_cognitive_load,
             signals=signals,
+            human_signals=human_signals,
         )
-    except OllamaServiceError as exc:
+        explanation_text = guidance["human_explanation"]
+        study_technique = guidance["study_technique"]
+        lecture_support = guidance["lecture_support"]
+    except GeminiServiceError as exc:
         raise HTTPException(
             status_code=503,
             detail={
                 "success": False,
                 "message": str(exc),
                 "data": None,
-                "errors": ["Ollama could not generate the requested student guidance."],
+                "errors": ["Gemini could not generate the requested student guidance."],
             },
         ) from exc
 
@@ -418,7 +410,7 @@ def generate_aggregate_explanation(
         payload,
         top_signals,
         human_explanation=explanation_text,
-        explanation_source="ollama",
+        explanation_source="gemini",
         study_technique=study_technique,
         lecture_support=lecture_support,
     )
@@ -437,7 +429,7 @@ def generate_aggregate_explanation(
             "top_signals": top_signals,
             "top_signals_record_id": saved_signals.id,
             "human_explanation": explanation_text,
-            "explanation_source": "ollama",
+            "explanation_source": "gemini",
             "study_technique": study_technique,
             "lecture_support": lecture_support,
         },

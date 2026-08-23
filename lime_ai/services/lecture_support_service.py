@@ -1,7 +1,7 @@
 import re
 from typing import Any
 
-from services.ollama_client import OllamaServiceError, generate_ollama_text
+from services.gemini_client import GeminiServiceError, generate_gemini_text
 
 
 SYSTEM_PROMPT = (
@@ -40,7 +40,7 @@ def generate_lecture_support(
         predicted_label=predicted_label,
         signals_text="\n".join(f"- {signal}" for signal in signals) or "- none detected",
     )
-    response = generate_ollama_text(SYSTEM_PROMPT, prompt)
+    response = generate_gemini_text(SYSTEM_PROMPT, prompt)
 
     strategies: list[str] = []
     pattern = re.compile(r"^\s*\d+\s*[).:-]\s*(.+)$")
@@ -64,7 +64,7 @@ def generate_lecture_support(
         ]
 
     if not strategies:
-        raise OllamaServiceError("Ollama did not return usable lecture-support recommendations.")
+        raise GeminiServiceError("Gemini did not return usable lecture-support recommendations.")
 
     text = "\n".join(f"{index + 1}) {item}" for index, item in enumerate(strategies[:5]))
-    return {"strategies": text, "source": "ollama"}
+    return {"strategies": text, "source": "gemini"}

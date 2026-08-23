@@ -1,4 +1,4 @@
-const DEFAULT_MODEL = 'gemma3:12b';
+const DEFAULT_MODEL = 'deepseek-v4-flash';
 
 const quizSchema = {
   type: 'object',
@@ -29,24 +29,24 @@ const quizSchema = {
   additionalProperties: false,
 };
 
-class OllamaMcqError extends Error {
+class DeepSeekMcqError extends Error {
   constructor(message, status = 502) {
     super(message);
-    this.name = 'OllamaMcqError';
+    this.name = 'DeepSeekMcqError';
     this.status = status;
   }
 }
 
 function cleanText(value, fieldName) {
   if (typeof value !== 'string' || !value.trim()) {
-    throw new OllamaMcqError(`Ollama returned an invalid ${fieldName}.`);
+    throw new DeepSeekMcqError(`DeepSeek returned an invalid ${fieldName}.`);
   }
   return value.replace(/\s+/g, ' ').trim();
 }
 
 function validateQuiz(payload) {
   if (!payload || !Array.isArray(payload.questions) || payload.questions.length !== 10) {
-    throw new OllamaMcqError('Ollama must return exactly 10 questions.');
+    throw new DeepSeekMcqError('DeepSeek must return exactly 10 questions.');
   }
 
   const seenQuestions = new Set();
@@ -54,21 +54,21 @@ function validateQuiz(payload) {
     const question = cleanText(item?.question, `question ${index + 1}`);
     const normalizedQuestion = question.toLocaleLowerCase();
     if (seenQuestions.has(normalizedQuestion)) {
-      throw new OllamaMcqError('Ollama returned duplicate questions.');
+      throw new DeepSeekMcqError('DeepSeek returned duplicate questions.');
     }
     seenQuestions.add(normalizedQuestion);
 
     if (!Array.isArray(item.options) || item.options.length !== 4) {
-      throw new OllamaMcqError(`Question ${index + 1} must have exactly four options.`);
+      throw new DeepSeekMcqError(`Question ${index + 1} must have exactly four options.`);
     }
     const options = item.options.map((option) => cleanText(option, `option for question ${index + 1}`));
     if (new Set(options.map((option) => option.toLocaleLowerCase())).size !== 4) {
-      throw new OllamaMcqError(`Question ${index + 1} contains duplicate options.`);
+      throw new DeepSeekMcqError(`Question ${index + 1} contains duplicate options.`);
     }
 
     const correctAnswer = String(item.correctAnswer || '').trim().toUpperCase();
     if (!['A', 'B', 'C', 'D'].includes(correctAnswer)) {
-      throw new OllamaMcqError(`Question ${index + 1} has an invalid correct answer.`);
+      throw new DeepSeekMcqError(`Question ${index + 1} has an invalid correct answer.`);
     }
     return {
       question,
@@ -80,9 +80,11 @@ function validateQuiz(payload) {
 }
 
 async function generateMcqs({ lessonName, unitNo, cognitiveLoad = 'Unknown', context }) {
-  const baseUrl = String(process.env.OLLAMA_BASE_URL || 'http://localhost:11434').replace(/\/$/, '');
-  const model = String(process.env.OLLAMA_EXAM_MODEL || DEFAULT_MODEL).trim();
-  const timeoutMs = Number(process.env.OLLAMA_EXAM_TIMEOUT_MS || 600000);
+  const baseUrl = String(process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com').replace(/\/$/, '');
+  const apiKey = String(process.env.DEEPSEEK_API_KEY || '').trim();
+  const model = String(process.env.DEEPSEEK_MODEL || DEFAULT_MODEL).trim();
+  const timeoutMs = Number(process.env.DEEPSEEK_TIMEOUT_MS || 600000);
+  if (!apiKey) throw new DeepSeekMcqError('DEEPSEEK_API_KEY must be configured.', 503);
   const prompt = `Create exactly 10 multiple-choice questions using only the lecture material below.
 
 Requirements:
@@ -105,19 +107,16 @@ END_LECTURE_MATERIAL`;
 
   let response;
   try {
-    response = await fetch(`${baseUrl}/api/chat`, {
+    response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(timeoutMs),
       body: JSON.stringify({
         model,
         stream: false,
-        keep_alive: process.env.OLLAMA_KEEP_ALIVE || '10m',
-        format: quizSchema,
-        options: {
-          temperature: Number(process.env.OLLAMA_EXAM_TEMPERATURE || 0.1),
-          num_predict: Number(process.env.OLLAMA_EXAM_NUM_PREDICT || 4096),
-        },
+        response_format: { type: 'json_object' },
+        temperature: Number(process.env.DEEPSEEK_TEMPERATURE || 0.1),
+        max_tokens: Number(process.env.DEEPSEEK_MAX_TOKENS || 4096),
         messages: [
           {
             role: 'system',
@@ -129,27 +128,27 @@ END_LECTURE_MATERIAL`;
     });
   } catch (error) {
     if (error.name === 'TimeoutError') {
-      throw new OllamaMcqError(`Ollama timed out after ${Math.round(timeoutMs / 1000)} seconds.`, 504);
+      throw new DeepSeekMcqError(`DeepSeek timed out after ${Math.round(timeoutMs / 1000)} seconds.`, 504);
     }
-    throw new OllamaMcqError(`Could not connect to Ollama at ${baseUrl}.`, 503);
+    throw new DeepSeekMcqError(`Could not connect to DeepSeek at ${baseUrl}.`, 503);
   }
 
   const responseText = await response.text();
   if (!response.ok) {
     let detail = responseText;
     try { detail = JSON.parse(responseText).error || responseText; } catch { /* use response body */ }
-    throw new OllamaMcqError(`Ollama returned HTTP ${response.status}: ${detail}`);
+    throw new DeepSeekMcqError(`DeepSeek returned HTTP ${response.status}: ${detail}`);
   }
 
   let envelope;
   let generated;
   try {
     envelope = JSON.parse(responseText);
-    generated = JSON.parse(envelope?.message?.content);
+    generated = JSON.parse(envelope?.choices?.[0]?.message?.content);
   } catch {
-    throw new OllamaMcqError('Ollama returned malformed JSON.');
+    throw new DeepSeekMcqError('DeepSeek returned malformed JSON.');
   }
   return { model, questions: validateQuiz(generated) };
 }
 
-module.exports = { DEFAULT_MODEL, OllamaMcqError, generateMcqs, validateQuiz };
+module.exports = { DEFAULT_MODEL, DeepSeekMcqError, generateMcqs, validateQuiz };

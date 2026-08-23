@@ -1,6 +1,6 @@
 from typing import Any
 
-from services.ollama_client import OllamaServiceError, generate_ollama_text
+from services.gemini_client import GeminiServiceError, generate_gemini_text
 
 
 SYSTEM_PROMPT = (
@@ -57,7 +57,7 @@ def generate_study_techniques(*, predicted_label: str, signals: list[str]) -> di
         predicted_label=predicted_label,
         signals_text="\n".join(f"- {signal}" for signal in signals) or "- none detected",
     )
-    response = generate_ollama_text(SYSTEM_PROMPT, prompt)
+    response = generate_gemini_text(SYSTEM_PROMPT, prompt)
 
     selected: list[dict[str, str]] = []
     for line in response.splitlines():
@@ -68,6 +68,6 @@ def generate_study_techniques(*, predicted_label: str, signals: list[str]) -> di
                 break
 
     if not selected:
-        raise OllamaServiceError("Ollama did not return a recognized study technique.")
+        raise GeminiServiceError("Gemini did not return a recognized study technique.")
 
-    return {"techniques": selected[:2], "source": "ollama"}
+    return {"techniques": selected[:2], "source": "gemini"}

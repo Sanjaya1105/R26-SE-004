@@ -178,9 +178,9 @@ class AggregateSignalPersistenceTests(unittest.TestCase):
             self.payload,
             [{"signal": "pause_frequency", "raw_value": 2.0, "normalized_value": 1.0}],
             human_explanation="The student paused frequently while working through the lesson.",
-            explanation_source="ollama",
-            study_technique={"techniques": [{"technique": "Pomodoro"}], "source": "ollama"},
-            lecture_support={"strategies": "1. Pause after each concept.", "source": "ollama"},
+            explanation_source="gemini",
+            study_technique={"techniques": [{"technique": "Pomodoro"}], "source": "gemini"},
+            lecture_support={"strategies": "1. Pause after each concept.", "source": "gemini"},
         )
 
         result = get_cached_student_lesson_analysis(self.db, "lesson-7", "student-9")
@@ -190,7 +190,7 @@ class AggregateSignalPersistenceTests(unittest.TestCase):
         self.assertEqual(result["data"]["shap_explanation"]["expected_value"], 2.1)
         self.assertEqual(
             result["data"]["aggregate_explanation"]["study_technique"]["source"],
-            "ollama",
+            "gemini",
         )
         self.assertEqual(
             result["data"]["aggregate_explanation"]["top_signals"][0]["signal"],
@@ -216,7 +216,7 @@ class AggregateSignalPersistenceTests(unittest.TestCase):
             self.payload,
             [{"signal": "pause_frequency", "raw_value": 1.0, "normalized_value": 1.0}],
             human_explanation="Saved explanation",
-            explanation_source="ollama",
+            explanation_source="gemini",
             study_technique={"techniques": [{"technique": "Pomodoro"}]},
             lecture_support={"strategies": "1) Pause after each concept."},
         )

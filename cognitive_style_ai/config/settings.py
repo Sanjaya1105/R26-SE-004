@@ -21,13 +21,11 @@ class Settings(BaseSettings):
     COGNITIVE_STYLE_MODEL_PATH: str = "../CognitiveStyleBackend/aiModel2/cognitive_style_rf_model.pkl"
     COGNITIVE_STYLE_LABEL_ENCODER_PATH: str = "../CognitiveStyleBackend/aiModel2/label_encoder.pkl"
 
-    OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_MODEL: str = "gemma3:12b"
-    OLLAMA_MODEL_FALLBACKS: str = "tinyllama:latest"
-    OLLAMA_TIMEOUT_SECONDS: int = 180
-    OLLAMA_TEMPERATURE: float = 0.2
-    OLLAMA_NUM_PREDICT: int = 180
-    OLLAMA_KEEP_ALIVE: str = "10m"
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-3.5-flash-lite"
+    GEMINI_TIMEOUT_SECONDS: int = 180
+    GEMINI_TEMPERATURE: float = 0.2
+    GEMINI_MAX_OUTPUT_TOKENS: int = 180
 
     @property
     def SQLALCHEMY_DATABASE_URL(self) -> str:

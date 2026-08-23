@@ -32,7 +32,7 @@ class StudentLessonTopSignals(Base):
 
     # Keep the complete analysis beside the ranked values.  This record is
     # unique per student and lesson, so a later request can be served without
-    # rerunning LIME, SHAP, or Ollama.
+    # rerunning LIME, SHAP, or Gemini.
     lime_explanation: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     shap_explanation: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     human_explanation: Mapped[str | None] = mapped_column(Text, nullable=True)
