@@ -4,16 +4,22 @@ const CourseSection = require("../models/courseSection.model");
 const CourseSubSection = require("../models/courseSubSection.model");
 const SubsectionTranscriptChunk = require("../models/subsectionTranscriptChunk.model");
 const { runWhisperTranscription } = require("../services/transcription.service");
-const { extractPptText, extractPptMathText } = require("../services/pptText.service");
-const { extractPdfText, extractPdfMathText } = require("../services/pdfText.service");
 const {
   resolveEducatorNameFromRequest,
   ensureCourseEducatorName,
 } = require("../utils/educatorDisplay");
 const { assertVideoDurationLimit } = require("../utils/videoDuration");
 const { parseContainsMath, hasContainsMathField } = require("../utils/parseContainsMath");
-const { collectEquations } = require("../utils/mathText");
 const { dedupeSubsectionExtracts } = require("../services/semanticDedupe.service");
+const {
+  extractLessonDocuments,
+  extractFromStoredFile,
+} = require("../services/lessonExtract.service");
+const {
+  evaluateKnowledgeQuality,
+  applyUniqueKnowledge,
+} = require("../services/knowledgeQuality.service");
+const { scheduleKnowledgeRebuild } = require("../services/knowledgeRebuild.service");
 const {
   extractAndStoreDocumentImages,
   replaceExtractedBySource,
@@ -28,66 +34,6 @@ const {
 const MAX_VIDEO = 40 * 1024 * 1024;
 const MAX_OFFICE = 15 * 1024 * 1024;
 const MAX_IMAGE = 5 * 1024 * 1024;
-
-function toEquationDocs(latexList, source) {
-  return (latexList || [])
-    .map((latex) => String(latex || "").trim())
-    .filter(Boolean)
-    .map((latex) => ({ latex, source }));
-}
-
-function fileNameFromUrl(url, fallback) {
-  try {
-    const pathname = new URL(url).pathname;
-    const base = decodeURIComponent(pathname.split("/").pop() || "");
-    return base || fallback;
-  } catch (_) {
-    return fallback;
-  }
-}
-
-async function fetchRemoteBuffer(url) {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to download stored file (${response.status})`);
-  }
-  return Buffer.from(await response.arrayBuffer());
-}
-
-async function extractLessonDocuments({ pptBuffer, pptName, pdfBuffer, containsMath }) {
-  let pptText = "";
-  let pdfText = "";
-  const equations = [];
-
-  if (pptBuffer?.length) {
-    if (containsMath) {
-      const result = extractPptMathText(pptBuffer, pptName);
-      pptText = result.text || "";
-      equations.push(...toEquationDocs(result.equations, "ppt"));
-    } else {
-      pptText = extractPptText(pptBuffer, pptName);
-    }
-  }
-
-  if (pdfBuffer?.length) {
-    if (containsMath) {
-      const result = await extractPdfMathText(pdfBuffer);
-      pdfText = result.text || "";
-      equations.push(...toEquationDocs(result.equations, "pdf"));
-    } else {
-      pdfText = await extractPdfText(pdfBuffer);
-    }
-  }
-
-  if (containsMath && !equations.length) {
-    equations.push(
-      ...toEquationDocs(collectEquations(pptText), "ppt"),
-      ...toEquationDocs(collectEquations(pdfText), "pdf")
-    );
-  }
-
-  return { pptText, pdfText, equations: containsMath ? equations : [] };
-}
 
 function uploadBuffer(buffer, options) {
   return new Promise((resolve, reject) => {
@@ -169,13 +115,10 @@ const createSubSection = async (req, res) => {
     pdfFileName: "",
     images: [],
     extractedImages: [],
-    pptText: "",
-    pdfText: "",
     transcriptText: "",
     transcriptPreview: "",
     transcriptChunkCount: 0,
     containsMath: parseContainsMath(req.body),
-    equations: [],
   };
 
   const rollbackIds = [];
@@ -204,14 +147,18 @@ const createSubSection = async (req, res) => {
       rollbackIds.push(r.public_id);
     }
 
+    let pptExtract = "";
+    let pdfExtract = "";
+    const equations = [];
+
     if (pptFile?.buffer?.length) {
       const extracted = await extractLessonDocuments({
         pptBuffer: pptFile.buffer,
         pptName: pptFile.originalname,
         containsMath: uploaded.containsMath,
       });
-      uploaded.pptText = extracted.pptText;
-      uploaded.equations.push(...extracted.equations);
+      pptExtract = extracted.pptText || "";
+      equations.push(...(extracted.equations || []));
       const fileName = originalOfficeFileName("ppt", pptFile.originalname);
       const r = await uploadRawDocument(
         pptFile.buffer,
@@ -229,8 +176,8 @@ const createSubSection = async (req, res) => {
         pdfBuffer: pdfFile.buffer,
         containsMath: uploaded.containsMath,
       });
-      uploaded.pdfText = extracted.pdfText;
-      uploaded.equations.push(...extracted.equations);
+      pdfExtract = extracted.pdfText || "";
+      equations.push(...(extracted.equations || []));
       const fileName = originalOfficeFileName("pdf", pdfFile.originalname);
       const r = await uploadRawDocument(
         pdfFile.buffer,
@@ -260,15 +207,30 @@ const createSubSection = async (req, res) => {
     }
 
     const dedupeResult = await dedupeSubsectionExtracts({
-      pptText: uploaded.pptText,
-      pdfText: uploaded.pdfText,
+      pptText: pptExtract,
+      pdfText: pdfExtract,
       transcriptText: uploaded.transcriptText,
       protectMath: uploaded.containsMath,
     });
-    uploaded.dedupedPptText = dedupeResult.ppt || "";
-    uploaded.dedupedPdfText = dedupeResult.pdf || "";
-    uploaded.dedupedTranscriptText = dedupeResult.transcript || "";
-    uploaded.dedupeStats = dedupeResult.stats || null;
+    const quality = evaluateKnowledgeQuality({
+      hasPptFile: Boolean(uploaded.pptUrl),
+      hasPdfFile: Boolean(uploaded.pdfUrl),
+      pptExtractLen: pptExtract.length,
+      pdfExtractLen: pdfExtract.length,
+      transcriptText: uploaded.transcriptText,
+      dedupedPpt: dedupeResult.ppt,
+      dedupedPdf: dedupeResult.pdf,
+      dedupedTranscript: dedupeResult.transcript,
+      containsMath: uploaded.containsMath,
+      equations,
+    });
+    applyUniqueKnowledge(uploaded, {
+      transcriptText: uploaded.transcriptText,
+      dedupeResult,
+      equations,
+      containsMath: uploaded.containsMath,
+      quality,
+    });
 
     const order = await CourseSubSection.countDocuments({
       sectionId: sectionObjectId,
@@ -280,6 +242,9 @@ const createSubSection = async (req, res) => {
       order,
       ...uploaded,
     });
+    if (!quality.ok) {
+      scheduleKnowledgeRebuild(doc._id);
+    }
 
     if (Array.isArray(transcriptionResult.chunks) && transcriptionResult.chunks.length > 0) {
       const chunkDocs = transcriptionResult.chunks.map((chunk, idx) => ({
@@ -316,13 +281,11 @@ const createSubSection = async (req, res) => {
           order: doc.order,
           videoUrl: doc.videoUrl,
           pptUrl: doc.pptUrl,
-          pptText: doc.pptText,
           pdfUrl: doc.pdfUrl,
-          pdfText: doc.pdfText,
           images: doc.images,
           extractedImages: mapExtractedImages(doc.extractedImages),
           containsMath: doc.containsMath,
-          transcriptText: doc.transcriptText,
+          knowledgeStatus: doc.knowledgeStatus,
           transcriptPreview: doc.transcriptPreview,
           transcriptChunkCount: doc.transcriptChunkCount,
           createdAt: doc.createdAt,
@@ -475,6 +438,16 @@ const updateSubSection = async (req, res) => {
       }
     }
 
+    let pptExtract = "";
+    let pdfExtract = "";
+    const equations = [];
+    const knowledgeInputsChanged = Boolean(
+      videoFile?.buffer?.length ||
+      pptFile?.buffer?.length ||
+      pdfFile?.buffer?.length ||
+      mathModeChanged
+    );
+
     if (pptFile?.buffer?.length) {
       if (doc.pptPublicId) {
         cloudinary.uploader.destroy(doc.pptPublicId, { resource_type: "raw" }).catch(() => {});
@@ -484,7 +457,8 @@ const updateSubSection = async (req, res) => {
         pptName: pptFile.originalname,
         containsMath: nextContainsMath,
       });
-      doc.pptText = extracted.pptText;
+      pptExtract = extracted.pptText || "";
+      equations.push(...(extracted.equations || []));
       const fileName = originalOfficeFileName("ppt", pptFile.originalname);
       const r = await uploadRawDocument(
         pptFile.buffer,
@@ -508,18 +482,6 @@ const updateSubSection = async (req, res) => {
         pptExtracted
       );
       doc.markModified("extractedImages");
-    } else if (mathModeChanged && doc.pptUrl) {
-      try {
-        const remote = await fetchRemoteBuffer(doc.pptUrl);
-        const extracted = await extractLessonDocuments({
-          pptBuffer: remote,
-          pptName: fileNameFromUrl(doc.pptUrl, "lesson.pptx"),
-          containsMath: nextContainsMath,
-        });
-        doc.pptText = extracted.pptText;
-      } catch (error) {
-        console.warn("[math-extract] Could not re-parse stored PPT:", error.message);
-      }
     }
 
     if (pdfFile?.buffer?.length) {
@@ -530,7 +492,8 @@ const updateSubSection = async (req, res) => {
         pdfBuffer: pdfFile.buffer,
         containsMath: nextContainsMath,
       });
-      doc.pdfText = extracted.pdfText;
+      pdfExtract = extracted.pdfText || "";
+      equations.push(...(extracted.equations || []));
       const fileName = originalOfficeFileName("pdf", pdfFile.originalname);
       const r = await uploadRawDocument(
         pdfFile.buffer,
@@ -554,26 +517,6 @@ const updateSubSection = async (req, res) => {
         pdfExtracted
       );
       doc.markModified("extractedImages");
-    } else if (mathModeChanged && doc.pdfUrl) {
-      try {
-        const remote = await fetchRemoteBuffer(doc.pdfUrl);
-        const extracted = await extractLessonDocuments({
-          pdfBuffer: remote,
-          containsMath: nextContainsMath,
-        });
-        doc.pdfText = extracted.pdfText;
-      } catch (error) {
-        console.warn("[math-extract] Could not re-parse stored PDF:", error.message);
-      }
-    }
-
-    doc.containsMath = nextContainsMath;
-    if (nextContainsMath) {
-      const pptEq = toEquationDocs(collectEquations(doc.pptText), "ppt");
-      const pdfEq = toEquationDocs(collectEquations(doc.pdfText), "pdf");
-      doc.equations = [...pptEq, ...pdfEq];
-    } else {
-      doc.equations = [];
     }
 
     if (imageFiles.some((f) => f.buffer?.length)) {
@@ -597,16 +540,63 @@ const updateSubSection = async (req, res) => {
       doc.images = newImages;
     }
 
-    const dedupeResult = await dedupeSubsectionExtracts({
-      pptText: doc.pptText,
-      pdfText: doc.pdfText,
-      transcriptText: doc.transcriptText,
-      protectMath: nextContainsMath,
-    });
-    doc.dedupedPptText = dedupeResult.ppt || "";
-    doc.dedupedPdfText = dedupeResult.pdf || "";
-    doc.dedupedTranscriptText = dedupeResult.transcript || "";
-    doc.dedupeStats = dedupeResult.stats || null;
+    if (knowledgeInputsChanged) {
+      if (!pptFile?.buffer?.length && doc.pptUrl) {
+        try {
+          const extracted = await extractFromStoredFile({
+            kind: "ppt",
+            url: doc.pptUrl,
+            containsMath: nextContainsMath,
+          });
+          pptExtract = extracted.pptText || "";
+          equations.push(...(extracted.equations || []));
+        } catch (error) {
+          console.warn("[knowledge] Could not re-parse stored PPT:", error.message);
+        }
+      }
+      if (!pdfFile?.buffer?.length && doc.pdfUrl) {
+        try {
+          const extracted = await extractFromStoredFile({
+            kind: "pdf",
+            url: doc.pdfUrl,
+            containsMath: nextContainsMath,
+          });
+          pdfExtract = extracted.pdfText || "";
+          equations.push(...(extracted.equations || []));
+        } catch (error) {
+          console.warn("[knowledge] Could not re-parse stored PDF:", error.message);
+        }
+      }
+
+      const dedupeResult = await dedupeSubsectionExtracts({
+        pptText: pptExtract,
+        pdfText: pdfExtract,
+        transcriptText: doc.transcriptText,
+        protectMath: nextContainsMath,
+      });
+      const quality = evaluateKnowledgeQuality({
+        hasPptFile: Boolean(doc.pptUrl),
+        hasPdfFile: Boolean(doc.pdfUrl),
+        pptExtractLen: pptExtract.length,
+        pdfExtractLen: pdfExtract.length,
+        transcriptText: doc.transcriptText,
+        dedupedPpt: dedupeResult.ppt,
+        dedupedPdf: dedupeResult.pdf,
+        dedupedTranscript: dedupeResult.transcript,
+        containsMath: nextContainsMath,
+        equations,
+      });
+      applyUniqueKnowledge(doc, {
+        transcriptText: doc.transcriptText,
+        dedupeResult,
+        equations,
+        containsMath: nextContainsMath,
+        quality,
+      });
+      if (!quality.ok) {
+        scheduleKnowledgeRebuild(doc._id);
+      }
+    }
 
     await doc.save();
 
@@ -630,6 +620,7 @@ const updateSubSection = async (req, res) => {
           images: doc.images,
           extractedImages: mapExtractedImages(doc.extractedImages),
           containsMath: doc.containsMath,
+          knowledgeStatus: doc.knowledgeStatus,
           updatedAt: doc.updatedAt,
         },
       },

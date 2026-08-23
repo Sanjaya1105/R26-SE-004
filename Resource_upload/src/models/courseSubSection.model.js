@@ -69,6 +69,12 @@ const courseSubSectionSchema = new mongoose.Schema(
     dedupedPdfText: { type: String, default: "" },
     dedupedTranscriptText: { type: String, default: "" },
     dedupeStats: { type: Object, default: null },
+    knowledgeStatus: {
+      type: String,
+      enum: ["ready", "needs_rebuild", "rebuilding", "failed"],
+      default: "ready",
+    },
+    knowledgeStatusReason: { type: String, default: "" },
   },
   { timestamps: true }
 );

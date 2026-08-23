@@ -1,7 +1,4 @@
-/**
- * Builds the pedagogical prompt template from subsection extracted materials
- * and learner profile fields supplied by the client.
- */
+const { filterWhisperNoise } = require("../lib/whisperNoise");
 
 const COGNITIVE_STYLES = new Set([
   "Visual",
@@ -53,12 +50,12 @@ function truncatePreservingMath(text, maxLen) {
 }
 
 function uniqueKnowledgeText(input = {}) {
-  const provided = clean(input.knowledgeChunk);
+  const provided = filterWhisperNoise(clean(input.knowledgeChunk));
   if (provided) return provided;
   return [
     clean(input.dedupedPptText || input.pptText),
     clean(input.dedupedPdfText || input.pdfText),
-    clean(input.dedupedTranscriptText || input.transcriptText),
+    filterWhisperNoise(clean(input.dedupedTranscriptText || input.transcriptText)),
   ]
     .filter(Boolean)
     .join("\n\n");

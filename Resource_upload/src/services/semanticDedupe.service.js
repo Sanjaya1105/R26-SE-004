@@ -1,5 +1,6 @@
 const { spawn } = require("child_process");
 const path = require("path");
+const { filterWhisperNoise } = require("./whisperNoise.service");
 
 const THRESHOLD = 0.70;
 const MIN_CHARS = 40;
@@ -243,7 +244,7 @@ async function dedupeSubsectionExtracts({
   const payload = {
     pptText,
     pdfText,
-    transcriptText,
+    transcriptText: filterWhisperNoise(transcriptText),
     threshold: THRESHOLD,
     protectMath: Boolean(protectMath),
   };

@@ -11,6 +11,7 @@ const {
   fileNameFromStoredUrl,
   sniffOfficeFileName,
 } = require("../utils/officeFiles");
+const { filterWhisperNoise } = require("../services/whisperNoise.service");
 
 function parseKeywords(raw) {
   if (!raw || typeof raw !== "string") return [];
@@ -145,7 +146,7 @@ const getPublicCourseDetail = async (req, res) => {
 
     const subs = await CourseSubSection.find({ courseId })
       .sort({ order: 1, createdAt: 1 })
-      .select("sectionId order videoUrl pptUrl pptFileName pdfUrl pdfFileName images extractedImages transcriptText pptText pdfText dedupedTranscriptText dedupedPptText dedupedPdfText containsMath equations")
+      .select("sectionId order videoUrl pptUrl pptFileName pdfUrl pdfFileName images extractedImages transcriptText pptText pdfText dedupedTranscriptText dedupedPptText dedupedPdfText containsMath equations knowledgeStatus")
       .lean();
 
     const subsectionsBySection = new Map();
@@ -161,7 +162,11 @@ const getPublicCourseDetail = async (req, res) => {
         ? [sub.dedupedPptText, sub.dedupedPdfText, sub.dedupedTranscriptText]
         : [sub.pptText, sub.pdfText, sub.transcriptText];
       let knowledgeChunk = knowledgeParts
-        .map((t) => String(t || "").trim())
+        .map((text, index) => {
+          const raw = String(text || "").trim();
+          if (!raw) return "";
+          return index === 2 ? filterWhisperNoise(raw) : raw;
+        })
         .filter(Boolean)
         .join("\n\n");
       if (sub.containsMath && Array.isArray(sub.equations) && sub.equations.length) {
@@ -182,6 +187,7 @@ const getPublicCourseDetail = async (req, res) => {
         pdfUrl: sub.pdfUrl || "",
         pdfFileName: sub.pdfFileName || "",
         containsMath: Boolean(sub.containsMath),
+        knowledgeStatus: sub.knowledgeStatus || "ready",
         knowledgeChunk,
         images: Array.isArray(sub.images)
           ? sub.images.map((img) => ({ url: img.url }))
