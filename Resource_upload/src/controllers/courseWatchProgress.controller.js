@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const CourseSection = require("../models/courseSection.model");
 const CourseSubSection = require("../models/courseSubSection.model");
 const CourseWatchProgress = require("../models/courseWatchProgress.model");
 const { isLessonReadyForStudents } = require("../utils/lessonVisibility");
@@ -34,7 +35,8 @@ function serializeLessons(lessons) {
 
 async function loadReadyVideoLessons(courseId) {
   const subs = await CourseSubSection.find({ courseId })
-    .select("videoUrl videoDurationSec knowledgeStatus")
+    .select("videoUrl videoDurationSec knowledgeStatus order sectionId")
+    .sort({ order: 1 })
     .lean();
 
   return (subs || []).filter(
@@ -43,27 +45,51 @@ async function loadReadyVideoLessons(courseId) {
   );
 }
 
-function buildSummary(videoLessons, lessonMap) {
+async function loadSectionNames(courseId) {
+  const rows = await CourseSection.find({ courseId }).select("sectionName").lean();
+  return Object.fromEntries(
+    (rows || []).map((row) => [String(row._id), String(row.sectionName || "").trim()])
+  );
+}
+
+function buildSummary(videoLessons, lessonMap, sectionNameById = {}) {
   let totalSec = 0;
   let watchedSec = 0;
-
-  for (const sub of videoLessons) {
-    const id = String(sub._id);
-    const stored = lessonMap[id] || {};
+  const ranked = [...(videoLessons || [])].sort(
+    (left, right) => (Number(left.order) || 0) - (Number(right.order) || 0)
+  );
+  const scored = ranked.map((sub, index) => {
+    const stored = lessonMap[String(sub._id)] || {};
     const durationSec = Math.max(
       0,
       Number(stored.durationSec) || Number(sub.videoDurationSec) || 0
     );
-    if (durationSec <= 0) continue;
-    totalSec += durationSec;
-    watchedSec += Math.min(durationSec, Number(stored.watchedSec) || 0);
-  }
+    const uniqueSec = Math.min(durationSec, Number(stored.watchedSec) || 0);
+    if (durationSec > 0) {
+      totalSec += durationSec;
+      watchedSec += uniqueSec;
+    }
+    const percent = durationSec > 0 ? (uniqueSec / durationSec) * 100 : 0;
+    return { sub, index, durationSec, uniqueSec, percent };
+  });
+
+  const resume =
+    scored.find((item) => item.percent > 0 && item.percent < 95) ||
+    scored.find((item) => item.percent <= 0) ||
+    scored[scored.length - 1] ||
+    null;
+  const sectionName = resume
+    ? String(sectionNameById[String(resume.sub.sectionId)] || "").trim()
+    : "";
 
   const percent = totalSec > 0 ? (watchedSec / totalSec) * 100 : 0;
   return {
     watchedSec: Math.round(watchedSec * 100) / 100,
     totalSec: Math.round(totalSec * 100) / 100,
     percent: Math.round(Math.max(0, Math.min(100, percent)) * 10) / 10,
+    videoCount: ranked.length,
+    lectureTitle: sectionName || (resume ? `Lecture ${resume.index + 1}` : "Lecture"),
+    lectureDurationSec: Math.round(Number(resume?.durationSec) || 0),
     lessons: lessonMap,
   };
 }
@@ -77,11 +103,14 @@ const getWatchProgress = async (req, res) => {
   }
 
   try {
-    const videoLessons = await loadReadyVideoLessons(courseId);
+    const [videoLessons, sectionNameById] = await Promise.all([
+      loadReadyVideoLessons(courseId),
+      loadSectionNames(courseId),
+    ]);
     if (!userId) {
       return res.status(200).json({
         success: true,
-        data: buildSummary(videoLessons, {}),
+        data: buildSummary(videoLessons, {}, sectionNameById),
       });
     }
 
@@ -92,7 +121,11 @@ const getWatchProgress = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      data: buildSummary(videoLessons, serializeLessons(doc?.lessons)),
+      data: buildSummary(
+        videoLessons,
+        serializeLessons(doc?.lessons),
+        sectionNameById
+      ),
     });
   } catch (error) {
     console.error(error);
@@ -140,7 +173,10 @@ const upsertWatchProgress = async (req, res) => {
       );
     }
 
-    const videoLessons = await loadReadyVideoLessons(courseId);
+    const [videoLessons, sectionNameById] = await Promise.all([
+      loadReadyVideoLessons(courseId),
+      loadSectionNames(courseId),
+    ]);
     const resolvedDuration = durationSec || Number(sub.videoDurationSec) || 0;
 
     if (!userId) {
@@ -158,7 +194,7 @@ const upsertWatchProgress = async (req, res) => {
       return res.status(200).json({
         success: true,
         stored: false,
-        data: buildSummary(videoLessons, lessonMap),
+        data: buildSummary(videoLessons, lessonMap, sectionNameById),
       });
     }
 
@@ -200,7 +236,11 @@ const upsertWatchProgress = async (req, res) => {
     return res.status(200).json({
       success: true,
       stored: true,
-      data: buildSummary(videoLessons, serializeLessons(lessons)),
+      data: buildSummary(
+        videoLessons,
+        serializeLessons(lessons),
+        sectionNameById
+      ),
     });
   } catch (error) {
     console.error(error);

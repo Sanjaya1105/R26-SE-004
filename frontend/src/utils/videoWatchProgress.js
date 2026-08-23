@@ -182,6 +182,32 @@ export function summarizeCourseWatch(sections, lessons = {}) {
   };
 }
 
+export function summarizeStoredWatch(courseId, userId) {
+  const lessons = loadLocalProgress(courseId, userId);
+  let totalSec = 0;
+  let watchedSec = 0;
+  let videoCount = 0;
+  Object.values(lessons).forEach((lesson) => {
+    const durationSec = Math.max(0, Number(lesson?.durationSec) || 0);
+    const uniqueSec = Math.min(
+      durationSec || coveredSeconds(lesson?.intervals),
+      coveredSeconds(lesson?.intervals)
+    );
+    if (durationSec > 0 || uniqueSec > 0) videoCount += 1;
+    if (durationSec > 0) {
+      totalSec += durationSec;
+      watchedSec += uniqueSec;
+    }
+  });
+  const percent = totalSec > 0 ? (watchedSec / totalSec) * 100 : 0;
+  return {
+    videoCount,
+    watchedSec,
+    totalSec,
+    percent: Math.max(0, Math.min(100, percent)),
+  };
+}
+
 export function formatWatchClock(totalSeconds) {
   const sec = Math.max(0, Math.round(Number(totalSeconds) || 0));
   const minutes = Math.floor(sec / 60);
