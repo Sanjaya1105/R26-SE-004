@@ -2,28 +2,16 @@ const mongoose = require("mongoose");
 const cloudinary = require("../config/cloudinary");
 const CourseSection = require("../models/courseSection.model");
 const CourseSubSection = require("../models/courseSubSection.model");
-const SubsectionTranscriptChunk = require("../models/subsectionTranscriptChunk.model");
-const { runWhisperTranscription } = require("../services/transcription.service");
 const {
   resolveEducatorNameFromRequest,
   ensureCourseEducatorName,
 } = require("../utils/educatorDisplay");
 const { assertVideoDurationLimit } = require("../utils/videoDuration");
 const { parseContainsMath, hasContainsMathField } = require("../utils/parseContainsMath");
-const { dedupeSubsectionExtracts } = require("../services/semanticDedupe.service");
+const { scheduleProcessSubsection } = require("../services/processLesson.service");
 const {
-  extractLessonDocuments,
-  extractFromStoredFile,
-} = require("../services/lessonExtract.service");
-const {
-  evaluateKnowledgeQuality,
-  applyUniqueKnowledge,
-} = require("../services/knowledgeQuality.service");
-const { scheduleKnowledgeRebuild } = require("../services/knowledgeRebuild.service");
-const {
-  extractAndStoreDocumentImages,
-  replaceExtractedBySource,
   destroyCloudinaryImages,
+  replaceExtractedBySource,
   mapExtractedImages,
 } = require("../services/documentImage.service");
 const {
@@ -82,8 +70,9 @@ const createSubSection = async (req, res) => {
   if (videoFile?.size > MAX_VIDEO) {
     return res.status(400).json({ message: "Video must be 40MB or smaller." });
   }
+  let videoDurationSec = 0;
   try {
-    await assertVideoDurationLimit(videoFile);
+    videoDurationSec = await assertVideoDurationLimit(videoFile);
   } catch (durationErr) {
     return res.status(400).json({
       message: durationErr.message || "Video must be 15 minutes or less.",
@@ -116,6 +105,7 @@ const createSubSection = async (req, res) => {
     images: [],
     extractedImages: [],
     transcriptText: "",
+    videoDurationSec,
     transcriptPreview: "",
     transcriptChunkCount: 0,
     containsMath: parseContainsMath(req.body),
@@ -124,113 +114,72 @@ const createSubSection = async (req, res) => {
   const rollbackIds = [];
 
   try {
-    let transcriptionResult = { text: "", chunks: [] };
-    if (videoFile?.buffer?.length) {
-      if (!videoFile.mimetype.startsWith("video/")) {
-        return res.status(400).json({ message: "Video file must be a video." });
-      }
-      transcriptionResult = await runWhisperTranscription(
-        videoFile.buffer,
-        videoFile.originalname
-      );
-      const r = await uploadBuffer(videoFile.buffer, {
-        folder: "upload_section_subsections/video",
-        resource_type: "video",
-      });
-      uploaded.videoUrl = r.secure_url;
-      uploaded.videoPublicId = r.public_id;
-      uploaded.transcriptText = transcriptionResult.text || "";
-      uploaded.transcriptPreview = (transcriptionResult.text || "").slice(0, 300);
-      uploaded.transcriptChunkCount = Array.isArray(transcriptionResult.chunks)
-        ? transcriptionResult.chunks.length
-        : 0;
-      rollbackIds.push(r.public_id);
+    if (!videoFile.mimetype.startsWith("video/")) {
+      return res.status(400).json({ message: "Video file must be a video." });
     }
 
-    let pptExtract = "";
-    let pdfExtract = "";
-    const equations = [];
+    const uploads = [
+      uploadBuffer(videoFile.buffer, {
+        folder: "upload_section_subsections/video",
+        resource_type: "video",
+      }).then((r) => {
+        uploaded.videoUrl = r.secure_url;
+        uploaded.videoPublicId = r.public_id;
+        if (Number(r.duration) > 0) {
+          uploaded.videoDurationSec = Number(r.duration);
+        }
+        rollbackIds.push(r.public_id);
+      }),
+    ];
 
     if (pptFile?.buffer?.length) {
-      const extracted = await extractLessonDocuments({
-        pptBuffer: pptFile.buffer,
-        pptName: pptFile.originalname,
-        containsMath: uploaded.containsMath,
-      });
-      pptExtract = extracted.pptText || "";
-      equations.push(...(extracted.equations || []));
       const fileName = originalOfficeFileName("ppt", pptFile.originalname);
-      const r = await uploadRawDocument(
-        pptFile.buffer,
-        "upload_section_subsections/ppt",
-        fileName
-      );
-      uploaded.pptUrl = r.secure_url;
-      uploaded.pptPublicId = r.public_id;
       uploaded.pptFileName = fileName;
-      rollbackIds.push(r.public_id);
+      uploads.push(
+        uploadRawDocument(
+          pptFile.buffer,
+          "upload_section_subsections/ppt",
+          fileName
+        ).then((r) => {
+          uploaded.pptUrl = r.secure_url;
+          uploaded.pptPublicId = r.public_id;
+          rollbackIds.push(r.public_id);
+        })
+      );
     }
 
     if (pdfFile?.buffer?.length) {
-      const extracted = await extractLessonDocuments({
-        pdfBuffer: pdfFile.buffer,
-        containsMath: uploaded.containsMath,
-      });
-      pdfExtract = extracted.pdfText || "";
-      equations.push(...(extracted.equations || []));
       const fileName = originalOfficeFileName("pdf", pdfFile.originalname);
-      const r = await uploadRawDocument(
-        pdfFile.buffer,
-        "upload_section_subsections/pdf",
-        fileName
-      );
-      uploaded.pdfUrl = r.secure_url;
-      uploaded.pdfPublicId = r.public_id;
       uploaded.pdfFileName = fileName;
-      rollbackIds.push(r.public_id);
+      uploads.push(
+        uploadRawDocument(
+          pdfFile.buffer,
+          "upload_section_subsections/pdf",
+          fileName
+        ).then((r) => {
+          uploaded.pdfUrl = r.secure_url;
+          uploaded.pdfPublicId = r.public_id;
+          rollbackIds.push(r.public_id);
+        })
+      );
     }
-
-    uploaded.extractedImages = await extractAndStoreDocumentImages({
-      pptBuffer: pptFile?.buffer,
-      pdfBuffer: pdfFile?.buffer,
-      rollbackIds,
-    });
 
     for (const img of imageFiles) {
       if (!img.buffer?.length) continue;
-      const r = await uploadBuffer(img.buffer, {
-        folder: "upload_section_subsections/images",
-        resource_type: "image",
-      });
-      uploaded.images.push({ url: r.secure_url, publicId: r.public_id });
-      rollbackIds.push(r.public_id);
+      uploads.push(
+        uploadBuffer(img.buffer, {
+          folder: "upload_section_subsections/images",
+          resource_type: "image",
+        }).then((r) => {
+          uploaded.images.push({ url: r.secure_url, publicId: r.public_id });
+          rollbackIds.push(r.public_id);
+        })
+      );
     }
 
-    const dedupeResult = await dedupeSubsectionExtracts({
-      pptText: pptExtract,
-      pdfText: pdfExtract,
-      transcriptText: uploaded.transcriptText,
-      protectMath: uploaded.containsMath,
-    });
-    const quality = evaluateKnowledgeQuality({
-      hasPptFile: Boolean(uploaded.pptUrl),
-      hasPdfFile: Boolean(uploaded.pdfUrl),
-      pptExtractLen: pptExtract.length,
-      pdfExtractLen: pdfExtract.length,
-      transcriptText: uploaded.transcriptText,
-      dedupedPpt: dedupeResult.ppt,
-      dedupedPdf: dedupeResult.pdf,
-      dedupedTranscript: dedupeResult.transcript,
-      containsMath: uploaded.containsMath,
-      equations,
-    });
-    applyUniqueKnowledge(uploaded, {
-      transcriptText: uploaded.transcriptText,
-      dedupeResult,
-      equations,
-      containsMath: uploaded.containsMath,
-      quality,
-    });
+    await Promise.all(uploads);
+    uploaded.knowledgeStatus = "processing";
+    uploaded.knowledgeStatusReason = "";
 
     const order = await CourseSubSection.countDocuments({
       sectionId: sectionObjectId,
@@ -242,31 +191,28 @@ const createSubSection = async (req, res) => {
       order,
       ...uploaded,
     });
-    if (!quality.ok) {
-      scheduleKnowledgeRebuild(doc._id);
-    }
-
-    if (Array.isArray(transcriptionResult.chunks) && transcriptionResult.chunks.length > 0) {
-      const chunkDocs = transcriptionResult.chunks.map((chunk, idx) => ({
-        courseId: section.courseId,
-        sectionId: sectionObjectId,
-        subsectionId: doc._id,
-        index: Number.isFinite(chunk.index) ? chunk.index : idx,
-        startSec: Number(chunk.startSec ?? idx * 10),
-        endSec: Number(chunk.endSec ?? (idx + 1) * 10),
-        text: chunk.text || "",
-      }));
-      await SubsectionTranscriptChunk.insertMany(chunkDocs);
-    }
+    scheduleProcessSubsection(doc._id, {
+      transcribe: true,
+      extractImages: true,
+      assets: {
+        videoBuffer: videoFile.buffer,
+        videoName: videoFile.originalname,
+        pptBuffer: pptFile?.buffer || null,
+        pptName: pptFile?.originalname || uploaded.pptFileName,
+        pdfBuffer: pdfFile?.buffer || null,
+        pdfName: pdfFile?.originalname || uploaded.pdfFileName,
+      },
+    });
 
     await ensureCourseEducatorName(
       section.courseId,
       resolveEducatorNameFromRequest(req)
     );
 
-    return res.status(201).json({
+    return res.status(202).json({
       success: true,
-      message: "Subsection saved under this section.",
+      message:
+        "Files saved. Transcript, MiniLM, and knowledge chunk are processing in the background. You will get a Chrome notification when it is ready.",
       data: {
         section: {
           id: section._id,
@@ -370,9 +316,10 @@ const updateSubSection = async (req, res) => {
   if (videoFile?.size > MAX_VIDEO) {
     return res.status(400).json({ message: "Video must be 40MB or smaller." });
   }
+  let nextVideoDurationSec = Number(doc.videoDurationSec) || 0;
   if (videoFile?.buffer?.length) {
     try {
-      await assertVideoDurationLimit(videoFile);
+      nextVideoDurationSec = await assertVideoDurationLimit(videoFile);
     } catch (durationErr) {
       return res.status(400).json({
         message: durationErr.message || "Video must be 15 minutes or less.",
@@ -397,7 +344,15 @@ const updateSubSection = async (req, res) => {
   const rollbackIds = [];
 
   try {
-    if (videoFile?.buffer?.length) {
+    const uploads = [];
+    const videoChanged = Boolean(videoFile?.buffer?.length);
+    const pptChanged = Boolean(pptFile?.buffer?.length);
+    const pdfChanged = Boolean(pdfFile?.buffer?.length);
+    const knowledgeInputsChanged = Boolean(
+      videoChanged || pptChanged || pdfChanged || mathModeChanged
+    );
+
+    if (videoChanged) {
       if (!videoFile.mimetype.startsWith("video/")) {
         return res.status(400).json({ message: "Video file must be a video." });
       }
@@ -406,117 +361,64 @@ const updateSubSection = async (req, res) => {
           .destroy(doc.videoPublicId, { resource_type: "video" })
           .catch(() => {});
       }
-      const transcriptionResult = await runWhisperTranscription(
-        videoFile.buffer,
-        videoFile.originalname
+      uploads.push(
+        uploadBuffer(videoFile.buffer, {
+          folder: "upload_section_subsections/video",
+          resource_type: "video",
+        }).then((r) => {
+          doc.videoUrl = r.secure_url;
+          doc.videoPublicId = r.public_id;
+          doc.videoDurationSec =
+            Number(r.duration) > 0 ? Number(r.duration) : nextVideoDurationSec;
+          rollbackIds.push(r.public_id);
+        })
       );
-      const r = await uploadBuffer(videoFile.buffer, {
-        folder: "upload_section_subsections/video",
-        resource_type: "video",
-      });
-      doc.videoUrl = r.secure_url;
-      doc.videoPublicId = r.public_id;
-      rollbackIds.push(r.public_id);
-      doc.transcriptText = transcriptionResult.text || "";
-      doc.transcriptPreview = (transcriptionResult.text || "").slice(0, 300);
-      doc.transcriptChunkCount = Array.isArray(transcriptionResult.chunks)
-        ? transcriptionResult.chunks.length
-        : 0;
-
-      await SubsectionTranscriptChunk.deleteMany({ subsectionId: doc._id });
-      if (Array.isArray(transcriptionResult.chunks) && transcriptionResult.chunks.length > 0) {
-        const chunkDocs = transcriptionResult.chunks.map((chunk, idx) => ({
-          courseId: doc.courseId,
-          sectionId: doc.sectionId,
-          subsectionId: doc._id,
-          index: Number.isFinite(chunk.index) ? chunk.index : idx,
-          startSec: Number(chunk.startSec ?? idx * 10),
-          endSec: Number(chunk.endSec ?? (idx + 1) * 10),
-          text: chunk.text || "",
-        }));
-        await SubsectionTranscriptChunk.insertMany(chunkDocs);
-      }
     }
 
-    let pptExtract = "";
-    let pdfExtract = "";
-    const equations = [];
-    const knowledgeInputsChanged = Boolean(
-      videoFile?.buffer?.length ||
-      pptFile?.buffer?.length ||
-      pdfFile?.buffer?.length ||
-      mathModeChanged
-    );
-
-    if (pptFile?.buffer?.length) {
+    if (pptChanged) {
       if (doc.pptPublicId) {
         cloudinary.uploader.destroy(doc.pptPublicId, { resource_type: "raw" }).catch(() => {});
       }
-      const extracted = await extractLessonDocuments({
-        pptBuffer: pptFile.buffer,
-        pptName: pptFile.originalname,
-        containsMath: nextContainsMath,
-      });
-      pptExtract = extracted.pptText || "";
-      equations.push(...(extracted.equations || []));
-      const fileName = originalOfficeFileName("ppt", pptFile.originalname);
-      const r = await uploadRawDocument(
-        pptFile.buffer,
-        "upload_section_subsections/ppt",
-        fileName
-      );
-      doc.pptUrl = r.secure_url;
-      doc.pptPublicId = r.public_id;
-      doc.pptFileName = fileName;
-      rollbackIds.push(r.public_id);
-      const pptExtracted = await extractAndStoreDocumentImages({
-        pptBuffer: pptFile.buffer,
-        rollbackIds,
-      });
       destroyCloudinaryImages(
         (doc.extractedImages || []).filter((img) => img.source === "ppt")
       );
-      doc.extractedImages = replaceExtractedBySource(
-        doc.extractedImages,
-        "ppt",
-        pptExtracted
+      doc.extractedImages = replaceExtractedBySource(doc.extractedImages, "ppt", []);
+      const fileName = originalOfficeFileName("ppt", pptFile.originalname);
+      uploads.push(
+        uploadRawDocument(
+          pptFile.buffer,
+          "upload_section_subsections/ppt",
+          fileName
+        ).then((r) => {
+          doc.pptUrl = r.secure_url;
+          doc.pptPublicId = r.public_id;
+          doc.pptFileName = fileName;
+          rollbackIds.push(r.public_id);
+        })
       );
-      doc.markModified("extractedImages");
     }
 
-    if (pdfFile?.buffer?.length) {
+    if (pdfChanged) {
       if (doc.pdfPublicId) {
         cloudinary.uploader.destroy(doc.pdfPublicId, { resource_type: "raw" }).catch(() => {});
       }
-      const extracted = await extractLessonDocuments({
-        pdfBuffer: pdfFile.buffer,
-        containsMath: nextContainsMath,
-      });
-      pdfExtract = extracted.pdfText || "";
-      equations.push(...(extracted.equations || []));
-      const fileName = originalOfficeFileName("pdf", pdfFile.originalname);
-      const r = await uploadRawDocument(
-        pdfFile.buffer,
-        "upload_section_subsections/pdf",
-        fileName
-      );
-      doc.pdfUrl = r.secure_url;
-      doc.pdfPublicId = r.public_id;
-      doc.pdfFileName = fileName;
-      rollbackIds.push(r.public_id);
-      const pdfExtracted = await extractAndStoreDocumentImages({
-        pdfBuffer: pdfFile.buffer,
-        rollbackIds,
-      });
       destroyCloudinaryImages(
         (doc.extractedImages || []).filter((img) => img.source === "pdf")
       );
-      doc.extractedImages = replaceExtractedBySource(
-        doc.extractedImages,
-        "pdf",
-        pdfExtracted
+      doc.extractedImages = replaceExtractedBySource(doc.extractedImages, "pdf", []);
+      const fileName = originalOfficeFileName("pdf", pdfFile.originalname);
+      uploads.push(
+        uploadRawDocument(
+          pdfFile.buffer,
+          "upload_section_subsections/pdf",
+          fileName
+        ).then((r) => {
+          doc.pdfUrl = r.secure_url;
+          doc.pdfPublicId = r.public_id;
+          doc.pdfFileName = fileName;
+          rollbackIds.push(r.public_id);
+        })
       );
-      doc.markModified("extractedImages");
     }
 
     if (imageFiles.some((f) => f.buffer?.length)) {
@@ -527,87 +429,64 @@ const updateSubSection = async (req, res) => {
           }
         }
       }
-      const newImages = [];
+      const imageUploads = [];
       for (const img of imageFiles) {
         if (!img.buffer?.length) continue;
-        const r = await uploadBuffer(img.buffer, {
-          folder: "upload_section_subsections/images",
-          resource_type: "image",
-        });
-        newImages.push({ url: r.secure_url, publicId: r.public_id });
-        rollbackIds.push(r.public_id);
+        imageUploads.push(
+          uploadBuffer(img.buffer, {
+            folder: "upload_section_subsections/images",
+            resource_type: "image",
+          }).then((r) => {
+            rollbackIds.push(r.public_id);
+            return { url: r.secure_url, publicId: r.public_id };
+          })
+        );
       }
-      doc.images = newImages;
+      uploads.push(
+        Promise.all(imageUploads).then((newImages) => {
+          doc.images = newImages;
+        })
+      );
+    }
+
+    await Promise.all(uploads);
+    doc.containsMath = nextContainsMath;
+    if (pptChanged || pdfChanged) {
+      doc.markModified("extractedImages");
     }
 
     if (knowledgeInputsChanged) {
-      if (!pptFile?.buffer?.length && doc.pptUrl) {
-        try {
-          const extracted = await extractFromStoredFile({
-            kind: "ppt",
-            url: doc.pptUrl,
-            containsMath: nextContainsMath,
-          });
-          pptExtract = extracted.pptText || "";
-          equations.push(...(extracted.equations || []));
-        } catch (error) {
-          console.warn("[knowledge] Could not re-parse stored PPT:", error.message);
-        }
-      }
-      if (!pdfFile?.buffer?.length && doc.pdfUrl) {
-        try {
-          const extracted = await extractFromStoredFile({
-            kind: "pdf",
-            url: doc.pdfUrl,
-            containsMath: nextContainsMath,
-          });
-          pdfExtract = extracted.pdfText || "";
-          equations.push(...(extracted.equations || []));
-        } catch (error) {
-          console.warn("[knowledge] Could not re-parse stored PDF:", error.message);
-        }
-      }
-
-      const dedupeResult = await dedupeSubsectionExtracts({
-        pptText: pptExtract,
-        pdfText: pdfExtract,
-        transcriptText: doc.transcriptText,
-        protectMath: nextContainsMath,
-      });
-      const quality = evaluateKnowledgeQuality({
-        hasPptFile: Boolean(doc.pptUrl),
-        hasPdfFile: Boolean(doc.pdfUrl),
-        pptExtractLen: pptExtract.length,
-        pdfExtractLen: pdfExtract.length,
-        transcriptText: doc.transcriptText,
-        dedupedPpt: dedupeResult.ppt,
-        dedupedPdf: dedupeResult.pdf,
-        dedupedTranscript: dedupeResult.transcript,
-        containsMath: nextContainsMath,
-        equations,
-      });
-      applyUniqueKnowledge(doc, {
-        transcriptText: doc.transcriptText,
-        dedupeResult,
-        equations,
-        containsMath: nextContainsMath,
-        quality,
-      });
-      if (!quality.ok) {
-        scheduleKnowledgeRebuild(doc._id);
-      }
+      doc.knowledgeStatus = "processing";
+      doc.knowledgeStatusReason = "";
     }
 
     await doc.save();
+
+    if (knowledgeInputsChanged) {
+      scheduleProcessSubsection(doc._id, {
+        transcribe: videoChanged || !doc.transcriptText,
+        extractImages: pptChanged || pdfChanged,
+        assets: {
+          videoBuffer: videoChanged ? videoFile.buffer : null,
+          videoName: videoChanged ? videoFile.originalname : "",
+          pptBuffer: pptChanged ? pptFile.buffer : null,
+          pptName: pptChanged ? pptFile.originalname : doc.pptFileName,
+          pdfBuffer: pdfChanged ? pdfFile.buffer : null,
+          pdfName: pdfChanged ? pdfFile.originalname : doc.pdfFileName,
+        },
+      });
+    }
 
     await ensureCourseEducatorName(
       section.courseId,
       resolveEducatorNameFromRequest(req)
     );
 
-    return res.status(200).json({
+    return res.status(knowledgeInputsChanged ? 202 : 200).json({
       success: true,
-      message: "Subsection updated.",
+      message: knowledgeInputsChanged
+        ? "Files saved. Knowledge is processing in the background. You will get a Chrome notification when it is ready."
+        : "Subsection updated.",
       data: {
         subsection: {
           id: doc._id,
@@ -636,4 +515,48 @@ const updateSubSection = async (req, res) => {
   }
 };
 
-module.exports = { createSubSection, updateSubSection };
+const getSubSection = async (req, res) => {
+  const { sectionId: sectionIdParam, subsectionId } = req.params;
+  const educatorId = req.user?.id ? String(req.user.id).trim() : "";
+
+  if (!educatorId || !mongoose.Types.ObjectId.isValid(educatorId)) {
+    return res.status(400).json({ message: "Invalid educator session." });
+  }
+  if (!sectionIdParam || !mongoose.Types.ObjectId.isValid(sectionIdParam)) {
+    return res.status(400).json({ message: "Invalid section id." });
+  }
+  if (!subsectionId || !mongoose.Types.ObjectId.isValid(subsectionId)) {
+    return res.status(400).json({ message: "Invalid subsection id." });
+  }
+
+  const doc = await CourseSubSection.findById(subsectionId)
+    .select(
+      "sectionId educatorId knowledgeStatus knowledgeStatusReason transcriptPreview order courseId containsMath"
+    )
+    .lean();
+  if (!doc) {
+    return res.status(404).json({ message: "Subsection not found." });
+  }
+  if (String(doc.sectionId) !== String(sectionIdParam)) {
+    return res.status(400).json({ message: "Subsection does not belong to this section." });
+  }
+  if (String(doc.educatorId) !== educatorId) {
+    return res.status(403).json({ message: "Access denied for this subsection." });
+  }
+
+  return res.status(200).json({
+    success: true,
+    data: {
+      id: doc._id,
+      sectionId: doc.sectionId,
+      courseId: doc.courseId,
+      order: doc.order,
+      containsMath: Boolean(doc.containsMath),
+      knowledgeStatus: doc.knowledgeStatus || "ready",
+      knowledgeStatusReason: doc.knowledgeStatusReason || "",
+      transcriptPreview: doc.transcriptPreview || "",
+    },
+  });
+};
+
+module.exports = { createSubSection, updateSubSection, getSubSection };

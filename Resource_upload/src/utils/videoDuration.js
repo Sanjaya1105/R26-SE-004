@@ -10,19 +10,31 @@ class VideoDurationError extends Error {
   }
 }
 
-/**
- * Reads duration from the uploaded video buffer and rejects clips longer than 15 minutes.
- */
-async function assertVideoDurationLimit(file) {
-  if (!file?.buffer?.length) return;
+async function readVideoDurationSec(file) {
+  if (!file?.buffer?.length) return 0;
 
-  let durationSec;
   try {
     const metadata = await parseBuffer(file.buffer, {
       mimeType: file.mimetype,
       size: file.size,
     });
-    durationSec = Number(metadata?.format?.duration);
+    const durationSec = Number(metadata?.format?.duration);
+    return Number.isFinite(durationSec) && durationSec > 0 ? durationSec : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Reads duration from the uploaded video buffer and rejects clips longer than 15 minutes.
+ * @returns {Promise<number>} duration in seconds
+ */
+async function assertVideoDurationLimit(file) {
+  if (!file?.buffer?.length) return 0;
+
+  let durationSec = 0;
+  try {
+    durationSec = await readVideoDurationSec(file);
   } catch (err) {
     throw new VideoDurationError(
       "Could not read video duration. Please upload a standard MP4/WebM file of 15 minutes or less."
@@ -41,10 +53,13 @@ async function assertVideoDurationLimit(file) {
       `Video is too long (${minutes} minutes). Maximum allowed length is 15 minutes.`
     );
   }
+
+  return durationSec;
 }
 
 module.exports = {
   MAX_VIDEO_DURATION_SEC,
   VideoDurationError,
+  readVideoDurationSec,
   assertVideoDurationLimit,
 };

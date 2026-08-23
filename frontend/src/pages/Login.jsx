@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { getGatewayBaseUrl } from '../config/gateway';
+import { enableTeacherPushNotifications } from '../utils/pushNotifications';
 
 const Login = () => {
   const [formData, setFormData] = useState({ email: '', password: '' });
@@ -23,6 +24,7 @@ const Login = () => {
       const response = await axios.post(`${gatewayBaseUrl}/api/auth/login`, formData);
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
+      await enableTeacherPushNotifications();
       navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.message || 'Login failed. Please check credentials.');

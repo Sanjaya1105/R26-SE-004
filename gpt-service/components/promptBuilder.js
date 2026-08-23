@@ -100,7 +100,7 @@ function buildPedagogicalPrompt(input = {}) {
   const containsMath = isTruthyFlag(input.containsMath);
   const uniqueText = (containsMath ? truncatePreservingMath : truncate)(
     uniqueKnowledgeText(input),
-    18000
+    12000
   );
 
   const knowledgeChunk = [
@@ -131,7 +131,7 @@ Inputs:
 Student Profile: {Major: ${major}, Year: ${year}, Interests: ${interests}}
 Cognitive Style: {Style: ${style} (1 of 4: Visual, Auditory, Read/Write, Kinesthetic)}
 Current Cognitive Load: {Level: ${loadLevel} (1 of 5: Very Low, Low, Medium, High, Very High), Frustration: ${frustration} (Low, Moderate, High)}
-Knowledge Chunk: {Original Text/Transcript from Educator}
+Knowledge Chunk: {Unique extractive lesson knowledge. Do not invent facts.}
 
 ${knowledgeChunk}
 

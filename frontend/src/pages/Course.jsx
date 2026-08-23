@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { getGatewayBaseUrl } from '../config/gateway';
+import './Course.css';
 
 const getStoredUser = () => {
   try {
@@ -106,6 +107,10 @@ const Course = () => {
 
     const courseId = String(course.id);
     if (enrolledIds.has(courseId) || enrollingId === courseId) return;
+    if (Number(course.readyLessonCount || 0) === 0 && Number(course.preparingLessonCount || 0) > 0) {
+      setActionMessage('This course is still being prepared. You can enroll when the lessons are ready.');
+      return;
+    }
 
     const token = localStorage.getItem('token');
     if (!token) {
@@ -166,48 +171,18 @@ const Course = () => {
     .join('') || 'S';
 
   return (
-    <div style={{ width: '100%', minHeight: '100vh', padding: '2rem' }}>
-      <header
-        className="glass-panel"
-        style={{
-          maxWidth: '1200px',
-          margin: '0 auto 2rem',
-          padding: '1.25rem 1.5rem',
-          borderRadius: '12px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '1rem',
-          flexWrap: 'wrap',
-        }}
-      >
+    <div className="course-catalog">
+      <header className="glass-panel course-catalog__header">
         <div>
-          <h1
-            className="gradient-text"
-            style={{ fontSize: '1.35rem', fontWeight: 700 }}
-          >
+          <h1 className="gradient-text course-catalog__title">
             Courses
           </h1>
-          <p
-            style={{
-              marginTop: '0.35rem',
-              fontSize: '0.9rem',
-              color: 'var(--text-muted)',
-            }}
-          >
+          <p className="course-catalog__subtitle">
             Browse published courses and enroll to start learning.
           </p>
         </div>
 
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.75rem',
-            marginLeft: 'auto',
-            flexWrap: 'wrap',
-          }}
-        >
+        <div className="course-catalog__actions">
           <button
             type="button"
             className="btn"
@@ -254,21 +229,7 @@ const Course = () => {
             type="button"
             aria-label="Open student profile"
             onClick={() => navigate('/student/profile')}
-            style={{
-              width: '42px',
-              height: '42px',
-              borderRadius: '999px',
-              border: '1px solid rgba(255,255,255,0.14)',
-              background: 'linear-gradient(135deg, #1d4ed8, #0f172a)',
-              color: '#fff',
-              fontWeight: 700,
-              fontSize: '0.9rem',
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: 0,
-            }}
+            className="course-catalog__avatar"
           >
             {initials}
           </button>
@@ -301,31 +262,20 @@ const Course = () => {
           </p>
         )}
         {!loading && !error && courses.length > 0 && (
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns:
-                'repeat(auto-fill, minmax(min(100%, 260px), 1fr))',
-              gap: '1.25rem',
-            }}
-          >
+          <div className="course-catalog__grid">
             {courses.map((c) => {
               const courseId = String(c.id);
               const isEnrolled = enrolledIds.has(courseId);
               const isEnrolling = enrollingId === courseId;
+              const lessonsPreparing =
+                Number(c.preparingLessonCount || 0) > 0 &&
+                Number(c.readyLessonCount || 0) === 0;
+              const canEnroll = !lessonsPreparing;
 
               return (
                 <article
                   key={courseId}
-                  className="glass-panel"
-                  style={{
-                    overflow: 'hidden',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    padding: 0,
-                    height: '100%',
-                    transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-                  }}
+                  className="glass-panel course-card"
                 >
                   <Link
                     to={`/course/${encodeURIComponent(courseId)}`}
@@ -336,68 +286,59 @@ const Course = () => {
                       flex: 1,
                     }}
                   >
-                    <div
-                      style={{
-                        aspectRatio: '16 / 10',
-                        background: 'var(--surface)',
-                        borderBottom: '1px solid rgba(255,255,255,0.08)',
-                      }}
-                    >
+                    <div className="course-card__media">
                       {c.thumbnailUrl ? (
                         <img
                           src={c.thumbnailUrl}
                           alt={c.courseName || 'Course thumbnail'}
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                            display: 'block',
-                          }}
                         />
                       ) : null}
+                      <span className="course-card__play" aria-hidden="true">
+                        ▶
+                      </span>
                     </div>
-                    <div style={{ padding: '1rem 1.1rem 0.75rem' }}>
-                      <h2
-                        style={{
-                          fontSize: '1.05rem',
-                          fontWeight: 600,
-                          lineHeight: 1.35,
-                          marginBottom: '0.5rem',
-                          color: 'var(--text)',
-                        }}
-                      >
+                    <div className="course-card__body">
+                      <h2 className="course-card__name">
                         {c.courseName || 'Untitled course'}
                       </h2>
-                      <p
-                        style={{
-                          fontSize: '0.85rem',
-                          color: 'var(--text-muted)',
-                        }}
-                      >
+                      <p className="course-card__meta">
                         {c.educatorName
                           ? `Educator: ${c.educatorName}`
                           : 'Educator: —'}
                       </p>
+                      {lessonsPreparing ? (
+                        <p
+                          style={{
+                            margin: '0.45rem 0 0 0',
+                            fontSize: '0.78rem',
+                            color: '#b45309',
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          Lessons are being prepared. Enrollment opens when they are ready.
+                        </p>
+                      ) : null}
                     </div>
                   </Link>
 
-                  <div style={{ padding: '0 1.1rem 1.15rem' }}>
+                  <div className="course-card__cta">
                     <button
                       type="button"
                       className="btn btn-primary"
-                      disabled={isEnrolled || isEnrolling}
+                      disabled={isEnrolled || isEnrolling || !canEnroll}
                       onClick={(event) => handleEnroll(event, c)}
                       style={{
-                        width: '100%',
-                        opacity: isEnrolled ? 0.85 : 1,
-                        cursor: isEnrolled ? 'default' : 'pointer',
+                        opacity: isEnrolled || !canEnroll ? 0.85 : 1,
+                        cursor: isEnrolled || !canEnroll ? 'default' : 'pointer',
                       }}
                     >
                       {isEnrolled
                         ? 'Enrolled'
                         : isEnrolling
                           ? 'Enrolling…'
-                          : 'Enroll'}
+                          : lessonsPreparing
+                            ? 'Preparing lessons'
+                            : 'Enroll now'}
                     </button>
                   </div>
                 </article>

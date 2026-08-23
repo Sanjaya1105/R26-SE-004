@@ -1,8 +1,13 @@
 """
 Semantic near-duplicate removal across PPT, PDF, and video transcript.
 
-Keep order: PPT (canonical slides) -> PDF -> video (only unique spoken extras).
+Keep order: PPT (canonical slides) -> PDF extras -> spoken extras only.
 Uses Sentence-BERT MiniLM when installed; otherwise lexical TF cosine.
+
+Spoken lecture text often paraphrases the slides at MiniLM ~0.50-0.70.
+A single 0.70 cutoff therefore kept most of the voice script. Video is
+compared against every slide/PDF sentence at a lower threshold so the
+knowledge chunk stays extractive (no generated summary) and smaller.
 """
 import json
 import math
@@ -14,9 +19,10 @@ os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
 os.environ.setdefault("TRANSFORMERS_NO_ADVISORY_WARNINGS", "1")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
-# MiniLM paraphrase scores for the same idea often sit ~0.65-0.84.
-# 0.85 only catches near-verbatim copies, so paraphrases were kept.
-THRESHOLD = 0.70
+PPT_THRESHOLD = 0.70
+PDF_THRESHOLD = 0.58
+VIDEO_THRESHOLD = 0.62
+VIDEO_INTRA_THRESHOLD = 0.70
 MIN_CHARS = 40
 MAX_TRANSCRIPT_CHUNKS = 280
 QUOTE_RE = re.compile(r'"([^"]{12,})"')
@@ -97,6 +103,13 @@ def cosine(a, b):
     return float(sum(x * y for x, y in zip(a, b)))
 
 
+def max_cosine(vec, others):
+    best = 0.0
+    for other in others:
+        best = max(best, cosine(vec, other))
+    return best
+
+
 def lexical_embeddings(texts):
     docs = [tokenize(t) for t in texts]
     vocab = {}
@@ -120,7 +133,6 @@ def sbert_embeddings(texts):
 def downsample(chunks, limit):
     if len(chunks) <= limit:
         return chunks
-    # Keep start, middle, and end so a 15-minute lecture is still represented.
     head = max(1, limit // 3)
     tail = max(1, limit // 3)
     mid = limit - head - tail
@@ -132,7 +144,7 @@ def downsample(chunks, limit):
     return start + middle + end
 
 
-def dedupe(ppt_text, pdf_text, transcript_text, threshold=THRESHOLD, protect_math=False):
+def dedupe(ppt_text, pdf_text, transcript_text, threshold=None, protect_math=False):
     splitter = split_math_aware if protect_math else split_chunks
     groups = [
         ("ppt", splitter(ppt_text)),
@@ -142,7 +154,13 @@ def dedupe(ppt_text, pdf_text, transcript_text, threshold=THRESHOLD, protect_mat
     items = []
     for source, chunks in groups:
         for chunk in chunks:
-            items.append({"source": source, "text": chunk, "math": protect_math and is_math_chunk(chunk)})
+            items.append(
+                {
+                    "source": source,
+                    "text": chunk,
+                    "math": protect_math and is_math_chunk(chunk),
+                }
+            )
 
     if not items:
         return {
@@ -154,7 +172,7 @@ def dedupe(ppt_text, pdf_text, transcript_text, threshold=THRESHOLD, protect_mat
                 "inputChunks": 0,
                 "kept": 0,
                 "dropped": 0,
-                "threshold": threshold,
+                "threshold": VIDEO_THRESHOLD,
                 "protectMath": bool(protect_math),
             },
         }
@@ -166,22 +184,40 @@ def dedupe(ppt_text, pdf_text, transcript_text, threshold=THRESHOLD, protect_mat
         method = "lexical_tf_cosine_fallback"
         vectors = lexical_embeddings([item["text"] for item in items])
 
-    kept_vectors = []
+    slide_vectors = [
+        vec
+        for item, vec in zip(items, vectors)
+        if item["source"] in ("ppt", "pdf")
+    ]
+    kept_ppt = []
+    kept_pdf = []
+    kept_video = []
     kept = {"ppt": [], "pdf": [], "video": []}
     dropped = 0
 
     for item, vec in zip(items, vectors):
+        source = item["source"]
         if not item["math"]:
-            max_sim = 0.0
-            for kept_vec in kept_vectors:
-                max_sim = max(max_sim, cosine(vec, kept_vec))
-            if max_sim >= threshold:
-                dropped += 1
-                continue
-            kept_vectors.append(vec)
-        kept[item["source"]].append(item["text"])
+            if source == "ppt":
+                if max_cosine(vec, kept_ppt) >= PPT_THRESHOLD:
+                    dropped += 1
+                    continue
+                kept_ppt.append(vec)
+            elif source == "pdf":
+                if max_cosine(vec, kept_ppt + kept_pdf) >= PDF_THRESHOLD:
+                    dropped += 1
+                    continue
+                kept_pdf.append(vec)
+            else:
+                against_slides = max_cosine(vec, slide_vectors)
+                against_spoken = max_cosine(vec, kept_video)
+                if against_slides >= VIDEO_THRESHOLD or against_spoken >= VIDEO_INTRA_THRESHOLD:
+                    dropped += 1
+                    continue
+                kept_video.append(vec)
+        kept[source].append(item["text"])
 
-    joiner = "\n\n" if protect_math else " "
+    joiner = "\n\n"
     return {
         "ppt": joiner.join(kept["ppt"]),
         "pdf": joiner.join(kept["pdf"]),
@@ -191,7 +227,12 @@ def dedupe(ppt_text, pdf_text, transcript_text, threshold=THRESHOLD, protect_mat
             "inputChunks": len(items),
             "kept": len(items) - dropped,
             "dropped": dropped,
-            "threshold": threshold,
+            "keptPpt": len(kept["ppt"]),
+            "keptPdf": len(kept["pdf"]),
+            "keptVideo": len(kept["video"]),
+            "pptThreshold": PPT_THRESHOLD,
+            "pdfThreshold": PDF_THRESHOLD,
+            "videoThreshold": VIDEO_THRESHOLD,
             "protectMath": bool(protect_math),
         },
     }
@@ -203,7 +244,7 @@ def main():
         payload.get("pptText") or "",
         payload.get("pdfText") or "",
         payload.get("transcriptText") or "",
-        float(payload.get("threshold") or THRESHOLD),
+        payload.get("threshold"),
         bool(payload.get("protectMath")),
     )
     json.dump(result, sys.stdout)

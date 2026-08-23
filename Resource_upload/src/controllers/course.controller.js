@@ -12,6 +12,11 @@ const {
   sniffOfficeFileName,
 } = require("../utils/officeFiles");
 const { filterWhisperNoise } = require("../services/whisperNoise.service");
+const { buildUniqueKnowledgeChunk } = require("../services/knowledgeMerge.service");
+const {
+  isLessonReadyForStudents,
+  isLessonPreparing,
+} = require("../utils/lessonVisibility");
 
 function parseKeywords(raw) {
   if (!raw || typeof raw !== "string") return [];
@@ -106,12 +111,63 @@ const listPublicCourses = async (req, res) => {
       .select("courseName thumbnailUrl educatorName")
       .lean();
 
-    const data = rows.map((c) => ({
-      id: c._id,
-      courseName: c.courseName,
-      thumbnailUrl: c.thumbnailUrl,
-      educatorName: (c.educatorName || "").trim(),
-    }));
+    const courseIds = rows.map((c) => c._id);
+    const lessonStats = courseIds.length
+      ? await CourseSubSection.aggregate([
+          { $match: { courseId: { $in: courseIds } } },
+          {
+            $group: {
+              _id: "$courseId",
+              readyLessonCount: {
+                $sum: {
+                  $cond: [
+                    {
+                      $in: [
+                        { $ifNull: ["$knowledgeStatus", "ready"] },
+                        ["processing", "rebuilding", "failed"],
+                      ],
+                    },
+                    0,
+                    1,
+                  ],
+                },
+              },
+              preparingLessonCount: {
+                $sum: {
+                  $cond: [
+                    {
+                      $in: [
+                        { $ifNull: ["$knowledgeStatus", "ready"] },
+                        ["processing", "rebuilding"],
+                      ],
+                    },
+                    1,
+                    0,
+                  ],
+                },
+              },
+            },
+          },
+        ])
+      : [];
+    const statsByCourse = new Map(
+      lessonStats.map((row) => [String(row._id), row])
+    );
+
+    const data = rows.map((c) => {
+      const stats = statsByCourse.get(String(c._id));
+      const readyLessonCount = Number(stats?.readyLessonCount || 0);
+      const preparingLessonCount = Number(stats?.preparingLessonCount || 0);
+      return {
+        id: c._id,
+        courseName: c.courseName,
+        thumbnailUrl: c.thumbnailUrl,
+        educatorName: (c.educatorName || "").trim(),
+        readyLessonCount,
+        preparingLessonCount,
+        lessonsAvailable: readyLessonCount > 0,
+      };
+    });
 
     return res.status(200).json({
       success: true,
@@ -146,11 +202,20 @@ const getPublicCourseDetail = async (req, res) => {
 
     const subs = await CourseSubSection.find({ courseId })
       .sort({ order: 1, createdAt: 1 })
-      .select("sectionId order videoUrl pptUrl pptFileName pdfUrl pdfFileName images extractedImages transcriptText pptText pdfText dedupedTranscriptText dedupedPptText dedupedPdfText containsMath equations knowledgeStatus")
+      .select("sectionId order videoUrl videoDurationSec pptUrl pptFileName pdfUrl pdfFileName images extractedImages transcriptText pptText pdfText dedupedTranscriptText dedupedPptText dedupedPdfText containsMath equations knowledgeStatus")
       .lean();
 
     const subsectionsBySection = new Map();
+    let preparingLessonCount = 0;
+    let readyLessonCount = 0;
     for (const sub of subs) {
+      if (isLessonPreparing(sub.knowledgeStatus)) {
+        preparingLessonCount += 1;
+      }
+      if (!isLessonReadyForStudents(sub.knowledgeStatus)) {
+        continue;
+      }
+      readyLessonCount += 1;
       const sid = String(sub.sectionId);
       if (!subsectionsBySection.has(sid)) {
         subsectionsBySection.set(sid, []);
@@ -158,30 +223,20 @@ const getPublicCourseDetail = async (req, res) => {
       const hasDedupe = Boolean(
         sub.dedupedPptText || sub.dedupedPdfText || sub.dedupedTranscriptText
       );
-      const knowledgeParts = hasDedupe
-        ? [sub.dedupedPptText, sub.dedupedPdfText, sub.dedupedTranscriptText]
-        : [sub.pptText, sub.pdfText, sub.transcriptText];
-      let knowledgeChunk = knowledgeParts
-        .map((text, index) => {
-          const raw = String(text || "").trim();
-          if (!raw) return "";
-          return index === 2 ? filterWhisperNoise(raw) : raw;
-        })
-        .filter(Boolean)
-        .join("\n\n");
-      if (sub.containsMath && Array.isArray(sub.equations) && sub.equations.length) {
-        const listed = sub.equations
-          .map((eq, idx) => `[eq_${idx + 1}] ${String(eq.latex || "").trim()}`)
-          .filter((line) => line.length > 8)
-          .join("\n");
-        if (listed) {
-          knowledgeChunk = `${knowledgeChunk}\n\nCANONICAL EQUATIONS (copy exactly):\n${listed}`.trim();
-        }
-      }
+      const knowledgeChunk = buildUniqueKnowledgeChunk({
+        ppt: hasDedupe ? sub.dedupedPptText : sub.pptText,
+        pdf: hasDedupe ? sub.dedupedPdfText : sub.pdfText,
+        transcript: hasDedupe
+          ? sub.dedupedTranscriptText
+          : filterWhisperNoise(sub.transcriptText),
+        equations: sub.equations,
+        containsMath: Boolean(sub.containsMath),
+      });
       subsectionsBySection.get(sid).push({
         id: sub._id,
         order: sub.order,
         videoUrl: sub.videoUrl || "",
+        videoDurationSec: Number(sub.videoDurationSec) || 0,
         pptUrl: sub.pptUrl || "",
         pptFileName: sub.pptFileName || "",
         pdfUrl: sub.pdfUrl || "",
@@ -207,6 +262,8 @@ const getPublicCourseDetail = async (req, res) => {
           keywords: course.keywords || [],
           description: course.description || "",
         },
+        preparingLessonCount,
+        readyLessonCount,
         sections: sections.map((s) => ({
           id: s._id,
           sectionName: s.sectionName,
@@ -237,11 +294,16 @@ const downloadPublicSubsectionFile = async (req, res) => {
 
   try {
     const doc = await CourseSubSection.findById(subsectionId)
-      .select("courseId pptUrl pptFileName pdfUrl pdfFileName")
+      .select("courseId pptUrl pptFileName pdfUrl pdfFileName knowledgeStatus")
       .lean();
 
     if (!doc || String(doc.courseId) !== String(courseId)) {
       return res.status(404).json({ message: "File not found." });
+    }
+    if (!isLessonReadyForStudents(doc.knowledgeStatus)) {
+      return res.status(404).json({
+        message: "This lesson is still being prepared.",
+      });
     }
 
     const storedUrl = type === "ppt" ? doc.pptUrl : doc.pdfUrl;
@@ -339,7 +401,7 @@ const getCourseForEdit = async (req, res) => {
 
     const subs = await CourseSubSection.find({ courseId: cid })
       .sort({ order: 1, createdAt: 1 })
-      .select("sectionId order videoUrl pptUrl pdfUrl images extractedImages containsMath")
+      .select("sectionId order videoUrl pptUrl pdfUrl images extractedImages containsMath knowledgeStatus")
       .lean();
 
     const subsectionsBySection = new Map();
@@ -355,6 +417,7 @@ const getCourseForEdit = async (req, res) => {
         pptUrl: sub.pptUrl || "",
         pdfUrl: sub.pdfUrl || "",
         containsMath: Boolean(sub.containsMath),
+        knowledgeStatus: sub.knowledgeStatus || "ready",
         images: Array.isArray(sub.images)
           ? sub.images.map((img) => ({ url: img.url }))
           : [],

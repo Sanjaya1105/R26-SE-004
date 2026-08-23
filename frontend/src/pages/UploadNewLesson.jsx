@@ -4,6 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import { getGatewayBaseUrl } from '../config/gateway';
 import { assertClientVideoDuration } from '../utils/videoDuration';
 import ContainsMathCheckbox from '../components/ContainsMathCheckbox';
+import {
+  enableTeacherPushNotifications,
+  trackProcessingSubsection,
+} from '../utils/pushNotifications';
 
 const resetInnerSectionState = () => ({
   sectionName: '',
@@ -328,6 +332,7 @@ const UploadNewLesson = () => {
 
     try {
       setIsSubmittingSub(true);
+      await enableTeacherPushNotifications();
       const res = await axios.post(
         `${gatewayBaseUrl}/api/sections/${activeSectionId}/subsections`,
         formData,
@@ -344,6 +349,13 @@ const UploadNewLesson = () => {
       const sub = payload?.subsection ?? payload;
       const sec = payload?.section;
       if (sub?.id) {
+        trackProcessingSubsection({
+          id: sub.id,
+          sectionId: String(sec?.id ?? activeSectionId),
+          label: sec?.sectionName
+            ? `Subsection under "${sec.sectionName}"`
+            : 'Lesson subsection',
+        });
         setSubmittedSubsections((prev) => [
           ...prev,
           {
@@ -358,8 +370,8 @@ const UploadNewLesson = () => {
       clearSubFiles();
       setMessage(
         sec?.sectionName
-          ? `Subsection saved under section "${sec.sectionName}". You can add another subsection when ready.`
-          : 'Subsection saved under this section. You can add another subsection when ready.'
+          ? `Files saved under "${sec.sectionName}". Whisper and MiniLM are running in the background. Allow Chrome notifications to be told when it is ready.`
+          : 'Files saved. Processing is running in the background. Allow Chrome notifications to be told when it is ready.'
       );
     } catch (error) {
       if (error.response?.status === 401 || error.response?.status === 403) {
@@ -873,7 +885,7 @@ const UploadNewLesson = () => {
                       style={{ width: '100%', marginBottom: '0.75rem' }}
                     >
                       {isSubmittingSub
-                        ? 'Submitting subsection…'
+                        ? 'Uploading files…'
                         : 'Submit subsection'}
                     </button>
 

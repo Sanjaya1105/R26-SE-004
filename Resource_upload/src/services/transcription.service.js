@@ -2,12 +2,32 @@ const fs = require("fs/promises");
 const os = require("os");
 const path = require("path");
 const { spawn } = require("child_process");
+const { fetchRemoteBuffer } = require("./lessonExtract.service");
+
+const MEDIA_EXTS = new Set([
+  ".mp4",
+  ".webm",
+  ".mov",
+  ".mkv",
+  ".avi",
+  ".mpeg",
+  ".mpg",
+  ".m4a",
+  ".mp3",
+  ".wav",
+]);
+
+function whisperFileName(originalName) {
+  const ext = path.extname(String(originalName || "")).toLowerCase();
+  if (MEDIA_EXTS.has(ext)) return originalName;
+  return "lesson.mp4";
+}
 
 const runWhisperTranscription = (videoBuffer, originalName) =>
   new Promise(async (resolve, reject) => {
     const pythonExecutable = process.env.PYTHON_EXECUTABLE || "python";
     const whisperModel = process.env.WHISPER_MODEL || "base";
-    const extension = path.extname(originalName || "") || ".mp4";
+    const extension = path.extname(whisperFileName(originalName));
     const tempFilePath = path.join(
       os.tmpdir(),
       `upload-${Date.now()}-${Math.random().toString(36).slice(2)}${extension}`
@@ -73,6 +93,15 @@ const runWhisperTranscription = (videoBuffer, originalName) =>
     }
   });
 
+async function runWhisperFromUrl(fileUrl, originalName = "lesson.mp4") {
+  const buffer = await fetchRemoteBuffer(fileUrl);
+  if (!buffer.length) {
+    return { text: "", chunks: [] };
+  }
+  return runWhisperTranscription(buffer, whisperFileName(originalName));
+}
+
 module.exports = {
   runWhisperTranscription,
+  runWhisperFromUrl,
 };
