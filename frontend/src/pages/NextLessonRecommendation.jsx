@@ -144,37 +144,58 @@ export default function NextLessonRecommendation() {
         </section>
 
         <form className="glass-panel course-selector" onSubmit={generateRecommendation}>
-          <label className="form-label" htmlFor="recommendation-course">Your uploaded course</label>
-          <div className="selector-row">
-            <select
-              id="recommendation-course"
-              className="form-input"
-              value={selectedCourseId}
-              disabled={loadingCourses || generating || courses.length === 0}
-              onChange={(event) => {
-                setSelectedCourseId(event.target.value);
-                setRecommendation(null);
-                setRecommendationDraft('');
-                setEditingRecommendation(false);
-                setShowRejectReason(false);
-                setShowTechnicalEvidence(false);
-                setReviewReason('');
-                setError('');
-              }}
-            >
-              {loadingCourses && <option value="">Loading courses...</option>}
-              {!loadingCourses && courses.length === 0 && <option value="">No uploaded courses found</option>}
-              {courses.map((course) => (
-                <option key={course.id} value={course.id}>{course.courseName}</option>
-              ))}
-            </select>
-            <button
-              className="btn btn-primary"
-              type="submit"
-              disabled={generating || loadingCourses || !selectedCourseId}
-            >
-              {generating ? 'Analysing class evidence...' : 'Create Evidence-Based Plan'}
-            </button>
+          <div className="course-selector-control">
+            <label className="course-select-label" htmlFor="recommendation-course">
+              <span>Choose your course</span>
+              {!loadingCourses && courses.length > 0 && (
+                <small>{courses.length} uploaded {courses.length === 1 ? 'course' : 'courses'} available</small>
+              )}
+            </label>
+            <div className="selector-row">
+              <div className="course-select-shell">
+                <select
+                  id="recommendation-course"
+                  className="form-input"
+                  value={selectedCourseId}
+                  disabled={loadingCourses || generating || courses.length === 0}
+                  onChange={(event) => {
+                    setSelectedCourseId(event.target.value);
+                    setRecommendation(null);
+                    setRecommendationDraft('');
+                    setEditingRecommendation(false);
+                    setShowRejectReason(false);
+                    setShowTechnicalEvidence(false);
+                    setReviewReason('');
+                    setError('');
+                  }}
+                >
+                  {loadingCourses && <option value="">Loading your courses...</option>}
+                  {!loadingCourses && courses.length === 0 && <option value="">No uploaded courses found</option>}
+                  {courses.map((course) => (
+                    <option key={course.id} value={course.id}>{course.courseName}</option>
+                  ))}
+                </select>
+                <span className="course-select-arrow" aria-hidden="true">⌄</span>
+              </div>
+              <button
+                className="btn btn-primary create-plan-button"
+                type="submit"
+                disabled={generating || loadingCourses || !selectedCourseId}
+              >
+                {generating ? (
+                  <>
+                    <span className="plan-button-spinner" aria-hidden="true" />
+                    Analysing class evidence...
+                  </>
+                ) : (
+                  <>
+                    Get Your Next Lesson Recommendation
+                    <span aria-hidden="true">→</span>
+                  </>
+                )}
+              </button>
+            </div>
+            <p className="course-selector-note">Your plan will use cognitive load, learning signals, and cognitive-style evidence.</p>
           </div>
         </form>
 
