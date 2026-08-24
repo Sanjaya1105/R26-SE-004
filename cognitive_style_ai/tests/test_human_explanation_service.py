@@ -1,6 +1,10 @@
 import unittest
 
-from services.human_explanation_service import EXPLANATION_PROMPT_VERSION, build_explanation_prompt
+from services.human_explanation_service import (
+    EXPLANATION_PROMPT_VERSION,
+    build_explanation_prompt,
+    get_cognitive_style_display_name,
+)
 
 
 class HumanExplanationPromptTests(unittest.TestCase):
@@ -30,6 +34,20 @@ class HumanExplanationPromptTests(unittest.TestCase):
         self.assertIn("Explain only why this style was selected", prompt)
         self.assertIn("do not tell the teacher or student what to do next", prompt)
         self.assertNotIn("may benefit from", prompt)
+
+    def test_intermediate_model_label_is_teacher_friendly(self):
+        prompt = build_explanation_prompt(
+            student_id="1002",
+            lesson_id="2001",
+            cognitive_style="Moderate/Intermediatory",
+            confidence=0.64,
+            top_features=[{"feature": "ImageGazeRatio", "direction": "positive"}],
+        )
+
+        self.assertEqual(get_cognitive_style_display_name("Moderate/Intermediatory"), "Intermediate")
+        self.assertIn("Predicted cognitive style: Intermediate", prompt)
+        self.assertIn("Start exactly with: This student shows an intermediate cognitive style because", prompt)
+        self.assertNotIn("predominantly moderate/intermediatory", prompt)
 
 
 if __name__ == "__main__":

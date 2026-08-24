@@ -1,7 +1,20 @@
 from services.gemini_client import generate_gemini_text
 
 
-EXPLANATION_PROMPT_VERSION = "teacher-friendly-v3"
+EXPLANATION_PROMPT_VERSION = "teacher-friendly-v4-three-class"
+
+
+def get_cognitive_style_display_name(cognitive_style: str) -> str:
+    normalized = str(cognitive_style or "").strip().lower().replace("-", "/")
+    if normalized in {
+        "moderate/intermediatory",
+        "moderate/intermediate",
+        "intermediatory",
+        "intermediate",
+        "moderate",
+    }:
+        return "Intermediate"
+    return str(cognitive_style or "Unknown").strip().title()
 
 
 FEATURE_DESCRIPTIONS = {
@@ -12,7 +25,7 @@ FEATURE_DESCRIPTIONS = {
 }
 
 SYSTEM_PROMPT = (
-    "You are an educational assistant explaining a learner's Visual or Verbal cognitive style to a "
+    "You are an educational assistant explaining a learner's Visual, Verbal, or Intermediate cognitive style to a "
     "teacher who has no technical or data-science knowledge. Use familiar classroom language and "
     "explain what the learner's observed actions mean, rather than merely naming those actions. Base "
     "every statement only on the supplied observations and use cautious wording such as 'suggests' or "
@@ -26,13 +39,19 @@ SYSTEM_PROMPT = (
 def build_explanation_prompt(
     *, student_id: str, lesson_id: str, cognitive_style: str, confidence: float, top_features: list[dict]
 ) -> str:
+    display_style = get_cognitive_style_display_name(cognitive_style)
+    opening = (
+        "This student shows an intermediate cognitive style because"
+        if display_style == "Intermediate"
+        else f"This student shows a predominantly {display_style.lower()} cognitive style because"
+    )
     observations = []
     for rank, feature in enumerate(top_features, start=1):
         description = FEATURE_DESCRIPTIONS.get(feature["feature"], feature["feature"])
         effect = (
-            f"supports the {cognitive_style} result"
+            f"supports the {display_style} result"
             if feature.get("direction") == "positive"
-            else f"slightly opposes the {cognitive_style} result"
+            else f"slightly opposes the {display_style} result"
             if feature.get("direction") == "negative"
             else "has no clear directional effect"
         )
@@ -43,15 +62,16 @@ def build_explanation_prompt(
         "Write one coherent paragraph of 65-100 words for a non-technical teacher.\n"
         f"Student ID (context only; do not repeat): {student_id}\n"
         f"Lesson ID (context only; do not repeat): {lesson_id}\n"
-        f"Predicted cognitive style: {cognitive_style}\n"
+        f"Predicted cognitive style: {display_style}\n"
         f"Prediction confidence: {confidence:.4f}\n"
         "Most influential observed behaviors:\n"
         + "\n".join(observations)
-        + f"\nStart exactly with: This student shows a predominantly {cognitive_style.lower()} cognitive style because\n"
+        + f"\nStart exactly with: {opening}\n"
         "Explain the result as a connected account of what the learner did and what that pattern may mean "
         "for how they engaged with this lesson. Translate every observation into everyday language, do not "
         "list or repeat technical labels, and do not include numerical values. Explain only why this style was "
-        "selected; do not tell the teacher or student what to do next.\n"
+        "selected; do not tell the teacher or student what to do next. For an Intermediate result, explain "
+        "the observed balance between visual and text-based engagement without presenting it as uncertainty.\n"
         "Style example only (do not copy facts from it): This student shows a predominantly visual cognitive "
         "style because their attention stayed mainly on diagrams and other visual material while working "
         "through the lesson. They also tended to explore visual content before relying on written text, which "

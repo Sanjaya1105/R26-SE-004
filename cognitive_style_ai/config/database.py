@@ -90,6 +90,13 @@ def init_db() -> None:
                     "ADD COLUMN `explanation_model` VARCHAR(100) NULL"
                 )
             )
+        if "model_signature" not in columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE `cognitive-style-analysis` "
+                    "ADD COLUMN `model_signature` VARCHAR(64) NULL"
+                )
+            )
 
         nullable_columns = {
             "lesson_id": "VARCHAR(100)",

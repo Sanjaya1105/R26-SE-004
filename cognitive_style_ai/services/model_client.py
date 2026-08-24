@@ -1,4 +1,5 @@
 from pathlib import Path
+import hashlib
 
 import joblib
 import numpy as np
@@ -15,6 +16,7 @@ SERVICE_DIR = Path(__file__).resolve().parents[1]
 _model = None
 _feature_names = None
 _label_encoder = None
+_model_signature = None
 
 
 def load_model():
@@ -37,6 +39,26 @@ def load_model():
         else:
             raise ModelClientError("The visual/verbal model does not expose its feature names.")
     return _model, _feature_names, _label_encoder
+
+
+def get_model_signature() -> str:
+    """Identify the loaded model/encoder pair so stale saved analyses can be refreshed."""
+    global _model_signature
+    if _model_signature is not None:
+        return _model_signature
+
+    load_model()
+    digest = hashlib.sha256()
+    for configured_path in (
+        settings.COGNITIVE_STYLE_MODEL_PATH,
+        settings.COGNITIVE_STYLE_LABEL_ENCODER_PATH,
+    ):
+        asset_path = (SERVICE_DIR / configured_path).resolve()
+        with asset_path.open("rb") as asset:
+            for chunk in iter(lambda: asset.read(1024 * 1024), b""):
+                digest.update(chunk)
+    _model_signature = digest.hexdigest()[:24]
+    return _model_signature
 
 
 class BatchPredictor:

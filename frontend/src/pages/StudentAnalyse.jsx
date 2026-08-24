@@ -70,6 +70,14 @@ function getLoadClass(level) {
   return String(level || '').trim().toLowerCase().replace(/\s+/g, '-');
 }
 
+function formatCognitiveStyleLabel(style) {
+  const normalized = String(style || '').trim().toLowerCase();
+  return ['moderate/intermediatory', 'moderate/intermediate', 'intermediatory', 'moderate']
+    .includes(normalized)
+    ? 'Intermediate'
+    : style;
+}
+
 export default function StudentAnalyse() {
   const [lessons, setLessons] = useState([]);
   const [students, setStudents] = useState([]);
@@ -582,7 +590,9 @@ export default function StudentAnalyse() {
               <div className="style-summary-row">
                 <div>
                   <span className="style-summary-label">Predicted style</span>
-                  <strong className="style-name">{styleAnalysis.cognitive_style}</strong>
+                  <strong className="style-name">
+                    {styleAnalysis.cognitive_style_display || formatCognitiveStyleLabel(styleAnalysis.cognitive_style)}
+                  </strong>
                 </div>
               </div>
 
@@ -623,7 +633,12 @@ export default function StudentAnalyse() {
                       <h3>Model Evidence</h3>
                     </div>
                     <div className="technical-evidence-summary">
-                      <span>Prediction: <strong>{styleAnalysis.cognitive_style}</strong></span>
+                      <span>
+                        Prediction:{' '}
+                        <strong>
+                          {styleAnalysis.cognitive_style_display || formatCognitiveStyleLabel(styleAnalysis.cognitive_style)}
+                        </strong>
+                      </span>
                       <span>
                         Confidence: <strong>{(Number(styleAnalysis.confidence || 0) * 100).toFixed(2)}%</strong>
                       </span>

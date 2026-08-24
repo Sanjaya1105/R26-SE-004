@@ -22,6 +22,7 @@ class CognitiveStyleAnalysis(Base):
         index=True,
     )
     cognitive_style: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    model_signature: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     feature_values: Mapped[dict] = mapped_column(JSON, nullable=False)
     lime_output: Mapped[list | None] = mapped_column(JSON(none_as_null=True), nullable=True)

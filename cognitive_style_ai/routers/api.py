@@ -4,8 +4,12 @@ from sqlalchemy.orm import Session
 from config.database import get_db
 from models.analysis import CognitiveStyleAnalysis
 from services.explanation_service import explain_in_parallel
-from services.human_explanation_service import EXPLANATION_PROMPT_VERSION, generate_human_explanation
-from services.model_client import BatchPredictor, ModelClientError, get_model_metadata
+from services.human_explanation_service import (
+    EXPLANATION_PROMPT_VERSION,
+    generate_human_explanation,
+    get_cognitive_style_display_name,
+)
+from services.model_client import BatchPredictor, ModelClientError, get_model_metadata, get_model_signature
 from services.mongo_sync_service import sync_mongo_inputs_once
 from services.gemini_client import GeminiServiceError
 
@@ -21,6 +25,8 @@ def _serialize(row: CognitiveStyleAnalysis) -> dict:
         "session_id": row.session_id,
         "analysis_status": row.analysis_status,
         "cognitive_style": row.cognitive_style,
+        "cognitive_style_display": get_cognitive_style_display_name(row.cognitive_style),
+        "model_signature": row.model_signature,
         "confidence": row.confidence,
         "feature_values": row.feature_values,
         "lime_output": row.lime_output,
@@ -47,6 +53,11 @@ def analyse_student_style(
     shap_samples: int = Query(100, ge=25, le=2000),
     db: Session = Depends(get_db),
 ):
+    try:
+        current_model_signature = get_model_signature()
+    except (ModelClientError, OSError) as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
     completed = (
         db.query(CognitiveStyleAnalysis)
         .filter(
@@ -57,7 +68,7 @@ def analyse_student_style(
         .order_by(CognitiveStyleAnalysis.updated_at.desc(), CognitiveStyleAnalysis.id.desc())
         .first()
     )
-    if completed is not None:
+    if completed is not None and completed.model_signature == current_model_signature:
         explanation_refreshed = False
         if (
             EXPLANATION_PROMPT_VERSION not in str(completed.explanation_prompt or "")
@@ -110,7 +121,11 @@ def analyse_student_style(
             .first()
         )
 
-    record = find_pending()
+    # A completed result produced by an older model is recalculated from its
+    # original feature snapshot. This prevents a two-class cached result from
+    # surviving after the model is upgraded to three classes.
+    refreshing_stale_model = completed is not None
+    record = completed if refreshing_stale_model else find_pending()
     if record is None:
         try:
             sync_mongo_inputs_once()
@@ -187,6 +202,7 @@ def analyse_student_style(
         raise HTTPException(status_code=503, detail=f"Human explanation generation failed: {exc}") from exc
 
     record.cognitive_style = style
+    record.model_signature = current_model_signature
     record.confidence = probability
     record.lime_output = lime_output
     record.shap_output = shap_output
@@ -199,8 +215,16 @@ def analyse_student_style(
     db.refresh(record)
     return {
         "success": True,
-        "message": "LIME, SHAP, top-three aggregation, and Gemini explanation completed.",
-        "data": {**_serialize(record), "cached": False},
+        "message": (
+            "The saved analysis was refreshed for the current three-class model."
+            if refreshing_stale_model
+            else "LIME, SHAP, top-three aggregation, and Gemini explanation completed."
+        ),
+        "data": {
+            **_serialize(record),
+            "cached": False,
+            "model_refreshed": refreshing_stale_model,
+        },
         "errors": [],
     }
 

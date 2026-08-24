@@ -1,6 +1,6 @@
 # Cognitive Style Explainability Service
 
-This FastAPI service automatically synchronizes model-ready visual/verbal inputs from CognitiveStyleBackend's MongoDB into MySQL. When Analyse Style is requested, it predicts the cognitive style from the saved input, runs LIME and SHAP concurrently, normalizes and combines their contributions, and updates the same row with the prediction and top three features.
+This FastAPI service automatically synchronizes model-ready cognitive-style inputs from CognitiveStyleBackend's MongoDB into MySQL. When Analyse Style is requested, it predicts the cognitive style, runs LIME and SHAP concurrently, normalizes and combines their contributions, and updates the same row with the prediction and top three features.
 
 The MongoDB `userId` becomes both `student_id` and `session_id`. CognitiveStyleBackend does not store a lesson ID, so `lesson_id` remains `NULL` until a lesson is selected for analysis.
 
@@ -25,7 +25,7 @@ The service creates the `cognitive-style-explanations` database and `cognitive-s
 1. CognitiveStyleBackend saves cursor and gaze summaries to MongoDB.
 2. The background synchronizer checks MongoDB every two seconds and creates or refreshes a pending MySQL row containing the four model inputs.
 3. `POST .../analyse` finds that student's latest pending row and assigns the selected lesson.
-4. The saved values are passed to the Visual/Verbal model.
+4. The saved values are passed to the Visual/Verbal/Intermediate model.
 5. The top three are translated into non-technical classroom language and sent to the configured Gemini model to explain only why the reported cognitive style was selected, without recommendations or teaching actions.
 6. Prediction, confidence, LIME output, SHAP output, top three, prompt, and human-readable explanation are written to that same row with status `completed`.
 
@@ -33,7 +33,7 @@ The frontend shows the teacher-friendly explanation by default. Prediction confi
 combined feature importance, and raw LIME/SHAP values remain available under the separate
 `View Technical Evidence` control and do not require another Gemini request.
 
-A completed row is never overwritten. New MongoDB source documents produce a new pending row.
+A completed row is reused while its saved model signature matches the currently loaded model and label encoder. After a model upgrade, the existing feature snapshot is automatically re-analysed and the stale result is replaced. New MongoDB source documents produce a new pending row.
 
 If Gemini is unavailable, the request returns HTTP 503 and the row remains `pending`, allowing the teacher to retry without losing the synchronized model input.
 
@@ -47,4 +47,4 @@ The default Gemini model is `gemini-3.5-flash-lite`. The exact model that genera
 
 Optional analysis query parameters are `lime_samples` (default `200`) and `shap_samples` (default `100`).
 
-The model is `CognitiveStyleBackend/aiModel2/cognitive_style_rf_model.pkl`, with its `label_encoder.pkl`. It predicts `Visual` or `Verbal` from `imageCursorRatio`, `imageScrollRatio`, `ImageGazeRatio`, and `FirstInteractionPreference_VISUAL`. The new service reads these files without modifying CognitiveStyleBackend. Set `COGNITIVE_STYLE_MODEL_PATH` and `COGNITIVE_STYLE_LABEL_ENCODER_PATH` to override their locations.
+The model is `CognitiveStyleBackend/aiModel2/cognitive_style_rf_model.pkl`, with its `label_encoder.pkl`. It predicts `Visual`, `Verbal`, or `Moderate/Intermediatory` from `imageCursorRatio`, `imageScrollRatio`, `ImageGazeRatio`, and `FirstInteractionPreference_VISUAL`. The raw third-class label is shown to teachers as `Intermediate`. The service reads these files without modifying CognitiveStyleBackend. Set `COGNITIVE_STYLE_MODEL_PATH` and `COGNITIVE_STYLE_LABEL_ENCODER_PATH` to override their locations.

@@ -77,6 +77,7 @@ def sync_mongo_inputs_once() -> dict[str, int]:
                     source_fingerprint=source_fingerprint,
                     analysis_status="pending",
                     cognitive_style=None,
+                    model_signature=None,
                     confidence=None,
                     feature_values=features,
                     lime_output=None,
