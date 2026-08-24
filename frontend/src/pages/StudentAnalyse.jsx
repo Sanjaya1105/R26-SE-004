@@ -66,6 +66,10 @@ function isNoRecommendationLoad(level) {
   return normalized === 'very low' || normalized === 'low';
 }
 
+function getLoadClass(level) {
+  return String(level || '').trim().toLowerCase().replace(/\s+/g, '-');
+}
+
 export default function StudentAnalyse() {
   const [lessons, setLessons] = useState([]);
   const [students, setStudents] = useState([]);
@@ -88,6 +92,7 @@ export default function StudentAnalyse() {
   const [guidanceAction, setGuidanceAction] = useState('');
   const [guidanceRejectionReason, setGuidanceRejectionReason] = useState('');
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
+  const [showTechniqueEvidence, setShowTechniqueEvidence] = useState(false);
   const [showStyleTopFeatures, setShowStyleTopFeatures] = useState(false);
 
   const recommendationItems = formatRecommendationItems(
@@ -115,6 +120,7 @@ export default function StudentAnalyse() {
     setAggregateError('');
     setShapError('');
     setShowTechnicalDetails(false);
+    setShowTechniqueEvidence(false);
     setSelectedAnalysisRowId(null);
     setStatusMessage('Select a student and click "Show High Cognitive Load".');
   }, [selectedLessonId]);
@@ -195,10 +201,10 @@ export default function StudentAnalyse() {
         setStatusMessage('Failed to create student-lesson summary.');
       } else if (isNoRecommendationLoad(summary.predicted_cognitive_load)) {
         setStatusMessage(
-          `Student ${selectedStudentId} cognitive load is ${summary.predicted_cognitive_load}. No recommendation needed, so Raw Analyse is hidden.`,
+          `Student ${selectedStudentId} cognitive load is ${summary.predicted_cognitive_load}. No further guidance is needed.`,
         );
       } else {
-        setStatusMessage(`Aggregated summary created for student ${selectedStudentId}. Click "Raw Analyse" to generate LIME and SHAP explanations.`);
+        setStatusMessage(`Cognitive-load summary created for student ${selectedStudentId}. You can now check why this load level was detected.`);
       }
     } catch (err) {
       setError(err.message);
@@ -217,6 +223,7 @@ export default function StudentAnalyse() {
       setAggregateError('');
       setShapError('');
       setShowTechnicalDetails(false);
+      setShowTechniqueEvidence(false);
 
       // Fixed sample sizes for all cognitive load levels
       const limeSamples = 50;   // LIME: 50 samples
@@ -397,56 +404,137 @@ export default function StudentAnalyse() {
   return (
     <div className="student-analyse-shell">
       <header className="student-analyse-header">
-        <button className="back-button" onClick={() => navigate('/dashboard')}>
-          Back to dashboard
+        <button
+          type="button"
+          className="back-button dashboard-back-button"
+          onClick={() => navigate('/dashboard')}
+          aria-label="Back to teacher dashboard"
+        >
+          <span className="dashboard-back-icon" aria-hidden="true">←</span>
+          <span className="dashboard-back-copy">
+            <small>Teacher workspace</small>
+            <strong>Back to dashboard</strong>
+          </span>
+          <span className="dashboard-back-decoration" aria-hidden="true" />
         </button>
         <div>
-          <p className="eyebrow">Student Analyse</p>
-          <h1>High Cognitive Load Monitor</h1>
+          <p className="eyebrow">Student Learning Analysis</p>
+          <h1>Understand Your Student's Learning Experience</h1>
           <p className="hero-copy">
-            Select lesson and student from LIME AI records, then display High and Very High cognitive-load results.
+            Choose a lesson and student to see how demanding the lesson was and discover what support may help them learn better.
           </p>
         </div>
       </header>
 
-      <section className="student-analyse-toolbar glass-panel">
-        <label>
-          Lesson
-          <select value={selectedLessonId} onChange={(event) => setSelectedLessonId(event.target.value)}>
-            <option value="">Select a lesson</option>
-            {lessons.map((lesson) => (
-              <option key={lesson.lesson_id} value={lesson.lesson_id}>
-                {lesson.lesson_name || `Lesson ${lesson.lesson_id}`}
-              </option>
-            ))}
-          </select>
-        </label>
+      <section className="student-analyse-toolbar selection-workflow glass-panel">
+        <div className="selection-workflow-heading">
+          <div>
+            <span className="selection-start-badge">Start here</span>
+            <h2>Choose a lesson and student</h2>
+            <p>Complete the two steps below before generating the student analysis.</p>
+          </div>
+          <span className={`selection-progress-badge ${selectedLessonId && selectedStudentId ? 'ready' : ''}`}>
+            {selectedLessonId && selectedStudentId
+              ? 'Ready to analyse'
+              : `${Number(Boolean(selectedLessonId)) + Number(Boolean(selectedStudentId))} of 2 selected`}
+          </span>
+        </div>
 
-        <label>
-          Student
-          <select
-            value={selectedStudentId}
-            onChange={(event) => setSelectedStudentId(event.target.value)}
-            disabled={!students.length}
-          >
-            <option value="">Select a student</option>
-            {students.map((student) => (
-              <option key={student.student_id} value={student.student_id}>
-                {student.student_name || `Student ${student.student_id}`}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="selection-fields">
+          <label className={`selection-field ${selectedLessonId ? 'completed' : 'active'}`}>
+            <span className="selection-field-heading">
+              <span className="selection-step-number">{selectedLessonId ? '✓' : '1'}</span>
+              <span>
+                <strong>Select lesson</strong>
+                <small>Choose the lesson you want to review.</small>
+              </span>
+            </span>
+            <span className="selection-select-wrap">
+              <select value={selectedLessonId} onChange={(event) => setSelectedLessonId(event.target.value)}>
+                <option value="">Choose a lesson...</option>
+                {lessons.map((lesson) => (
+                  <option key={lesson.lesson_id} value={lesson.lesson_id}>
+                    {lesson.lesson_name || `Lesson ${lesson.lesson_id}`}
+                  </option>
+                ))}
+              </select>
+            </span>
+            <span className="selection-field-status">
+              {selectedLessonId
+                ? 'Lesson selected. You can now choose a student.'
+                : `${lessons.length} lesson${lessons.length === 1 ? '' : 's'} available`}
+            </span>
+          </label>
 
-        <button onClick={handleShowHighLoad} disabled={!selectedLessonId || !selectedStudentId || loading}>
-          {loading ? 'Aggregating...' : 'Generate Student-Lesson Summary'}
-        </button>
+          <div className={`selection-connector ${selectedLessonId ? 'active' : ''}`} aria-hidden="true">
+            <span>→</span>
+          </div>
 
-        {selectedLessonId && selectedStudentId ? (
-          <button className="analyse-style-btn" onClick={handleAnalyseStyle} disabled={styleLoading}>
-            {styleLoading ? 'Analysing Style...' : 'Analyse Style'}
-          </button>
-        ) : null}
+          <label className={`selection-field ${selectedStudentId ? 'completed' : selectedLessonId ? 'active' : 'locked'}`}>
+            <span className="selection-field-heading">
+              <span className="selection-step-number">{selectedStudentId ? '✓' : '2'}</span>
+              <span>
+                <strong>Select student</strong>
+                <small>Students are loaded from the selected lesson.</small>
+              </span>
+            </span>
+            <span className="selection-select-wrap">
+              <select
+                value={selectedStudentId}
+                onChange={(event) => setSelectedStudentId(event.target.value)}
+                disabled={!selectedLessonId || !students.length}
+              >
+                <option value="">
+                  {!selectedLessonId ? 'Select a lesson first' : 'Choose a student...'}
+                </option>
+                {students.map((student) => (
+                  <option key={student.student_id} value={student.student_id}>
+                    {student.student_name || `Student ${student.student_id}`}
+                  </option>
+                ))}
+              </select>
+            </span>
+            <span className="selection-field-status">
+              {!selectedLessonId
+                ? 'Complete step 1 to unlock this selection.'
+                : selectedStudentId
+                  ? 'Student selected. The analysis actions are ready.'
+                  : `${students.length} student${students.length === 1 ? '' : 's'} available`}
+            </span>
+          </label>
+        </div>
+
+        <div className={`selection-actions ${selectedLessonId && selectedStudentId ? 'ready' : ''}`}>
+          <div className="selection-ready-message">
+            <span className="selection-ready-dot" aria-hidden="true" />
+            <span>
+              <strong>{selectedLessonId && selectedStudentId ? 'Selections complete' : 'Waiting for selections'}</strong>
+              <small>
+                {selectedLessonId && selectedStudentId
+                  ? 'Generate the cognitive-load summary or analyse the student’s learning style.'
+                  : 'Select both a lesson and a student to enable analysis.'}
+              </small>
+            </span>
+          </div>
+          <div className="selection-action-buttons">
+            <button
+              type="button"
+              onClick={handleShowHighLoad}
+              disabled={!selectedLessonId || !selectedStudentId || loading}
+            >
+              {loading ? 'Analysing cognitive load...' : 'Analyse Cognitive Load'}
+            </button>
+
+            <button
+              type="button"
+              className="analyse-style-btn"
+              onClick={handleAnalyseStyle}
+              disabled={!selectedLessonId || !selectedStudentId || styleLoading}
+            >
+              {styleLoading ? 'Analysing style...' : 'Analyse cognitive style'}
+            </button>
+          </div>
+        </div>
       </section>
 
       {error ? <div className="alert error">{error}</div> : null}
@@ -557,80 +645,366 @@ export default function StudentAnalyse() {
         </section>
       ) : null}
 
-      <section className="student-analyse-results glass-panel">
-        <h2>Aggregated Student Summary</h2>
-
-        {!predictions.length ? (
-          <p className="empty-state">No results loaded yet.</p>
-        ) : (
-          <div className="results-table-wrapper">
-            <table>
-  <thead>
-    <tr>
-      <th>Lesson</th>
-      <th>Student</th>
-      <th>Cognitive Load</th>
-      <th>Action</th>
-    </tr>
-  </thead>
-  <tbody>
-    {predictions.map((row) => (
-      <tr key={row.id}>
-        <td>
-          {lessons.find((lesson) => String(lesson.lesson_id) === String(row.lesson_id))?.lesson_name || row.lesson_id}
-        </td>
-        <td>
-          {students.find((student) => String(student.student_id) === String(row.student_id))?.student_name || row.student_id}
-        </td>
-        <td>
-          <span
-            className={`load-badge ${
-              row.predicted_cognitive_load === 'Very High'
-                ? 'very-high'
-                : row.predicted_cognitive_load === 'High'
-                ? 'high'
-                : 'medium'
-            }`}
-          >
-            {row.predicted_cognitive_load}
-          </span>
-        </td>
-        <td>
-          {isNoRecommendationLoad(row.predicted_cognitive_load) ? (
-            <span className="empty-state">No recommendation needed</span>
-          ) : (
-            <button
-              className={`raw-analyse-btn ${
-                selectedAnalysisRowId === row.id ? 'active' : ''
-              }`}
-              onClick={() => handleRawAnalyse(row)}
-              disabled={Boolean(analysisLoadingId)}
-            >
-              {analysisLoadingId === row.id ? 'Analysing...' : 'Raw Analyse'}
-            </button>
-          )}
-        </td>
-      </tr>
-    ))}
-  </tbody>
-</table>
+      {predictions.length ? (
+        <section className="student-analyse-results summary-results-panel glass-panel">
+          <div className="summary-results-heading">
+            <div>
+              <p className="eyebrow">Analysis result</p>
+              <h2>Student Cognitive-Load Summary</h2>
+              <p>Review the detected load level, then open its explanation if attention is needed.</p>
+            </div>
           </div>
-        )}
-      </section>
 
-      <section className="student-analyse-results glass-panel lime-panel">
-        <h2>Cognitive Load Explanation and Student Guidance</h2>
-        {!limeExplanation ? (
-          <p className="empty-state">Click Raw Analyse on a row to generate real LIME output.</p>
-        ) : (
-          <div className="lime-content">
+          <div className="cognitive-summary-list">
+            {predictions.map((row) => {
+              const lessonName = lessons.find(
+                (lesson) => String(lesson.lesson_id) === String(row.lesson_id),
+              )?.lesson_name || `Lesson ${row.lesson_id}`;
+              const studentName = students.find(
+                (student) => String(student.student_id) === String(row.student_id),
+              )?.student_name || `Student ${row.student_id}`;
+              const loadLevel = row.predicted_cognitive_load || 'Unknown';
+              const loadClass = getLoadClass(loadLevel);
+
+              return (
+                <article className={`cognitive-summary-card load-${loadClass}`} key={row.id}>
+                  <div className="summary-identity">
+                    <span className="summary-lesson-label">Lesson</span>
+                    <h3>{lessonName}</h3>
+                    <p>
+                      Student: <strong>{studentName}</strong>
+                    </p>
+                  </div>
+
+                  <div className="summary-load-result">
+                    <span className="summary-load-label">Detected cognitive load</span>
+                    <span className={`load-badge ${loadClass}`}>
+                      <span className="load-badge-dot" aria-hidden="true" />
+                      {loadLevel}
+                    </span>
+                    <small>
+                      {isNoRecommendationLoad(loadLevel)
+                        ? 'This result does not currently require additional guidance.'
+                        : 'Review the contributing learning-behaviour signals.'}
+                    </small>
+                  </div>
+
+                  <div className="summary-card-action">
+                    {isNoRecommendationLoad(loadLevel) ? (
+                      <span className="summary-no-action">No recommendation needed</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className={`load-reason-button ${
+                          selectedAnalysisRowId === row.id ? 'active' : ''
+                        }`}
+                        onClick={() => handleRawAnalyse(row)}
+                        disabled={Boolean(analysisLoadingId)}
+                      >
+                        <span className="load-reason-icon" aria-hidden="true">?</span>
+                        <span>
+                          <strong>
+                            {analysisLoadingId === row.id
+                              ? 'Checking cognitive load...'
+                              : `Check Why Cognitive Load Is ${loadLevel}`}
+                          </strong>
+                          <small>
+                            {selectedAnalysisRowId === row.id
+                              ? 'Explanation opened below'
+                              : 'View teacher-friendly explanation'}
+                          </small>
+                        </span>
+                        <span className="load-reason-arrow" aria-hidden="true">&#8594;</span>
+                      </button>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      {limeExplanation ? (
+        <section className="student-analyse-results glass-panel lime-panel guidance-review-panel">
+          <div className="guidance-page-heading">
+            <div>
+              <p className="eyebrow">Teacher decision workspace</p>
+              <h2>Review Student Guidance</h2>
+              <p>Review each section in order, then approve, regenerate, or reject the complete guidance.</p>
+            </div>
             {aggregateExplanation ? (
-              <div className="teacher-guidance-review">
+              <span className={`review-status ${aggregateExplanation.study_technique?.teacher_review?.status || 'pending'}`}>
+                {aggregateExplanation.study_technique?.teacher_review?.status || 'pending'}
+              </span>
+            ) : null}
+          </div>
+          <div className="lime-content guidance-review-flow">
+            <section className="guidance-review-section explanation-review-section">
+              <div className="guidance-section-heading">
+                <span className="guidance-section-number">1</span>
+                <div>
+                  <h3>Teacher-Friendly Explanation</h3>
+                  <p>Plain-language explanation of why this cognitive-load level was identified.</p>
+                </div>
+              </div>
+
+              <div className="human-explanation-card load-human-explanation">
+                <p className="human-explanation-title">Why this cognitive load level was selected</p>
+                <p className="human-explanation-source">
+                  Generated by Gemini from the observed lesson behaviour
+                </p>
+                <div className="teacher-explanation-sections">
+                  <div className="teacher-explanation-section load-meaning-section">
+                    <span className="teacher-explanation-step" aria-hidden="true">?</span>
+                    <div>
+                      <p className="human-explanation-text">
+                        {aggregateExplanation?.human_explanation || 'No explanation text returned.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                {aggregateError ? <p className="aggregate-error-text">{aggregateError}</p> : null}
+              </div>
+
+              <button
+                type="button"
+                className={`evidence-toggle-button explanation-evidence-button ${showTechnicalDetails ? 'active' : ''}`}
+                onClick={() => setShowTechnicalDetails(current => !current)}
+                aria-expanded={showTechnicalDetails}
+              >
+                <span>{showTechnicalDetails ? 'Hide explanation evidence' : 'View explanation technical evidence'}</span>
+                <span aria-hidden="true">{showTechnicalDetails ? '−' : '+'}</span>
+              </button>
+
+              {showTechnicalDetails ? (
+                <div className="technical-explanation-details technical-evidence-panel load-technical-evidence">
+                  <div className="technical-evidence-heading">
+                    <div>
+                      <p className="eyebrow">Explanation evidence only</p>
+                      <h3>Cognitive-Load Model Evidence</h3>
+                    </div>
+                    <div className="technical-evidence-summary">
+                      <span>
+                        Prediction:{' '}
+                        <strong>
+                          {aggregateExplanation?.predicted_cognitive_load || limeExplanation.predicted_cognitive_load}
+                        </strong>
+                      </span>
+                    </div>
+                  </div>
+                  <p className="technical-evidence-note">
+                    These LIME and SHAP values support the cognitive-load explanation above. Study-technique evidence is shown separately in section 3.
+                  </p>
+                  <h4>Top 3 Combined Signals</h4>
+                  <div className="results-table-wrapper">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Signal</th>
+                          <th>Combined Value</th>
+                          <th>Normalized Importance</th>
+                          <th>Impact</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(aggregateExplanation?.top_signals ?? []).map((signal, index) => (
+                          <tr key={`${signal.signal}-${index}`}>
+                            <td>{signal.signal}</td>
+                            <td>{Number(signal.raw_value ?? signal.strength).toFixed(6)}</td>
+                            <td>{(Number(signal.normalized_value ?? signal.normalized_strength) * 100).toFixed(2)}%</td>
+                            <td><span className={`impact-badge ${signal.impact}`}>{signal.impact}</span></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <h4 className="technical-subheading">Raw LIME Details</h4>
+                  <div className="results-table-wrapper">
+                    <table>
+                      <thead><tr><th>Rule</th><th>Weight</th><th>Impact</th></tr></thead>
+                      <tbody>
+                        {(limeExplanation.factors ?? []).map((factor, index) => (
+                          <tr key={`${factor.rule}-${index}`}>
+                            <td>{factor.rule}</td>
+                            <td>{Number(factor.weight).toFixed(6)}</td>
+                            <td><span className={`impact-badge ${factor.impact}`}>{factor.impact}</span></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <h4 className="technical-subheading">Raw SHAP Details</h4>
+                  {shapError ? <div className="alert error shap-alert">{shapError}</div> : null}
+                  {!shapError && !shapExplanation ? (
+                    <p className="empty-state technical-empty-state">
+                      SHAP output is unavailable for this analysis.
+                    </p>
+                  ) : null}
+                  {shapExplanation ? (
+                    <>
+                      <p className="technical-table-description">
+                        Each SHAP value shows how strongly that feature moved this student’s prediction.
+                      </p>
+                      <div className="results-table-wrapper">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Feature</th>
+                              <th>Feature Value</th>
+                              <th>SHAP Value</th>
+                              <th>Impact</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(shapExplanation.shap_values ?? []).map((item, index) => (
+                              <tr key={`${item.feature}-${index}`}>
+                                <td>{item.feature}</td>
+                                <td>{Number(item.value).toFixed(4)}</td>
+                                <td>{Number(item.shap_value).toFixed(6)}</td>
+                                <td><span className={`impact-badge ${item.impact}`}>{item.impact}</span></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
+            </section>
+
+            <section className="guidance-review-section recommendation-review-section">
+              <div className="guidance-section-heading">
+                <span className="guidance-section-number">2</span>
+                <div>
+                  <h3>Student Recommendations</h3>
+                  <p>General guidance the teacher can review before it is shared with the student.</p>
+                </div>
+              </div>
+              <div className="recommendation-content-card">
+                {aggregateExplanation?.lecture_support?.strategies ? (
+                  <div className="recommendation-list">
+                    {formatRecommendationItems(aggregateExplanation.lecture_support.strategies).map((item, index) => (
+                      <div key={`${index}-${item}`} className="recommendation-item">
+                        <span className="recommendation-item-number">{index + 1}</span>
+                        <p className="recommendation-item-text">{item}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : recommendationItems.length > 0 ? (
+                  <div className="recommendation-list">
+                    {recommendationItems.map((item, index) => (
+                      <div key={`${index}-${item}`} className="recommendation-item">
+                        <span className="recommendation-item-number">{index + 1}</span>
+                        <p className="recommendation-item-text">{item}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="human-explanation-text">No specific student recommendations are available.</p>
+                )}
+              </div>
+            </section>
+
+            <section className="guidance-review-section technique-review-section">
+              <div className="guidance-section-heading">
+                <span className="guidance-section-number">3</span>
+                <div>
+                  <h3>Recommended Study Techniques</h3>
+                  <p>Practical techniques selected from the fixed, backend-approved catalogue.</p>
+                </div>
+              </div>
+
+              <StudyTechniqueCards studyTechnique={aggregateExplanation?.study_technique} />
+
+              <button
+                type="button"
+                className={`evidence-toggle-button technique-evidence-button ${showTechniqueEvidence ? 'active' : ''}`}
+                onClick={() => setShowTechniqueEvidence(current => !current)}
+                aria-expanded={showTechniqueEvidence}
+              >
+                <span>{showTechniqueEvidence ? 'Hide technique evidence' : 'View study-technique evidence'}</span>
+                <span aria-hidden="true">{showTechniqueEvidence ? '−' : '+'}</span>
+              </button>
+
+              {showTechniqueEvidence && aggregateExplanation?.study_technique?.selection_evidence ? (
+                <div className="technical-evidence-panel technique-technical-evidence">
+                  <div className="technical-evidence-heading">
+                    <div>
+                      <p className="eyebrow">Technique evidence only</p>
+                      <h3>Study-Technique Selection Evidence</h3>
+                    </div>
+                  </div>
+                  <p className="technical-evidence-note">
+                    This evidence explains how Gemini selected the techniques and how the backend constrained the selection.
+                  </p>
+                  <div className="technique-evidence-metadata">
+                    <span>Method: <strong>{aggregateExplanation.study_technique.selection_evidence.selection_method}</strong></span>
+                    <span>Model: <strong>{aggregateExplanation.study_technique.selection_evidence.model_name}</strong></span>
+                    <span>Prompt version: <strong>{aggregateExplanation.study_technique.selection_evidence.prompt_version}</strong></span>
+                    <span>Temperature: <strong>{aggregateExplanation.study_technique.selection_evidence.temperature}</strong></span>
+                    <span>Max output tokens: <strong>{aggregateExplanation.study_technique.selection_evidence.max_output_tokens}</strong></span>
+                  </div>
+                  <h4>Selected techniques and matched behaviours</h4>
+                  <div className="results-table-wrapper">
+                    <table>
+                      <thead>
+                        <tr><th>Technique</th><th>Method</th><th>Matched behaviours</th><th>Selection reason</th></tr>
+                      </thead>
+                      <tbody>
+                        {(aggregateExplanation.study_technique.techniques ?? []).map((technique, index) => (
+                          <tr key={`${technique.technique}-selection-${index}`}>
+                            <td>{technique.title || technique.technique}</td>
+                            <td>{technique.selection_method || 'Legacy recommendation'}</td>
+                            <td>{technique.matched_signals?.join(', ') || 'Cognitive-load level only'}</td>
+                            <td>{technique.selection_reason || 'Not recorded for this legacy result.'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="technique-evidence-scope">
+                    <strong>Allowed catalogue:</strong>{' '}
+                    {(aggregateExplanation.study_technique.selection_evidence.allowed_techniques ?? []).join(', ')}
+                    <br />
+                    <strong>Teacher decision:</strong>{' '}
+                    {aggregateExplanation.study_technique.teacher_review?.status || 'pending'}
+                  </div>
+                  {Object.keys(aggregateExplanation.study_technique.student_feedback ?? {}).length ? (
+                    <>
+                      <h4>Student feedback</h4>
+                      <div className="results-table-wrapper">
+                        <table>
+                          <thead><tr><th>Technique</th><th>Used</th><th>Helpfulness</th><th>Ease</th><th>Comment</th></tr></thead>
+                          <tbody>
+                            {Object.values(aggregateExplanation.study_technique.student_feedback).map((feedback) => (
+                              <tr key={feedback.technique}>
+                                <td>{feedback.technique}</td>
+                                <td>{feedback.used ? 'Yes' : 'No'}</td>
+                                <td>{feedback.helpfulness || 'Not rated'}</td>
+                                <td>{feedback.ease_of_use || 'Not rated'}</td>
+                                <td>{feedback.comment || 'No comment'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
+            </section>
+
+            {aggregateExplanation ? (
+              <section className="teacher-guidance-review final-guidance-decision">
                 <div className="teacher-guidance-review-heading">
                   <div>
-                    <p className="support-card-title">Teacher Review</p>
+                    <span className="decision-step-label">Final step</span>
+                    <p className="support-card-title">Teacher Approval</p>
                     <p className="support-card-subtitle">
-                      Review the AI guidance before it becomes visible to the student.
+                      Your decision applies to the explanation, recommendations, and study techniques above.
                     </p>
                   </div>
                   <span className={`review-status ${aggregateExplanation.study_technique?.teacher_review?.status || 'pending'}`}>
@@ -657,7 +1031,7 @@ export default function StudentAnalyse() {
                       ? 'Approving...'
                       : aggregateExplanation.shared_to_student
                         ? 'Approved and Sent'
-                        : 'Approve and Send'}
+                        : 'Approve and Send to Student'}
                   </button>
                   <button
                     type="button"
@@ -665,7 +1039,7 @@ export default function StudentAnalyse() {
                     onClick={handleRegenerateGuidance}
                     disabled={Boolean(guidanceAction)}
                   >
-                    {guidanceAction === 'regenerate' ? 'Regenerating...' : 'Regenerate'}
+                    {guidanceAction === 'regenerate' ? 'Regenerating...' : 'Regenerate Guidance'}
                   </button>
                   <button
                     type="button"
@@ -673,284 +1047,15 @@ export default function StudentAnalyse() {
                     onClick={handleRejectGuidance}
                     disabled={Boolean(guidanceAction)}
                   >
-                    {guidanceAction === 'reject' ? 'Rejecting...' : 'Reject'}
+                    {guidanceAction === 'reject' ? 'Rejecting...' : 'Reject Guidance'}
                   </button>
                 </div>
-              </div>
-            ) : null}
-
-            <div className="human-explanation-card load-human-explanation">
-              <p className="human-explanation-title">Teacher-Friendly Cognitive Load Explanation</p>
-              <p className="human-explanation-source">
-                Generated by Gemini from the observed lesson behaviour
-              </p>
-
-              <div className="teacher-explanation-sections">
-                <div className="teacher-explanation-section load-meaning-section">
-                  <span className="teacher-explanation-step" aria-hidden="true">?</span>
-                  <div>
-                    <p className="teacher-explanation-section-title">
-                      Why this cognitive load level was selected
-                    </p>
-                    <p className="human-explanation-text">
-                      {aggregateExplanation?.human_explanation ||
-                        'No explanation text returned.'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="explanation-split-block">
-                <p className="split-block-title">Student Recommendations (separate from the explanation)</p>
-                {aggregateExplanation?.lecture_support?.strategies ? (
-                  <div className="recommendation-list">
-                    {formatRecommendationItems(aggregateExplanation.lecture_support.strategies).map((item, index) => (
-                      <div key={`${index}-${item}`} className="recommendation-item">
-                        <span className="recommendation-item-number">{index + 1}</span>
-                        <p className="recommendation-item-text">{item}</p>
-                      </div>
-                    ))}
-                  </div>
-                ) : recommendationItems.length > 0 ? (
-                  <div className="recommendation-list">
-                    {recommendationItems.map((item, index) => (
-                      <div key={`${index}-${item}`} className="recommendation-item">
-                        <span className="recommendation-item-number">{index + 1}</span>
-                        <p className="recommendation-item-text">{item}</p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="human-explanation-text">No specific strategies available. Focus on the explanation and top signals above.</p>
-                )}
-              </div>
-
-              {aggregateError ? <p className="aggregate-error-text">{aggregateError}</p> : null}
-            </div>
-
-            <StudyTechniqueCards studyTechnique={aggregateExplanation?.study_technique} />
-
-            <button
-              type="button"
-              className={`raw-analyse-btn ${showTechnicalDetails ? 'active' : ''}`}
-              onClick={() => setShowTechnicalDetails(current => !current)}
-              aria-expanded={showTechnicalDetails}
-            >
-              {showTechnicalDetails ? 'Hide Technical Evidence' : 'View Technical Evidence'}
-            </button>
-
-            {showTechnicalDetails ? (
-              <div className="technical-explanation-details technical-evidence-panel load-technical-evidence">
-                <div className="technical-evidence-heading">
-                  <div>
-                    <p className="eyebrow">For technical review</p>
-                    <h3>Model Evidence</h3>
-                  </div>
-                  <div className="technical-evidence-summary">
-                    <span>
-                      Prediction:{' '}
-                      <strong>
-                        {aggregateExplanation?.predicted_cognitive_load || limeExplanation.predicted_cognitive_load}
-                      </strong>
-                    </span>
-                    <span>
-                      Confidence:{' '}
-                      <strong>{(Number(aggregateExplanation?.confidence || 0) * 100).toFixed(2)}%</strong>
-                    </span>
-                  </div>
-                </div>
-
-                <p className="technical-evidence-note">
-                  The values below show how the combined LIME and SHAP evidence supported the result.
-                </p>
-
-                {aggregateExplanation?.study_technique?.selection_evidence ? (
-                  <section className="technique-selection-evidence">
-                    <h4>Study Technique Selection Evidence</h4>
-                    <div className="technique-evidence-metadata">
-                      <span>
-                        Method:{' '}
-                        <strong>{aggregateExplanation.study_technique.selection_evidence.selection_method}</strong>
-                      </span>
-                      <span>
-                        Model:{' '}
-                        <strong>{aggregateExplanation.study_technique.selection_evidence.model_name}</strong>
-                      </span>
-                      <span>
-                        Prompt version:{' '}
-                        <strong>{aggregateExplanation.study_technique.selection_evidence.prompt_version}</strong>
-                      </span>
-                      <span>
-                        Temperature:{' '}
-                        <strong>{aggregateExplanation.study_technique.selection_evidence.temperature}</strong>
-                      </span>
-                      <span>
-                        Max output tokens:{' '}
-                        <strong>{aggregateExplanation.study_technique.selection_evidence.max_output_tokens}</strong>
-                      </span>
-                    </div>
-
-                    <h5>Selected recommendations</h5>
-                    <div className="results-table-wrapper">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Technique</th>
-                            <th>Method</th>
-                            <th>Matched behaviours</th>
-                            <th>Selection reason</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(aggregateExplanation.study_technique.techniques ?? []).map((technique, index) => (
-                            <tr key={`${technique.technique}-selection-${index}`}>
-                              <td>{technique.title || technique.technique}</td>
-                              <td>{technique.selection_method || 'Legacy recommendation'}</td>
-                              <td>{technique.matched_signals?.join(', ') || 'Cognitive-load level only'}</td>
-                              <td>{technique.selection_reason || 'Not recorded for this legacy result.'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    <div className="technique-evidence-scope">
-                      <strong>Allowed catalogue:</strong>{' '}
-                      {(aggregateExplanation.study_technique.selection_evidence.allowed_techniques ?? []).join(', ')}
-                      <br />
-                      <strong>Teacher decision:</strong>{' '}
-                      {aggregateExplanation.study_technique.teacher_review?.status || 'pending'}
-                    </div>
-
-                    {Object.keys(aggregateExplanation.study_technique.student_feedback ?? {}).length ? (
-                      <>
-                        <h5>Student feedback</h5>
-                        <div className="results-table-wrapper">
-                          <table>
-                            <thead>
-                              <tr>
-                                <th>Technique</th>
-                                <th>Used</th>
-                                <th>Helpfulness</th>
-                                <th>Ease</th>
-                                <th>Comment</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {Object.values(aggregateExplanation.study_technique.student_feedback).map((feedback) => (
-                                <tr key={feedback.technique}>
-                                  <td>{feedback.technique}</td>
-                                  <td>{feedback.used ? 'Yes' : 'No'}</td>
-                                  <td>{feedback.helpfulness || 'Not rated'}</td>
-                                  <td>{feedback.ease_of_use || 'Not rated'}</td>
-                                  <td>{feedback.comment || 'No comment'}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </>
-                    ) : null}
-                  </section>
-                ) : null}
-
-                <h4>Top 3 Combined Signals</h4>
-                <div className="results-table-wrapper">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Signal</th>
-                        <th>Combined Value</th>
-                        <th>Normalized Importance</th>
-                        <th>Impact</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(aggregateExplanation?.top_signals ?? []).map((signal, index) => (
-                        <tr key={`${signal.signal}-${index}`}>
-                          <td>{signal.signal}</td>
-                          <td>{Number(signal.raw_value ?? signal.strength).toFixed(6)}</td>
-                          <td>
-                            {(Number(signal.normalized_value ?? signal.normalized_strength) * 100).toFixed(2)}%
-                          </td>
-                          <td>
-                            <span className={`impact-badge ${signal.impact}`}>{signal.impact}</span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                <h4 className="technical-subheading">Raw LIME Details</h4>
-                <div className="results-table-wrapper">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Rule</th>
-                        <th>Weight</th>
-                        <th>Impact</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(limeExplanation.factors ?? []).map((factor, index) => (
-                        <tr key={`${factor.rule}-${index}`}>
-                          <td>{factor.rule}</td>
-                          <td>{Number(factor.weight).toFixed(6)}</td>
-                          <td>
-                            <span className={`impact-badge ${factor.impact}`}>{factor.impact}</span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              </section>
             ) : null}
           </div>
-        )}
-      </section>
-
-      {showTechnicalDetails ? (
-        <section className="student-analyse-results glass-panel shap-panel">
-          <h2>Raw SHAP Technical Evidence</h2>
-          {shapError ? <div className="alert error shap-alert">{shapError}</div> : null}
-          {!shapExplanation ? (
-            <p className="empty-state">SHAP output is unavailable for this analysis.</p>
-          ) : (
-            <div className="lime-content">
-              <p>
-                <strong>Student:</strong> {shapExplanation.student_id} |{' '}
-                <strong>Cognitive Load:</strong> {shapExplanation.predicted_cognitive_load}
-              </p>
-              <div className="results-table-wrapper">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Feature</th>
-                      <th>Feature Value</th>
-                      <th>SHAP Value</th>
-                      <th>Impact</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(shapExplanation.shap_values ?? []).map((item, index) => (
-                      <tr key={`${item.feature}-${index}`}>
-                        <td>{item.feature}</td>
-                        <td>{Number(item.value).toFixed(4)}</td>
-                        <td>{Number(item.shap_value).toFixed(6)}</td>
-                        <td>
-                          <span className={`impact-badge ${item.impact}`}>{item.impact}</span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
         </section>
       ) : null}
+
     </div>
   );
 }
