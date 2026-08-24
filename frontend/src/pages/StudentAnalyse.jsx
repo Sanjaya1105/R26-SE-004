@@ -442,6 +442,37 @@ export default function StudentAnalyse() {
         </div>
       ) : null}
 
+      {styleLoading ? (
+        <div className="analysis-loading-overlay" role="dialog" aria-modal="true" aria-labelledby="style-loading-title">
+          <div className="analysis-loading-modal style-loading-modal">
+            <div className="analysis-orbit style-analysis-orbit" aria-hidden="true">
+              <span className="analysis-orbit-ring orbit-ring-one" />
+              <span className="analysis-orbit-ring orbit-ring-two" />
+              <span className="analysis-orbit-dot orbit-dot-one" />
+              <span className="analysis-orbit-dot orbit-dot-two" />
+              <span className="analysis-brain-icon style-brain-icon">V|T</span>
+            </div>
+
+            <span className="analysis-loading-kicker style-loading-kicker">Understanding learning style</span>
+            <h2 id="style-loading-title">Please wait while we analyse the student's learning style</h2>
+            <p>
+              We are checking for a saved insight and reviewing how the student engaged with visual and text content.
+            </p>
+
+            <div className="analysis-loading-steps style-loading-steps" aria-label="Cognitive-style analysis in progress">
+              <span><i aria-hidden="true" /> Checking saved analysis</span>
+              <span><i aria-hidden="true" /> Finding key patterns</span>
+              <span><i aria-hidden="true" /> Preparing explanation</span>
+            </div>
+
+            <div className="analysis-loading-bar style-loading-bar" aria-hidden="true">
+              <span />
+            </div>
+            <small>A saved result will open quickly; a new analysis may take a few moments.</small>
+          </div>
+        </div>
+      ) : null}
+
       <header className="student-analyse-header">
         <button
           type="button"

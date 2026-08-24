@@ -191,6 +191,47 @@
   font-size: 0.72rem;
 }
 
+.style-loading-modal {
+  border-color: rgba(221, 214, 254, 0.95);
+  background:
+    radial-gradient(circle at 15% 10%, rgba(221, 214, 254, 0.8), transparent 32%),
+    radial-gradient(circle at 90% 90%, rgba(191, 219, 254, 0.7), transparent 34%),
+    #ffffff;
+}
+
+.style-analysis-orbit .orbit-ring-one {
+  border-top-color: #7c3aed;
+  border-right-color: #c4b5fd;
+}
+
+.style-analysis-orbit .orbit-ring-two {
+  border-bottom-color: #2563eb;
+  border-left-color: #93c5fd;
+}
+
+.style-brain-icon {
+  background: linear-gradient(135deg, #7c3aed, #2563eb);
+  font-size: 0.86rem;
+  letter-spacing: -0.04em;
+}
+
+.style-loading-kicker {
+  background: #f5f3ff;
+  color: #6d28d9;
+}
+
+.style-loading-steps span {
+  border-color: #e9d5ff;
+}
+
+.style-loading-steps i {
+  background: #8b5cf6;
+}
+
+.style-loading-bar span {
+  background: linear-gradient(90deg, #7c3aed, #2563eb, #7c3aed);
+}
+
 @keyframes analysis-overlay-in {
   from { opacity: 0; }
   to { opacity: 1; }
