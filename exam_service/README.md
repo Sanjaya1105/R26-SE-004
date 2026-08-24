@@ -34,12 +34,14 @@ npm run test:pdf
 Both endpoints require the same `x-teacher-id` ownership header as the existing
 material routes. The backend gateway exposes them under `/api/exam`.
 
-## DeepSeek exam generation
+## Gemini exam generation
 
 `POST /quizzes/generate` loads extracted chunks for the selected lesson and asks
-DeepSeek for exactly ten schema-validated MCQs. Correct answers remain in MySQL and
+Gemini for exactly ten JSON-schema-constrained MCQs. The service also validates the
+question count, answer count, correct-answer labels, and duplicates before saving.
+Correct answers remain in MySQL and
 are not returned with the generated questions. `POST /quizzes/:id/check` accepts
 all ten answers and returns the score, correct choices, and explanations.
 
-Configure `DEEPSEEK_API_KEY`, model, timeout, output limit, and lecture-context
-size through the `DEEPSEEK_*` entries in `.env.example`.
+Configure `GEMINI_API_KEY`, model, timeout, output limit, and lecture-context
+size through the `GEMINI_*` entries in `.env.example`.

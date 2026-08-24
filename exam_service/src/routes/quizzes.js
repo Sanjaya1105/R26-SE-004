@@ -3,13 +3,13 @@ const express = require('express');
 
 const { pool } = require('../config/database');
 const requireTeacher = require('../middleware/auth');
-const { generateMcqs, DeepSeekMcqError } = require('../services/deepseekMcq');
+const { generateMcqs, GeminiMcqError } = require('../services/geminiMcq');
 
 const router = express.Router();
 const OPTIONS = ['A', 'B', 'C', 'D'];
 
 function buildContext(rows) {
-  const maximumCharacters = Number(process.env.DEEPSEEK_CONTEXT_CHARS || 40000);
+  const maximumCharacters = Number(process.env.GEMINI_CONTEXT_CHARS || 20000);
   const seen = new Set();
   const sections = [];
   let characterCount = 0;
@@ -102,7 +102,7 @@ router.post('/generate', requireTeacher, async (req, res) => {
     });
   } catch (error) {
     console.error('Exam quiz generation failed:', error);
-    if (error instanceof DeepSeekMcqError) {
+    if (error instanceof GeminiMcqError) {
       return res.status(error.status).json({ message: error.message });
     }
     return res.status(500).json({ message: 'Failed to generate and save the exam.' });
