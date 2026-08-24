@@ -48,6 +48,17 @@ def sync_mongo_inputs_once() -> dict[str, int]:
         with session_factory() as db:
             for raw_student_id in student_ids:
                 student_id = str(raw_student_id)
+                completed_exists = (
+                    db.query(CognitiveStyleAnalysis.id)
+                    .filter(
+                        CognitiveStyleAnalysis.student_id == student_id,
+                        CognitiveStyleAnalysis.analysis_status == "completed",
+                    )
+                    .first()
+                )
+                if completed_exists:
+                    continue
+
                 cursor_document = cursor_collection.find_one(
                     {"userId": raw_student_id}, sort=[("_id", DESCENDING)]
                 )
@@ -66,10 +77,25 @@ def sync_mongo_inputs_once() -> dict[str, int]:
                 ):
                     continue
 
-                # Each distinct MongoDB cursor/gaze pair is an analysis input
-                # snapshot. Keep it as a new MySQL row instead of overwriting an
-                # earlier pending row for the same student. The fingerprint check
-                # above still makes the repeating background sync idempotent.
+                existing_pending = (
+                    db.query(CognitiveStyleAnalysis)
+                    .filter(
+                        CognitiveStyleAnalysis.student_id == student_id,
+                        CognitiveStyleAnalysis.analysis_status == "pending",
+                    )
+                    .order_by(CognitiveStyleAnalysis.created_at.desc(), CognitiveStyleAnalysis.id.desc())
+                    .first()
+                )
+                if existing_pending is not None:
+                    existing_pending.session_id = student_id
+                    existing_pending.source_fingerprint = source_fingerprint
+                    existing_pending.feature_values = features
+                    updated += 1
+                    continue
+
+                # Cognitive style is a student-level profile. Keep one pending
+                # snapshot per student and stop syncing after that profile has
+                # been analysed successfully.
                 pending = CognitiveStyleAnalysis(
                     lesson_id=None,
                     student_id=student_id,

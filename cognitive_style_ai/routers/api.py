@@ -22,6 +22,7 @@ def _serialize(row: CognitiveStyleAnalysis) -> dict:
         "id": row.id,
         "lesson_id": row.lesson_id,
         "student_id": row.student_id,
+        "profile_scope": "student",
         "session_id": row.session_id,
         "analysis_status": row.analysis_status,
         "cognitive_style": row.cognitive_style,
@@ -61,7 +62,6 @@ def analyse_student_style(
     completed = (
         db.query(CognitiveStyleAnalysis)
         .filter(
-            CognitiveStyleAnalysis.lesson_id == lesson_id,
             CognitiveStyleAnalysis.student_id == student_id,
             CognitiveStyleAnalysis.analysis_status == "completed",
         )
@@ -234,12 +234,12 @@ def latest_student_style(lesson_id: str, student_id: str, db: Session = Depends(
     row = (
         db.query(CognitiveStyleAnalysis)
         .filter(
-            CognitiveStyleAnalysis.lesson_id == lesson_id,
             CognitiveStyleAnalysis.student_id == student_id,
+            CognitiveStyleAnalysis.analysis_status == "completed",
         )
-        .order_by(CognitiveStyleAnalysis.created_at.desc(), CognitiveStyleAnalysis.id.desc())
+        .order_by(CognitiveStyleAnalysis.updated_at.desc(), CognitiveStyleAnalysis.id.desc())
         .first()
     )
     if row is None:
-        raise HTTPException(status_code=404, detail="No cognitive-style analysis was found.")
-    return {"success": True, "message": "Latest analysis loaded.", "data": _serialize(row), "errors": []}
+        raise HTTPException(status_code=404, detail="No completed cognitive-style profile was found for this student.")
+    return {"success": True, "message": "Saved student cognitive-style profile loaded.", "data": _serialize(row), "errors": []}

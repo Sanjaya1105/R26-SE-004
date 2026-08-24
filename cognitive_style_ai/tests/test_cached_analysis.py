@@ -53,6 +53,14 @@ class CachedCognitiveStyleAnalysisTests(unittest.TestCase):
         self.assertEqual(response["data"]["human_explanation"], saved.human_explanation)
         self.assertFalse(response["data"]["explanation_refreshed"])
 
+    def test_completed_student_profile_is_reused_for_another_lesson(self):
+        response = analyse_student_style("lesson-2", "student-1", db=self.db)
+
+        self.assertTrue(response["data"]["cached"])
+        self.assertEqual(response["data"]["profile_scope"], "student")
+        self.assertEqual(response["data"]["cognitive_style"], "Visual")
+        self.assertEqual(response["data"]["lesson_id"], "lesson-1")
+
     @patch("routers.api.generate_human_explanation")
     def test_refreshes_only_old_human_explanation_without_rerunning_analysis(self, generate):
         saved = self.saved

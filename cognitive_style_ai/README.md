@@ -2,7 +2,7 @@
 
 This FastAPI service automatically synchronizes model-ready cognitive-style inputs from CognitiveStyleBackend's MongoDB into MySQL. When Analyse Style is requested, it predicts the cognitive style, runs LIME and SHAP concurrently, normalizes and combines their contributions, and updates the same row with the prediction and top three features.
 
-The MongoDB `userId` becomes both `student_id` and `session_id`. CognitiveStyleBackend does not store a lesson ID, so `lesson_id` remains `NULL` until a lesson is selected for analysis.
+The MongoDB `userId` becomes both `student_id` and `session_id`. Cognitive style is treated as a student-level profile. CognitiveStyleBackend does not store a lesson ID, so the lesson selected during the student's first analysis is retained only as creation context; later lessons reuse the same completed profile.
 
 ## Setup
 
@@ -23,7 +23,7 @@ The service creates the `cognitive-style-explanations` database and `cognitive-s
 ## Data lifecycle
 
 1. CognitiveStyleBackend saves cursor and gaze summaries to MongoDB.
-2. The background synchronizer checks MongoDB every two seconds and creates or refreshes a pending MySQL row containing the four model inputs.
+2. The background synchronizer checks MongoDB every two seconds and creates or refreshes one pending MySQL row per student containing the latest four model inputs. It stops creating inputs after that student has a completed profile.
 3. `POST .../analyse` finds that student's latest pending row and assigns the selected lesson.
 4. The saved values are passed to the Visual/Verbal/Intermediate model.
 5. The top three are translated into non-technical classroom language and sent to the configured Gemini model to explain only why the reported cognitive style was selected, without recommendations or teaching actions.
@@ -33,7 +33,7 @@ The frontend shows the teacher-friendly explanation by default. Prediction confi
 combined feature importance, and raw LIME/SHAP values remain available under the separate
 `View Technical Evidence` control and do not require another Gemini request.
 
-A completed row is reused while its saved model signature matches the currently loaded model and label encoder. After a model upgrade, the existing feature snapshot is automatically re-analysed and the stale result is replaced. New MongoDB source documents produce a new pending row.
+A completed student profile is reused across lessons while its saved model signature matches the currently loaded model and label encoder. After a model upgrade, the existing feature snapshot is automatically re-analysed and the stale result is replaced. New MongoDB interaction documents do not create repeated analyses after the student profile is complete.
 
 If Gemini is unavailable, the request returns HTTP 503 and the row remains `pending`, allowing the teacher to retry without losing the synchronized model input.
 
