@@ -368,6 +368,11 @@ function formatIsoDateTime(value) {
   return parsed.toLocaleString();
 }
 
+function formatSeconds(value) {
+  if (value == null || value === 'N/A') return 'N/A';
+  return `${value}s`;
+}
+
 function getLivePredictionSummary(result) {
   if (!result || typeof result !== 'object') return null;
 
@@ -397,23 +402,35 @@ function getLivePredictionSummary(result) {
     createdAt:
       prediction?.created_at ?? result.created_at ?? featureWindow?.window_end ?? '',
     pauseFrequency:
-      prediction?.pause_frequency ?? featureWindow?.pause_frequency ?? null,
+      prediction?.pause_frequency ??
+      featureWindow?.pause_frequency ??
+      result.pause_frequency ??
+      null,
     rewatchSegments:
-      prediction?.rewatch_segments ?? featureWindow?.rewatch_segments ?? null,
+      prediction?.rewatch_segments ??
+      featureWindow?.rewatch_segments ??
+      result.rewatch_segments ??
+      null,
     navigationCountVideo:
       prediction?.navigation_count_video ??
       featureWindow?.navigation_count_video ??
+      result.navigation_count_video ??
       null,
     playbackRateChange:
       prediction?.playback_rate_change ??
       featureWindow?.playback_rate_change ??
+      result.playback_rate_change ??
       null,
     idleDurationVideo:
       prediction?.idle_duration_video ??
       featureWindow?.idle_duration_video ??
+      result.idle_duration_video ??
       null,
     timeOnContent:
-      prediction?.time_on_content ?? featureWindow?.time_on_content ?? null,
+      prediction?.time_on_content ??
+      featureWindow?.time_on_content ??
+      result.time_on_content ??
+      null,
   };
 }
 
@@ -444,6 +461,92 @@ function getRawEventLabel(eventType) {
   };
 
   return labels[eventType] ?? eventType ?? 'Unknown';
+}
+
+function getCognitiveLoadTheme(load) {
+  const value = String(load || '').toLowerCase();
+
+  if (value.includes('very high')) {
+    return {
+      bg: '#fef2f2',
+      border: '#fecaca',
+      accent: '#dc2626',
+      soft: '#fee2e2',
+      text: '#7f1d1d',
+    };
+  }
+
+  if (value.includes('high')) {
+    return {
+      bg: '#fff7ed',
+      border: '#fed7aa',
+      accent: '#ea580c',
+      soft: '#ffedd5',
+      text: '#7c2d12',
+    };
+  }
+
+  if (value.includes('medium')) {
+    return {
+      bg: '#eff6ff',
+      border: '#bfdbfe',
+      accent: '#2563eb',
+      soft: '#dbeafe',
+      text: '#1e3a8a',
+    };
+  }
+
+  if (value.includes('low')) {
+    return {
+      bg: '#ecfdf5',
+      border: '#a7f3d0',
+      accent: '#059669',
+      soft: '#d1fae5',
+      text: '#064e3b',
+    };
+  }
+
+  return {
+    bg: '#f8fafc',
+    border: '#cbd5e1',
+    accent: '#475569',
+    soft: '#e2e8f0',
+    text: '#334155',
+  };
+}
+
+function MiniMetric({ label, value }) {
+  return (
+    <div
+      style={{
+        padding: '0.65rem 0.75rem',
+        borderRadius: '10px',
+        border: '1px solid rgba(148, 163, 184, 0.24)',
+        background: 'rgba(255, 255, 255, 0.72)',
+        minWidth: 0,
+      }}
+    >
+      <div
+        style={{
+          fontSize: '0.7rem',
+          color: '#64748b',
+          marginBottom: '0.22rem',
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontSize: '0.95rem',
+          fontWeight: 700,
+          color: '#1f2937',
+          overflowWrap: 'anywhere',
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
 }
 
 function updateRawEventStats(previousStats, payload) {
@@ -547,6 +650,8 @@ const CourseDetail = () => {
   const [loadLevel, setLoadLevel] = useState('Medium');
   const [frustration, setFrustration] = useState('Low');
   const [profileOpen, setProfileOpen] = useState(false);
+  const [cognitiveLoadOpen, setCognitiveLoadOpen] = useState(false);
+  const [predictionFeaturesOpen, setPredictionFeaturesOpen] = useState(false);
   const [promptBarOpen, setPromptBarOpen] = useState(false);
   const [playbackPrompt, setPlaybackPrompt] = useState(null);
   const [cognitiveLoadResult, setCognitiveLoadResult] = useState(null);
@@ -580,6 +685,7 @@ const CourseDetail = () => {
   const predictionInFlightWindowKeyRef = useRef('');
   const activeRawEventWindowKeyRef = useRef('');
   const rawEventQueueRef = useRef(Promise.resolve());
+  const windowStatsByKeyRef = useRef({});
 
   const toggleSection = (sectionId) => {
     const k = String(sectionId);
@@ -592,6 +698,38 @@ const CourseDetail = () => {
   };
 
   const livePredictionSummary = getLivePredictionSummary(cognitiveLoadResult);
+  const liveLoadStatus = livePredictionSummary?.predictedLoad || 'Collecting data';
+  const liveLoadTheme = getCognitiveLoadTheme(liveLoadStatus);
+  const liveLoadWindow =
+    livePredictionSummary?.minuteIndex != null
+      ? `Window #${livePredictionSummary.minuteIndex}`
+      : 'Waiting for first 2-minute window';
+
+  const clearWindowStats = () => {
+    windowStatsByKeyRef.current = {};
+    setRawEventStats(createEmptyRawEventStats());
+  };
+
+  const resetActiveWindowStats = (windowKey) => {
+    if (windowKey) {
+      windowStatsByKeyRef.current[windowKey] = createEmptyRawEventStats();
+    }
+    setRawEventStats(createEmptyRawEventStats());
+  };
+
+  const updateStatsForWindow = (windowKey, payload) => {
+    if (!windowKey) return;
+
+    const nextStats = updateRawEventStats(
+      windowStatsByKeyRef.current[windowKey] || createEmptyRawEventStats(),
+      payload
+    );
+    windowStatsByKeyRef.current[windowKey] = nextStats;
+
+    if (activeRawEventWindowKeyRef.current === windowKey) {
+      setRawEventStats(nextStats);
+    }
+  };
 
   useEffect(() => {
     setOpenSubsectionId(null);
@@ -616,7 +754,7 @@ const CourseDetail = () => {
     setCognitiveLoadError('');
     setCognitiveLoadLoading(false);
     setVideoSessionId('');
-    setRawEventStats(createEmptyRawEventStats());
+    clearWindowStats();
     lastPredictedWindowKeyRef.current = '';
     predictionInFlightWindowKeyRef.current = '';
     activeRawEventWindowKeyRef.current = '';
@@ -644,7 +782,7 @@ const CourseDetail = () => {
     if (!mainVideo?.url) {
       sessionStartRef.current = null;
       setVideoSessionId('');
-      setRawEventStats(createEmptyRawEventStats());
+      clearWindowStats();
       lastVideoTimeRef.current = 0;
       lastPlaybackRateRef.current = 1;
       idleStartRef.current = null;
@@ -679,7 +817,7 @@ const CourseDetail = () => {
     const sessionId = `video-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     sessionStartRef.current = startedAt;
     setVideoSessionId(sessionId);
-    setRawEventStats(createEmptyRawEventStats());
+    clearWindowStats();
     lastVideoTimeRef.current = 0;
     lastPlaybackRateRef.current = 1;
     idleStartRef.current = null;
@@ -695,6 +833,7 @@ const CourseDetail = () => {
     lastPredictedWindowKeyRef.current = '';
     predictionInFlightWindowKeyRef.current = '';
     activeRawEventWindowKeyRef.current = getActiveWindowKey(startedAt, sessionId);
+    resetActiveWindowStats(activeRawEventWindowKeyRef.current);
 
     return () => {
       if (pauseConfirmTimeoutRef.current) {
@@ -739,8 +878,18 @@ const CourseDetail = () => {
       setCognitiveLoadLoading(true);
       setCognitiveLoadError('');
       predictionInFlightWindowKeyRef.current = windowKey;
+      const completedWindowStats =
+        windowStatsByKeyRef.current[windowKey] || createEmptyRawEventStats();
+      const windowSeconds = Math.max(
+        0,
+        Math.round((windowEnd.getTime() - windowStart.getTime()) / 1000)
+      );
+      const idleDurationVideo = Math.max(
+        0,
+        Number(completedWindowStats.idleDuration || 0)
+      );
       const res = await axios.post(
-        `${getGatewayBaseUrl()}/api/cognitive-load/predict/from-raw`,
+        `${getGatewayBaseUrl()}/api/cognitive-load/predict`,
         {
           student_id: getActiveStudentId(),
           lesson_id: String(
@@ -750,6 +899,13 @@ const CourseDetail = () => {
           minute_index: minuteIndex,
           window_start: windowStart.toISOString(),
           window_end: windowEnd.toISOString(),
+          pause_frequency: completedWindowStats.pauseCount,
+          navigation_count_video: completedWindowStats.seekCount,
+          rewatch_segments: completedWindowStats.rewatchCount,
+          playback_rate_change: completedWindowStats.rateChangeCount,
+          idle_duration_video: idleDurationVideo,
+          time_on_content: Math.max(0, windowSeconds - idleDurationVideo),
+          save_result: true,
         }
       );
       setCognitiveLoadResult(res.data);
@@ -769,7 +925,7 @@ const CourseDetail = () => {
     }
   };
 
-  const enqueueRawEvent = ({ payload, sessionIdOverride }) => {
+  const enqueueRawEvent = ({ payload, sessionIdOverride, eventTime }) => {
     const activeSessionId = sessionIdOverride ?? videoSessionId;
     if (!mainVideo?.url || !activeSessionId) {
       return Promise.resolve();
@@ -778,24 +934,11 @@ const CourseDetail = () => {
     rawEventQueueRef.current = rawEventQueueRef.current
       .catch(() => {})
       .then(async () => {
-        const currentWindowKey = getActiveWindowKey(
-          sessionStartRef.current,
-          activeSessionId
-        );
-
-        if (
-          currentWindowKey &&
-          activeRawEventWindowKeyRef.current !== currentWindowKey
-        ) {
-          activeRawEventWindowKeyRef.current = currentWindowKey;
-          setRawEventStats(createEmptyRawEventStats());
-        }
-
         await axios.post(`${getGatewayBaseUrl()}/api/cognitive-load/events/raw`, {
           student_id: getActiveStudentId(),
           lesson_id: String(mainVideo.lessonId || mainVideo.subsectionId || courseId),
           session_id: activeSessionId,
-          event_time: new Date().toISOString(),
+          event_time: eventTime,
           video_time: payload.video_time ?? null,
           from_position: payload.from_position ?? null,
           to_position: payload.to_position ?? null,
@@ -804,7 +947,6 @@ const CourseDetail = () => {
           is_correct: payload.is_correct ?? null,
           event_type: payload.event_type,
         });
-        setRawEventStats((prev) => updateRawEventStats(prev, payload));
       });
 
     return rawEventQueueRef.current;
@@ -813,13 +955,27 @@ const CourseDetail = () => {
   const sendCognitiveLoadEvent = async (payload) => {
     if (!mainVideo?.url || !videoSessionId) return;
 
-    try {
-      await enqueueRawEvent({ payload });
-    } catch {
+    const eventTime = new Date().toISOString();
+    const currentWindowKey = getActiveWindowKey(
+      sessionStartRef.current,
+      videoSessionId
+    );
+
+    if (
+      currentWindowKey &&
+      activeRawEventWindowKeyRef.current !== currentWindowKey
+    ) {
+      activeRawEventWindowKeyRef.current = currentWindowKey;
+      resetActiveWindowStats(currentWindowKey);
+    }
+
+    updateStatsForWindow(currentWindowKey, payload);
+
+    enqueueRawEvent({ payload, eventTime }).catch(() => {
       setCognitiveLoadError(
         'Could not send video interaction data to the cognitive load API.'
       );
-    }
+    });
   };
 
   const markInteraction = () => {
@@ -1065,6 +1221,16 @@ const CourseDetail = () => {
             video_time: Number(videoRef.current?.currentTime?.toFixed(2) || 0),
           });
         } else {
+          const activeWindowKey = activeRawEventWindowKeyRef.current;
+          if (activeWindowKey) {
+            const nextStats = {
+              ...(windowStatsByKeyRef.current[activeWindowKey] ||
+                createEmptyRawEventStats()),
+              idleDuration:
+                (windowStatsByKeyRef.current[activeWindowKey]?.idleDuration || 0) + 1,
+            };
+            windowStatsByKeyRef.current[activeWindowKey] = nextStats;
+          }
           setRawEventStats((prev) => ({
             ...prev,
             idleDuration: prev.idleDuration + 1,
@@ -1103,7 +1269,7 @@ const CourseDetail = () => {
           sessionStart,
           videoSessionId
         );
-        setRawEventStats(createEmptyRawEventStats());
+        resetActiveWindowStats(activeRawEventWindowKeyRef.current);
         scheduleNextWindowPrediction();
       }, delayMs);
     };
@@ -2141,161 +2307,357 @@ const CourseDetail = () => {
                   marginTop: '1rem',
                   padding: '1rem',
                   borderRadius: '12px',
-                  border: '1px solid rgba(56, 189, 248, 0.28)',
-                  background: 'rgba(8, 47, 73, 0.3)',
+                  border: `1px solid ${liveLoadTheme.border}`,
+                  background: liveLoadTheme.bg,
                 }}
               >
-                <div
+                <button
+                  type="button"
+                  onClick={() => setCognitiveLoadOpen((open) => !open)}
+                  aria-expanded={cognitiveLoadOpen}
                   style={{
+                    width: '100%',
                     display: 'flex',
+                    alignItems: 'center',
                     justifyContent: 'space-between',
                     gap: '0.75rem',
-                    alignItems: 'center',
-                    flexWrap: 'wrap',
+                    padding: 0,
+                    border: 'none',
+                    background: 'transparent',
+                    color: 'inherit',
+                    cursor: 'pointer',
+                    textAlign: 'left',
                   }}
                 >
-                  <div>
-                    <p
+                  <span>
+                    <span
                       className="form-label"
                       style={{
+                        display: 'block',
                         margin: 0,
                         fontSize: '0.8rem',
-                        marginBottom: '0.3rem',
                         letterSpacing: '0.02em',
                       }}
                     >
                       Live cognitive load
-                    </p>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: '0.78rem',
-                        color: 'var(--text-muted)',
-                        lineHeight: 1.45,
-                      }}
-                    >
-                      Video interaction events are collected live. A prediction appears after each
-                      completed 2-minute video window.
-                    </p>
-                  </div>
-                  {cognitiveLoadLoading ? (
-                    <span
-                      style={{
-                        padding: '0.28rem 0.65rem',
-                        borderRadius: '999px',
-                        fontSize: '0.75rem',
-                        background: 'rgba(59, 130, 246, 0.16)',
-                        color: '#bfdbfe',
-                      }}
-                    >
-                      Predicting...
                     </span>
-                  ) : null}
-                </div>
-
-                {cognitiveLoadError ? (
-                  <p
+                    {!cognitiveLoadOpen ? (
+                      <span
+                        style={{
+                          display: 'block',
+                          marginTop: '0.25rem',
+                          fontSize: '0.75rem',
+                          color: liveLoadTheme.text,
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        <strong>{liveLoadStatus}</strong> · {liveLoadWindow}
+                        {rawEventStats.lastEvent
+                          ? ` · Last event ${rawEventStats.lastEvent}`
+                          : ''}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span
+                    aria-hidden="true"
                     style={{
-                      margin: '0.85rem 0 0 0',
-                      padding: '0.75rem 0.9rem',
-                      borderRadius: '10px',
-                      background: 'rgba(127, 29, 29, 0.26)',
-                      border: '1px solid rgba(248, 113, 113, 0.22)',
-                      color: '#fecaca',
-                      fontSize: '0.82rem',
-                      whiteSpace: 'pre-wrap',
+                      flexShrink: 0,
+                      fontSize: '0.7rem',
+                      color: liveLoadTheme.accent,
+                      transform: cognitiveLoadOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
+                      transition: 'transform 0.18s ease',
                     }}
                   >
-                    {cognitiveLoadError}
-                  </p>
-                ) : null}
+                    ▼
+                  </span>
+                </button>
 
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-                    gap: '0.65rem',
-                    marginTop: '0.9rem',
-                    color: 'var(--text-muted)',
-                    fontSize: '0.82rem',
-                  }}
-                >
-                  <div>Pause events: {rawEventStats.pauseCount}</div>
-                  <div>Video seek events: {rawEventStats.seekCount}</div>
-                  <div>Rewatch events: {rawEventStats.rewatchCount}</div>
-                  <div>Playback speed changes: {rawEventStats.rateChangeCount}</div>
-                  <div>Video idle time: {rawEventStats.idleDuration}s</div>
-                  <div>Last event: {rawEventStats.lastEvent || 'Waiting...'}</div>
-                </div>
-
-                {livePredictionSummary ? (
+                {cognitiveLoadOpen ? (
                   <>
                     <div
                       style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                        display: 'flex',
+                        justifyContent: 'space-between',
                         gap: '0.75rem',
-                        marginTop: '0.9rem',
-                      }}
-                    >
-                      <div style={{ padding: '0.85rem', borderRadius: '10px', background: 'rgba(15, 23, 42, 0.65)', border: '1px solid rgba(255,255,255,0.12)' }}>
-                        <div style={{ fontSize: '0.74rem', color: '#cbd5e1', marginBottom: '0.28rem' }}>Previous window predicted load</div>
-                        <div style={{ fontSize: '1rem', fontWeight: 700, color: '#f8fafc' }}>{livePredictionSummary.predictedLoad}</div>
-                      </div>
-                      <div style={{ padding: '0.85rem', borderRadius: '10px', background: 'rgba(15, 23, 42, 0.65)', border: '1px solid rgba(255,255,255,0.12)' }}>
-                        <div style={{ fontSize: '0.74rem', color: '#cbd5e1', marginBottom: '0.28rem' }}>Window</div>
-                        <div style={{ fontSize: '1rem', fontWeight: 700, color: '#f8fafc' }}>
-                          {livePredictionSummary.minuteIndex != null
-                            ? `#${livePredictionSummary.minuteIndex}`
-                            : 'N/A'}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-                        gap: '0.65rem',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
                         marginTop: '0.85rem',
-                        color: 'var(--text-muted)',
-                        fontSize: '0.82rem',
+                        paddingTop: '0.85rem',
+                        borderTop: `1px solid ${liveLoadTheme.border}`,
                       }}
                     >
-                      <div>Pause frequency: {livePredictionSummary.pauseFrequency ?? 'N/A'}</div>
-                      <div>Rewatch segments: {livePredictionSummary.rewatchSegments ?? 'N/A'}</div>
-                      <div>Video navigation: {livePredictionSummary.navigationCountVideo ?? 'N/A'}</div>
-                      <div>Rate changes: {livePredictionSummary.playbackRateChange ?? 'N/A'}</div>
-                      <div>Video idle duration: {livePredictionSummary.idleDurationVideo ?? 'N/A'}s</div>
-                      <div>Time on content: {livePredictionSummary.timeOnContent ?? 'N/A'}s</div>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: '0.78rem',
+                          color: 'var(--text-muted)',
+                          lineHeight: 1.45,
+                        }}
+                      >
+                        Video interaction events are collected live. A prediction appears after each
+                        completed 2-minute video window.
+                      </p>
+                      {cognitiveLoadLoading ? (
+                        <span
+                          style={{
+                            padding: '0.28rem 0.65rem',
+                            borderRadius: '999px',
+                            fontSize: '0.75rem',
+                            background: 'rgba(59, 130, 246, 0.16)',
+                            color: '#bfdbfe',
+                          }}
+                        >
+                          Predicting...
+                        </span>
+                      ) : null}
                     </div>
 
-                    {livePredictionSummary.createdAt ? (
+                    {cognitiveLoadError ? (
                       <p
                         style={{
                           margin: '0.85rem 0 0 0',
-                          fontSize: '0.76rem',
-                          color: 'var(--text-muted)',
+                          padding: '0.75rem 0.9rem',
+                          borderRadius: '10px',
+                          background: 'rgba(127, 29, 29, 0.26)',
+                          border: '1px solid rgba(248, 113, 113, 0.22)',
+                          color: '#fecaca',
+                          fontSize: '0.82rem',
+                          whiteSpace: 'pre-wrap',
                         }}
                       >
-                        Last updated: {formatIsoDateTime(livePredictionSummary.createdAt)}
+                        {cognitiveLoadError}
                       </p>
                     ) : null}
+
+                    {!predictionFeaturesOpen ? (
+                      <>
+                        <p
+                          className="form-label"
+                          style={{
+                            margin: '1rem 0 0.45rem 0',
+                            fontSize: '0.76rem',
+                            letterSpacing: '0.02em',
+                          }}
+                        >
+                          Live events
+                        </p>
+                        <div
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))',
+                            gap: '0.55rem',
+                          }}
+                        >
+                          <MiniMetric label="Pause" value={rawEventStats.pauseCount} />
+                          <MiniMetric label="Seek" value={rawEventStats.seekCount} />
+                          <MiniMetric label="Rewatch" value={rawEventStats.rewatchCount} />
+                          <MiniMetric
+                            label="Speed changes"
+                            value={rawEventStats.rateChangeCount}
+                          />
+                          <MiniMetric label="Idle time" value={`${rawEventStats.idleDuration}s`} />
+                          <MiniMetric
+                            label="Last event"
+                            value={rawEventStats.lastEvent || 'Waiting'}
+                          />
+                        </div>
+                      </>
+                    ) : null}
+
+                    {livePredictionSummary ? (
+                      <>
+                        <div
+                          style={{
+                            marginTop: '1rem',
+                            padding: '0.75rem 0',
+                            borderTop: `1px solid ${liveLoadTheme.border}`,
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setPredictionFeaturesOpen((open) => !open)}
+                            aria-expanded={predictionFeaturesOpen}
+                            style={{
+                              width: '100%',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: '0.75rem',
+                              padding: 0,
+                              border: 'none',
+                              background: 'transparent',
+                              color: 'inherit',
+                              cursor: 'pointer',
+                              textAlign: 'left',
+                            }}
+                          >
+                            <span>
+                              <span
+                                className="form-label"
+                                style={{
+                                  display: 'block',
+                                  margin: 0,
+                                  fontSize: '0.76rem',
+                                  letterSpacing: '0.02em',
+                                }}
+                              >
+                                Prediction
+                              </span>
+                              {!predictionFeaturesOpen ? (
+                                <span
+                                  style={{
+                                    display: 'block',
+                                    marginTop: '0.25rem',
+                                    fontSize: '0.74rem',
+                                    color: liveLoadTheme.text,
+                                    lineHeight: 1.4,
+                                  }}
+                                >
+                                  <strong>{livePredictionSummary.predictedLoad}</strong> ·{' '}
+                                  {livePredictionSummary.minuteIndex != null
+                                    ? `Window #${livePredictionSummary.minuteIndex}`
+                                    : 'Window N/A'}
+                                </span>
+                              ) : null}
+                            </span>
+                            <span
+                              aria-hidden="true"
+                              style={{
+                                flexShrink: 0,
+                                fontSize: '0.7rem',
+                                color: liveLoadTheme.accent,
+                                transform: predictionFeaturesOpen
+                                  ? 'rotate(0deg)'
+                                  : 'rotate(-90deg)',
+                                transition: 'transform 0.18s ease',
+                              }}
+                            >
+                              ▼
+                            </span>
+                          </button>
+                        </div>
+
+                        {predictionFeaturesOpen ? (
+                          <>
+                            <div
+                              style={{
+                                display: 'grid',
+                                gridTemplateColumns:
+                                  'minmax(210px, 1.2fr) repeat(auto-fit, minmax(150px, 1fr))',
+                                gap: '0.65rem',
+                                alignItems: 'stretch',
+                              }}
+                            >
+                              <div
+                                style={{
+                                  padding: '0.85rem',
+                                  borderRadius: '10px',
+                                  border: `1px solid ${liveLoadTheme.border}`,
+                                  background: liveLoadTheme.soft,
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    fontSize: '0.72rem',
+                                    color: liveLoadTheme.text,
+                                    marginBottom: '0.3rem',
+                                  }}
+                                >
+                                  Latest prediction
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: '1.25rem',
+                                    fontWeight: 800,
+                                    color: liveLoadTheme.accent,
+                                  }}
+                                >
+                                  {livePredictionSummary.predictedLoad}
+                                </div>
+                              </div>
+                              <MiniMetric
+                                label="Window"
+                                value={
+                                  livePredictionSummary.minuteIndex != null
+                                    ? `#${livePredictionSummary.minuteIndex}`
+                                    : 'N/A'
+                                }
+                              />
+                              <MiniMetric
+                                label="Last updated"
+                                value={
+                                  livePredictionSummary.createdAt
+                                    ? formatIsoDateTime(livePredictionSummary.createdAt)
+                                    : 'N/A'
+                                }
+                              />
+                            </div>
+
+                            <p
+                              className="form-label"
+                              style={{
+                                margin: '0.9rem 0 0.45rem 0',
+                                fontSize: '0.76rem',
+                                letterSpacing: '0.02em',
+                              }}
+                            >
+                              Prediction features
+                            </p>
+                            <div
+                              style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))',
+                                gap: '0.55rem',
+                              }}
+                            >
+                              <MiniMetric
+                                label="Pause frequency"
+                                value={livePredictionSummary.pauseFrequency ?? 'N/A'}
+                              />
+                              <MiniMetric
+                                label="Rewatch segments"
+                                value={livePredictionSummary.rewatchSegments ?? 'N/A'}
+                              />
+                              <MiniMetric
+                                label="Video navigation"
+                                value={livePredictionSummary.navigationCountVideo ?? 'N/A'}
+                              />
+                              <MiniMetric
+                                label="Rate changes"
+                                value={livePredictionSummary.playbackRateChange ?? 'N/A'}
+                              />
+                              <MiniMetric
+                                label="Video idle"
+                                value={formatSeconds(livePredictionSummary.idleDurationVideo)}
+                              />
+                              <MiniMetric
+                                label="Time on content"
+                                value={formatSeconds(livePredictionSummary.timeOnContent)}
+                              />
+                            </div>
+                          </>
+                        ) : null}
+                      </>
+                    ) : (
+                      <p
+                        style={{
+                          margin: '0.85rem 0 0 0',
+                          padding: '0.75rem 0.85rem',
+                          borderRadius: '10px',
+                          border: '1px solid rgba(148, 163, 184, 0.24)',
+                          background: 'rgba(255,255,255,0.62)',
+                          fontSize: '0.82rem',
+                          color: 'var(--text-muted)',
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        Start watching and interacting with the video. The first
+                        cognitive load prediction appears after the first completed
+                        2-minute window.
+                      </p>
+                    )}
                   </>
-                ) : (
-                  <p
-                    style={{
-                      margin: '0.85rem 0 0 0',
-                      fontSize: '0.82rem',
-                      color: 'var(--text-muted)',
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    Start watching and interacting with the video. The first
-                    cognitive load prediction appears after the first completed
-                    2-minute window.
-                  </p>
-                )}
+                ) : null}
               </div>
               <div
                 style={{
