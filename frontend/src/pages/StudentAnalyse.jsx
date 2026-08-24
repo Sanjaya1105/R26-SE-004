@@ -403,6 +403,37 @@ export default function StudentAnalyse() {
 
   return (
     <div className="student-analyse-shell">
+      {analysisLoadingId ? (
+        <div className="analysis-loading-overlay" role="dialog" aria-modal="true" aria-labelledby="analysis-loading-title">
+          <div className="analysis-loading-modal">
+            <div className="analysis-orbit" aria-hidden="true">
+              <span className="analysis-orbit-ring orbit-ring-one" />
+              <span className="analysis-orbit-ring orbit-ring-two" />
+              <span className="analysis-orbit-dot orbit-dot-one" />
+              <span className="analysis-orbit-dot orbit-dot-two" />
+              <span className="analysis-brain-icon">?</span>
+            </div>
+
+            <span className="analysis-loading-kicker">Creating student insight</span>
+            <h2 id="analysis-loading-title">Please wait while we analyse the student</h2>
+            <p>
+              We are reviewing the lesson behaviour and preparing a clear explanation for you.
+            </p>
+
+            <div className="analysis-loading-steps" aria-label="Analysis in progress">
+              <span><i aria-hidden="true" /> Reviewing behaviour</span>
+              <span><i aria-hidden="true" /> Finding key signals</span>
+              <span><i aria-hidden="true" /> Preparing guidance</span>
+            </div>
+
+            <div className="analysis-loading-bar" aria-hidden="true">
+              <span />
+            </div>
+            <small>This may take a few moments. The result will open automatically.</small>
+          </div>
+        </div>
+      ) : null}
+
       <header className="student-analyse-header">
         <button
           type="button"
