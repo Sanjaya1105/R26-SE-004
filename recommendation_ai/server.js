@@ -21,6 +21,7 @@ const COGNITIVE_STYLE_TABLE = `\`${COGNITIVE_STYLE_DB_NAME}\`.\`cognitive-style-
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
 const GEMINI_TIMEOUT_MS = Number(process.env.GEMINI_TIMEOUT_MS || 120000);
 const RECOMMENDATION_PROMPT_VERSION = 'evidence-next-lesson-v1';
+const COVE_METHOD_VERSION = 'chain-of-verification-v1';
 
 app.use(cors());
 app.use(express.json());
@@ -237,7 +238,123 @@ function buildRecommendationPrompt(evidence) {
   ].join('\n');
 }
 
-async function generateGeminiRecommendation(evidence) {
+function buildVerificationQuestionsPrompt(draftRecommendation) {
+  return [
+    `Verification method: ${COVE_METHOD_VERSION}.`,
+    'Plan 3-6 verification questions that independently test every factual or causal claim in the draft.',
+    'Include numerical claims, descriptions of student behaviour, lesson content, causes, and evidence-to-action rationales.',
+    'A pedagogical action itself is advice, but any factual reason given for that action must be verified.',
+    'Return JSON only in this shape:',
+    '{"questions":[{"id":"q1","draftClaim":"exact claim being checked","question":"a yes/no evidence question"}]}',
+    `Draft recommendation:\n${draftRecommendation}`,
+  ].join('\n');
+}
+
+function buildVerificationAnswerPrompt(question, evidence) {
+  return [
+    `Verification method: ${COVE_METHOD_VERSION}.`,
+    'Answer this verification question independently using only the original evidence below.',
+    'The draft recommendation is intentionally not provided, so do not infer or reconstruct it.',
+    'Mark supported true only when the evidence directly supports the complete claim.',
+    'Correlation or an observed pattern does not support an invented cause.',
+    'Return JSON only in this shape:',
+    '{"supported":true,"answer":"short evidence answer","evidencePaths":["path.in.evidence"],"reason":"short reason"}',
+    `Verification question:\n${question.question}`,
+    `Original evidence:\n${JSON.stringify(evidence, null, 2)}`,
+  ].join('\n');
+}
+
+function buildFinalVerifiedRecommendationPrompt(draftRecommendation, evidence, verificationAnswers) {
+  return [
+    `Verification method: ${COVE_METHOD_VERSION}.`,
+    'Produce the final verified next-lesson recommendation.',
+    'Preserve useful advice from the draft, but remove or correct every claim marked unsupported.',
+    'Use only the original evidence and the independent verification answers.',
+    'Never add a new factual claim, student behaviour, lesson detail, or causal explanation.',
+    'Treat cognitive style as an observed lesson preference, not a permanent learner trait.',
+    'Write 130-190 words in plain teacher-friendly English.',
+    'Start with one short class insight, followed by exactly three numbered actions.',
+    'Do not mention verification, Gemini, prompts, databases, LIME, SHAP, algorithms, or confidence scores.',
+    'Return JSON only in this shape:',
+    '{"recommendation":"final text","fullyGrounded":true,"removedUnsupportedClaims":["claim"]}',
+    'Set fullyGrounded false if you cannot produce the requested plan without an unsupported factual claim.',
+    `Draft recommendation:\n${draftRecommendation}`,
+    `Independent verification answers:\n${JSON.stringify(verificationAnswers, null, 2)}`,
+    `Original evidence:\n${JSON.stringify(evidence, null, 2)}`,
+  ].join('\n');
+}
+
+function parseGeminiJson(text, label) {
+  const cleaned = String(text || '')
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/, '');
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    throw new Error(`Gemini returned invalid JSON during ${label}.`);
+  }
+}
+
+function normalizeVerificationQuestions(payload) {
+  const questions = Array.isArray(payload?.questions) ? payload.questions : [];
+  const normalized = questions
+    .map((item, index) => ({
+      id: String(item?.id || `q${index + 1}`).trim(),
+      draftClaim: String(item?.draftClaim || '').trim(),
+      question: String(item?.question || '').trim(),
+    }))
+    .filter((item) => item.draftClaim && item.question)
+    .slice(0, 6);
+  if (normalized.length < 3) {
+    throw new Error('CoVe did not produce enough valid verification questions.');
+  }
+  return normalized;
+}
+
+function normalizeEvidencePath(path) {
+  return String(path || '')
+    .trim()
+    .replace(/^\$\.?/, '')
+    .replace(/^evidence\./i, '')
+    .replace(/\[(\d+)\]/g, '.$1');
+}
+
+function evidencePathExists(evidence, path) {
+  const parts = normalizeEvidencePath(path).split('.').filter(Boolean);
+  if (!parts.length) return false;
+  let current = evidence;
+  for (const part of parts) {
+    if (current === null || current === undefined || !Object.prototype.hasOwnProperty.call(Object(current), part)) {
+      return false;
+    }
+    current = current[part];
+  }
+  return current !== undefined;
+}
+
+function normalizeVerificationAnswer(payload, question, evidence) {
+  if (typeof payload?.supported !== 'boolean') {
+    throw new Error(`CoVe returned an invalid answer for ${question.id}.`);
+  }
+  const evidencePaths = Array.isArray(payload.evidencePaths)
+    ? payload.evidencePaths.map(normalizeEvidencePath).filter(Boolean).slice(0, 8)
+    : [];
+  if (payload.supported && (!evidencePaths.length || evidencePaths.some((path) => !evidencePathExists(evidence, path)))) {
+    throw new Error(`CoVe cited invalid evidence for ${question.id}.`);
+  }
+  return {
+    id: question.id,
+    draftClaim: question.draftClaim,
+    question: question.question,
+    supported: payload.supported,
+    answer: String(payload.answer || '').trim(),
+    evidencePaths,
+    reason: String(payload.reason || '').trim(),
+  };
+}
+
+async function callGeminiText({ systemInstruction, prompt, temperature, maxOutputTokens, json = false }) {
   const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured.');
 
@@ -252,21 +369,97 @@ async function generateGeminiRecommendation(evidence) {
         signal: controller.signal,
         body: JSON.stringify({
           system_instruction: {
-            parts: [{ text: 'You are a cautious educational planning assistant. Produce actionable next-lesson guidance grounded only in supplied class evidence.' }],
+            parts: [{ text: systemInstruction }],
           },
-          contents: [{ role: 'user', parts: [{ text: buildRecommendationPrompt(evidence) }] }],
-          generationConfig: { temperature: 0.2, maxOutputTokens: 450 },
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature,
+            maxOutputTokens,
+            ...(json ? { responseMimeType: 'application/json' } : {}),
+          },
         }),
       },
     );
     if (!response.ok) throw new Error(`Gemini returned HTTP ${response.status}.`);
     const payload = await response.json();
     const text = payload?.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('').trim();
-    if (!text || text.length < 80) throw new Error('Gemini returned an incomplete recommendation.');
-    return { text, model: GEMINI_MODEL };
+    if (!text) throw new Error('Gemini returned an empty response.');
+    return text;
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function generateGeminiRecommendation(evidence, geminiCaller = callGeminiText) {
+  const draft = await geminiCaller({
+    systemInstruction: 'You are a cautious educational planning assistant. Ground all guidance only in supplied class evidence.',
+    prompt: buildRecommendationPrompt(evidence),
+    temperature: 0.2,
+    maxOutputTokens: 450,
+  });
+  if (String(draft).trim().length < 80) {
+    throw new Error('Gemini returned an incomplete draft recommendation.');
+  }
+
+  const questionsPayload = parseGeminiJson(await geminiCaller({
+    systemInstruction: 'You plan independent evidence checks for Chain-of-Verification. Return valid JSON only.',
+    prompt: buildVerificationQuestionsPrompt(draft),
+    temperature: 0,
+    maxOutputTokens: 700,
+    json: true,
+  }), 'CoVe question planning');
+  const questions = normalizeVerificationQuestions(questionsPayload);
+
+  const verificationAnswers = await Promise.all(questions.map(async (question) => {
+    const answerPayload = parseGeminiJson(await geminiCaller({
+      systemInstruction: 'You are an independent evidence verifier. Return valid JSON only and never infer beyond the supplied evidence.',
+      prompt: buildVerificationAnswerPrompt(question, evidence),
+      temperature: 0,
+      maxOutputTokens: 350,
+      json: true,
+    }), `CoVe verification answer ${question.id}`);
+    return normalizeVerificationAnswer(answerPayload, question, evidence);
+  }));
+
+  const finalPayload = parseGeminiJson(await geminiCaller({
+    systemInstruction: 'You revise educational guidance using independent Chain-of-Verification results. Return valid JSON only.',
+    prompt: buildFinalVerifiedRecommendationPrompt(draft, evidence, verificationAnswers),
+    temperature: 0.1,
+    maxOutputTokens: 600,
+    json: true,
+  }), 'CoVe final synthesis');
+  const recommendation = String(finalPayload?.recommendation || '').trim();
+  if (finalPayload?.fullyGrounded !== true || recommendation.length < 80) {
+    throw new Error('CoVe could not produce a fully grounded recommendation.');
+  }
+
+  const removedUnsupportedClaims = Array.isArray(finalPayload.removedUnsupportedClaims)
+    ? finalPayload.removedUnsupportedClaims.map((claim) => String(claim).trim()).filter(Boolean)
+    : [];
+  const unsupportedClaims = verificationAnswers
+    .filter((answer) => !answer.supported)
+    .map((answer) => answer.draftClaim);
+  if (unsupportedClaims.length && !removedUnsupportedClaims.length) {
+    throw new Error('CoVe did not report removal of unsupported claims.');
+  }
+  const normalizedRecommendation = recommendation.toLowerCase();
+  if (unsupportedClaims.some((claim) => normalizedRecommendation.includes(claim.toLowerCase()))) {
+    throw new Error('CoVe retained an unsupported claim in the final recommendation.');
+  }
+  return {
+    text: recommendation,
+    draft: String(draft).trim(),
+    model: GEMINI_MODEL,
+    verification: {
+      method: 'Chain-of-Verification',
+      version: COVE_METHOD_VERSION,
+      status: 'verified',
+      questionCount: verificationAnswers.length,
+      unsupportedClaimCount: verificationAnswers.filter((answer) => !answer.supported).length,
+      removedUnsupportedClaims,
+      answers: verificationAnswers,
+    },
+  };
 }
 
 async function ensureTables() {
@@ -287,11 +480,15 @@ async function ensureTables() {
       dominant_cognitive_load VARCHAR(20) NOT NULL,
       recommendation_text TEXT NOT NULL,
       generated_recommendation_text TEXT NULL,
+      original_draft_text TEXT NULL,
       baseline_recommendation_text TEXT NULL,
       recommendation_source VARCHAR(40) NOT NULL DEFAULT 'fixed-template',
       generation_model VARCHAR(100) NULL,
       evidence_snapshot LONGTEXT NULL,
       fallback_reason TEXT NULL,
+      verification_method VARCHAR(80) NULL,
+      verification_status VARCHAR(30) NOT NULL DEFAULT 'not-run',
+      verification_report LONGTEXT NULL,
       teacher_review_status VARCHAR(20) NOT NULL DEFAULT 'pending',
       teacher_review_reason TEXT NULL,
       box_plot_data LONGTEXT NOT NULL,
@@ -318,12 +515,16 @@ async function ensureTables() {
 
   const requiredColumns = {
     generated_recommendation_text: 'TEXT NULL AFTER recommendation_text',
-    baseline_recommendation_text: 'TEXT NULL AFTER generated_recommendation_text',
+    original_draft_text: 'TEXT NULL AFTER generated_recommendation_text',
+    baseline_recommendation_text: 'TEXT NULL AFTER original_draft_text',
     recommendation_source: "VARCHAR(40) NOT NULL DEFAULT 'fixed-template' AFTER baseline_recommendation_text",
     generation_model: 'VARCHAR(100) NULL AFTER recommendation_source',
     evidence_snapshot: 'LONGTEXT NULL AFTER generation_model',
     fallback_reason: 'TEXT NULL AFTER evidence_snapshot',
-    teacher_review_status: "VARCHAR(20) NOT NULL DEFAULT 'pending' AFTER fallback_reason",
+    verification_method: 'VARCHAR(80) NULL AFTER fallback_reason',
+    verification_status: "VARCHAR(30) NOT NULL DEFAULT 'not-run' AFTER verification_method",
+    verification_report: 'LONGTEXT NULL AFTER verification_status',
+    teacher_review_status: "VARCHAR(20) NOT NULL DEFAULT 'pending' AFTER verification_report",
     teacher_review_reason: 'TEXT NULL AFTER teacher_review_status',
   };
   for (const [column, definition] of Object.entries(requiredColumns)) {
@@ -514,11 +715,17 @@ function responseRecord(row) {
     dominantCognitiveLoad: row.dominant_cognitive_load,
     recommendation: row.recommendation_text,
     generatedRecommendation: row.generated_recommendation_text || row.recommendation_text,
+    originalDraft: row.original_draft_text,
     baselineRecommendation: row.baseline_recommendation_text,
     recommendationSource: row.recommendation_source || 'fixed-template',
     generationModel: row.generation_model,
     evidence,
     fallbackReason: row.fallback_reason,
+    verification: {
+      method: row.verification_method,
+      status: row.verification_status || 'not-run',
+      report: safeJsonParse(row.verification_report, null),
+    },
     teacherReview: {
       status: row.teacher_review_status || 'pending',
       reason: row.teacher_review_reason || '',
@@ -583,13 +790,27 @@ app.post('/recommendations', async (req, res) => {
     let recommendationSource = 'fixed-template';
     let generationModel = null;
     let fallbackReason = null;
+    let originalDraft = null;
+    const verificationMethod = 'Chain-of-Verification';
+    let verificationStatus = 'not-run';
+    let verificationReport = null;
     try {
       const generated = await generateGeminiRecommendation(evidence);
       recommendation = generated.text;
-      recommendationSource = 'gemini-evidence';
+      originalDraft = generated.draft;
+      recommendationSource = 'gemini-cove-verified';
       generationModel = generated.model;
+      verificationStatus = 'verified';
+      verificationReport = generated.verification;
     } catch (generationError) {
       fallbackReason = generationError.message;
+      verificationStatus = 'failed';
+      verificationReport = {
+        method: verificationMethod,
+        version: COVE_METHOD_VERSION,
+        status: 'failed',
+        error: generationError.message,
+      };
       console.warn('Using fixed next-lesson fallback:', fallbackReason);
     }
     const teacherId = String(course.educatorId);
@@ -612,14 +833,16 @@ app.post('/recommendations', async (req, res) => {
         (teacher_id, course_id, course_name, matched_lesson_ids,
          very_low_count, low_count, medium_count, high_count, very_high_count,
          unknown_count, total_observations, dominant_cognitive_load, recommendation_text,
-         generated_recommendation_text, baseline_recommendation_text, recommendation_source, generation_model,
-         evidence_snapshot, fallback_reason, teacher_review_status, teacher_review_reason,
+         generated_recommendation_text, original_draft_text, baseline_recommendation_text,
+         recommendation_source, generation_model, evidence_snapshot, fallback_reason,
+         verification_method, verification_status, verification_report,
+         teacher_review_status, teacher_review_reason,
          box_plot_data)
        VALUES (?, ?, ?, ?,
                ?, ?, ?, ?, ?, ?,
                ?, ?, ?,
-               ?, ?, ?, ?,
-               ?, ?,
+               ?, ?, ?, ?, ?,
+               ?, ?, ?, ?, ?,
                'pending', NULL, ?)
        ON DUPLICATE KEY UPDATE
          course_name = VALUES(course_name),
@@ -634,11 +857,15 @@ app.post('/recommendations', async (req, res) => {
          dominant_cognitive_load = VALUES(dominant_cognitive_load),
          recommendation_text = VALUES(recommendation_text),
          generated_recommendation_text = VALUES(generated_recommendation_text),
+         original_draft_text = VALUES(original_draft_text),
          baseline_recommendation_text = VALUES(baseline_recommendation_text),
          recommendation_source = VALUES(recommendation_source),
          generation_model = VALUES(generation_model),
          evidence_snapshot = VALUES(evidence_snapshot),
          fallback_reason = VALUES(fallback_reason),
+         verification_method = VALUES(verification_method),
+         verification_status = VALUES(verification_status),
+         verification_report = VALUES(verification_report),
          teacher_review_status = 'pending',
          teacher_review_reason = NULL,
          box_plot_data = VALUES(box_plot_data),
@@ -647,8 +874,9 @@ app.post('/recommendations', async (req, res) => {
         teacherId, courseId, course.courseName, JSON.stringify(lessonIds),
         counts['Very Low'], counts.Low, counts.Medium, counts.High,
         counts['Very High'], counts.Unknown, total, dominant, recommendation,
-        recommendation, baselineRecommendation, recommendationSource, generationModel,
-        JSON.stringify(evidence), fallbackReason,
+        recommendation, originalDraft, baselineRecommendation, recommendationSource, generationModel,
+        JSON.stringify(evidence), fallbackReason, verificationMethod, verificationStatus,
+        JSON.stringify(verificationReport),
         JSON.stringify(boxPlotData),
       ]
     );
@@ -776,5 +1004,13 @@ module.exports = {
   createStyleCounts,
   buildEvidenceSnapshot,
   buildRecommendationPrompt,
+  buildVerificationQuestionsPrompt,
+  buildVerificationAnswerPrompt,
+  buildFinalVerifiedRecommendationPrompt,
+  parseGeminiJson,
+  normalizeVerificationQuestions,
+  normalizeVerificationAnswer,
+  evidencePathExists,
+  generateGeminiRecommendation,
   recommendationFor,
 };

@@ -327,9 +327,15 @@
   color: #92400e;
 }
 
+.recommendation-source.gemini-cove-verified {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #166534;
+}
+
 .recommendation-evidence-grid {
   display: grid;
-  grid-template-columns: minmax(180px, 0.7fr) repeat(2, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 1rem;
   margin-top: 1.25rem;
 }
@@ -392,6 +398,11 @@
 .evidence-detail-card li strong {
   color: #1e3a8a;
   white-space: nowrap;
+}
+
+.verification-card {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
 }
 
 .evidence-detail-card p {

@@ -22,6 +22,7 @@ export default function NextLessonRecommendation() {
 
   const token = localStorage.getItem('token');
   const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const isCoveVerified = recommendation?.recommendationSource === 'gemini-cove-verified';
 
   useEffect(() => {
     let active = true;
@@ -231,8 +232,8 @@ export default function NextLessonRecommendation() {
                     <h2>What shaped this recommendation</h2>
                   </div>
                   <span className={`recommendation-source ${recommendation.recommendationSource}`}>
-                    {recommendation.recommendationSource === 'gemini-evidence'
-                      ? 'Evidence-based AI guidance'
+                    {isCoveVerified
+                      ? 'CoVe-verified AI guidance'
                       : 'Reliable template fallback'}
                   </span>
                 </div>
@@ -271,11 +272,37 @@ export default function NextLessonRecommendation() {
                       </ul>
                     ) : <p>No completed cognitive-style analyses are available yet.</p>}
                   </div>
+
+                  <div className="evidence-detail-card verification-card">
+                    <h3>Hallucination verification</h3>
+                    {isCoveVerified ? (
+                      <ul>
+                        <li>
+                          <span>Method</span>
+                          <strong>{recommendation.verification?.method || 'Chain-of-Verification'}</strong>
+                        </li>
+                        <li>
+                          <span>Status</span>
+                          <strong>Verified</strong>
+                        </li>
+                        <li>
+                          <span>Questions checked</span>
+                          <strong>{recommendation.verification?.report?.questionCount || 0}</strong>
+                        </li>
+                        <li>
+                          <span>Unsupported claims found</span>
+                          <strong>{recommendation.verification?.report?.unsupportedClaimCount || 0}</strong>
+                        </li>
+                      </ul>
+                    ) : (
+                      <p>CoVe verification did not complete, so the fixed evidence-based template was used.</p>
+                    )}
+                  </div>
                 </div>
 
-                {recommendation.recommendationSource !== 'gemini-evidence' && (
+                {!isCoveVerified && (
                   <p className="recommendation-fallback-note">
-                    The evidence summary remains available, but the dependable fixed recommendation was used because AI generation was unavailable.
+                    The evidence summary remains available, but the dependable fixed recommendation was used because AI generation or verification did not complete.
                   </p>
                 )}
               </article>
