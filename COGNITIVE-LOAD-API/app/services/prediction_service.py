@@ -49,15 +49,34 @@ MODEL_FEATURE_FIELDS = [
 ]
 
 
+COGNITIVE_LOAD_LABELS = {
+    1: "Very Low",
+    2: "Low",
+    3: "Medium",
+    4: "High",
+    5: "Very High",
+}
+
+COGNITIVE_LOAD_SCORES = {
+    label.lower(): score for score, label in COGNITIVE_LOAD_LABELS.items()
+}
+
+
 def get_label(score: int):
-    labels = {
-        1: "Very Low",
-        2: "Low",
-        3: "Medium",
-        4: "High",
-        5: "Very High",
-    }
-    return labels.get(score, "Unknown")
+    return COGNITIVE_LOAD_LABELS.get(score, "Unknown")
+
+
+def normalize_prediction_value(prediction):
+    if hasattr(prediction, "item"):
+        prediction = prediction.item()
+
+    try:
+        score = int(prediction)
+        return get_label(score), score
+    except (TypeError, ValueError):
+        label = str(prediction)
+        score = COGNITIVE_LOAD_SCORES.get(label.lower(), 0)
+        return label if score else "Unknown", score
 
 
 def save_to_csv(row_data: dict):
@@ -199,7 +218,7 @@ def predict_cognitive_load(data, persist: bool | None = None):
     prediction = model.predict(input_df)[0]
     proba = model.predict_proba(input_df)[0]
     confidence = max(proba)
-    label = get_label(int(prediction))
+    label, predicted_score = normalize_prediction_value(prediction)
 
     response_data = {
         "student_id": data.student_id,
@@ -217,7 +236,7 @@ def predict_cognitive_load(data, persist: bool | None = None):
         "quiz_response_time": quiz_response_time,
         "error_rate": error_rate,
         "predicted_cognitive_load": label,
-        "predicted_score": int(prediction),
+        "predicted_score": predicted_score,
         "predicted_label": label,
         "confidence": round(float(confidence), 2),
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -232,7 +251,7 @@ def predict_cognitive_load(data, persist: bool | None = None):
                 "lesson_id": data.lesson_id,
                 "session_id": data.session_id,
                 "predicted_cognitive_load": label,
-                "predicted_score": int(prediction),
+                "predicted_score": predicted_score,
                 "confidence": round(float(confidence), 2),
             }
         )
