@@ -2,7 +2,11 @@ const { spawn } = require("child_process");
 const path = require("path");
 const { filterWhisperNoise } = require("./whisperNoise.service");
 
-const THRESHOLD = 0.70;
+const PPT_THRESHOLD = 0.70;
+const PDF_THRESHOLD = 0.58;
+const VIDEO_THRESHOLD = 0.62;
+const VIDEO_INTRA_THRESHOLD = 0.70;
+const THRESHOLD = VIDEO_THRESHOLD;
 const MIN_CHARS = 40;
 const MAX_TRANSCRIPT_CHUNKS = 280;
 const QUOTE_RE = /"([^"]{12,})"/g;
@@ -83,6 +87,14 @@ function cosine(a, b) {
   return dot / (Math.sqrt(na) * Math.sqrt(nb));
 }
 
+function maxCosine(vec, others) {
+  let best = 0;
+  for (const other of others) {
+    best = Math.max(best, cosine(vec, other));
+  }
+  return best;
+}
+
 function lexicalEmbeddings(texts) {
   const docs = texts.map(tokenize);
   const vocab = new Map();
@@ -113,7 +125,7 @@ function downsample(chunks, limit) {
   return [...start, ...middle, ...end];
 }
 
-function lexicalDedupe({ pptText, pdfText, transcriptText, threshold = THRESHOLD, protectMath = false }) {
+function lexicalDedupe({ pptText, pdfText, transcriptText, protectMath = false }) {
   const splitter = protectMath ? splitMathAware : splitChunks;
   const groups = [
     ["ppt", splitter(pptText)],
@@ -134,41 +146,65 @@ function lexicalDedupe({ pptText, pdfText, transcriptText, threshold = THRESHOLD
         inputChunks: 0,
         kept: 0,
         dropped: 0,
-        threshold,
+        threshold: VIDEO_THRESHOLD,
         protectMath: Boolean(protectMath),
       },
     };
   }
 
   const vectors = lexicalEmbeddings(items.map((item) => item.text));
-  const keptVectors = [];
+  const slideVectors = items
+    .map((item, index) => (item.source === "ppt" || item.source === "pdf" ? vectors[index] : null))
+    .filter(Boolean);
+  const keptPpt = [];
+  const keptPdf = [];
+  const keptVideo = [];
   const kept = { ppt: [], pdf: [], video: [] };
   let dropped = 0;
 
   items.forEach((item, index) => {
     const vec = vectors[index];
     if (!item.math) {
-      const maxSim = keptVectors.reduce((best, other) => Math.max(best, cosine(vec, other)), 0);
-      if (maxSim >= threshold) {
+      if (item.source === "ppt") {
+        if (maxCosine(vec, keptPpt) >= PPT_THRESHOLD) {
+          dropped += 1;
+          return;
+        }
+        keptPpt.push(vec);
+      } else if (item.source === "pdf") {
+        if (maxCosine(vec, [...keptPpt, ...keptPdf]) >= PDF_THRESHOLD) {
+          dropped += 1;
+          return;
+        }
+        keptPdf.push(vec);
+      } else if (
+        maxCosine(vec, slideVectors) >= VIDEO_THRESHOLD ||
+        maxCosine(vec, keptVideo) >= VIDEO_INTRA_THRESHOLD
+      ) {
         dropped += 1;
         return;
+      } else {
+        keptVideo.push(vec);
       }
-      keptVectors.push(vec);
     }
     kept[item.source].push(item.text);
   });
 
-  const joiner = protectMath ? "\n\n" : " ";
   return {
-    ppt: kept.ppt.join(joiner),
-    pdf: kept.pdf.join(joiner),
-    transcript: kept.video.join(joiner),
+    ppt: kept.ppt.join("\n\n"),
+    pdf: kept.pdf.join("\n\n"),
+    transcript: kept.video.join("\n\n"),
     stats: {
       method: "lexical_tf_cosine_fallback",
       inputChunks: items.length,
       kept: items.length - dropped,
       dropped,
-      threshold,
+      keptPpt: kept.ppt.length,
+      keptPdf: kept.pdf.length,
+      keptVideo: kept.video.length,
+      pptThreshold: PPT_THRESHOLD,
+      pdfThreshold: PDF_THRESHOLD,
+      videoThreshold: VIDEO_THRESHOLD,
       protectMath: Boolean(protectMath),
     },
   };
@@ -245,7 +281,6 @@ async function dedupeSubsectionExtracts({
     pptText,
     pdfText,
     transcriptText: filterWhisperNoise(transcriptText),
-    threshold: THRESHOLD,
     protectMath: Boolean(protectMath),
   };
 

@@ -12,6 +12,11 @@ const {
   updateCourse,
   deleteCourse,
 } = require("../controllers/course.controller");
+const attachOptionalJwt = require("../middleware/attachOptionalJwt.middleware");
+const {
+  getWatchProgress,
+  upsertWatchProgress,
+} = require("../controllers/courseWatchProgress.controller");
 const {
   createCourseSections,
   createSingleSection,
@@ -35,6 +40,18 @@ router.get(
     req.params.kind = "pdf";
     return downloadPublicSubsectionFile(req, res, next);
   }
+);
+router.get(
+  "/public/courses/:courseId/watch-progress",
+  ensureGatewayAccess,
+  attachOptionalJwt,
+  getWatchProgress
+);
+router.put(
+  "/public/courses/:courseId/watch-progress",
+  ensureGatewayAccess,
+  attachOptionalJwt,
+  upsertWatchProgress
 );
 router.get(
   "/public/courses/:courseId",

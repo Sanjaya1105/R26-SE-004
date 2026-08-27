@@ -4,6 +4,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { getGatewayBaseUrl } from '../config/gateway';
 import { assertClientVideoDuration } from '../utils/videoDuration';
 import ContainsMathCheckbox from '../components/ContainsMathCheckbox';
+import {
+  enableTeacherPushNotifications,
+  trackProcessingSubsection,
+} from '../utils/pushNotifications';
 
 function getLoggedInEducatorName() {
   try {
@@ -65,6 +69,10 @@ function SubsectionMaterialsUpdater({
     if (subsection.pptUrl) parts.push('PPT');
     if (subsection.pdfUrl) parts.push('PDF');
     if (subsection.containsMath) parts.push('Equations preserved');
+    if (subsection.knowledgeStatus === 'processing' || subsection.knowledgeStatus === 'rebuilding') {
+      parts.push('Processing in background');
+    }
+    if (subsection.knowledgeStatus === 'failed') parts.push('Processing failed');
     const imgCount = Array.isArray(subsection.images) ? subsection.images.length : 0;
     if (imgCount > 0) parts.push(`${imgCount} image${imgCount === 1 ? '' : 's'}`);
     return parts.length ? parts.join(' · ') : 'No materials yet';
@@ -73,6 +81,7 @@ function SubsectionMaterialsUpdater({
     subsection.pptUrl,
     subsection.pdfUrl,
     subsection.containsMath,
+    subsection.knowledgeStatus,
     subsection.images,
   ]);
 
@@ -116,7 +125,8 @@ function SubsectionMaterialsUpdater({
 
     try {
       setSaving(true);
-      await axios.patch(
+      await enableTeacherPushNotifications();
+      const patchRes = await axios.patch(
         `${gatewayBaseUrl}/api/sections/${encodeURIComponent(String(sectionId))}/subsections/${encodeURIComponent(String(subsection.id))}`,
         formData,
         {
@@ -126,7 +136,18 @@ function SubsectionMaterialsUpdater({
         }
       );
       clearFiles();
-      setLocalMsg('Subsection materials updated.');
+      if (subVideo || subPpt || subPdf || mathChanged) {
+        trackProcessingSubsection({
+          id: subsection.id,
+          sectionId,
+          label: `Subsection ${orderLabel || ''}`.trim(),
+        });
+        setLocalMsg(
+          'Files saved. Processing is running in the background. You will get a Chrome notification when it is ready.'
+        );
+      } else {
+        setLocalMsg('Subsection updated.');
+      }
       onUpdated();
     } catch (error) {
       if (error.response?.status === 401 || error.response?.status === 403) {
@@ -399,7 +420,8 @@ function NewSubsectionForm({
 
     try {
       setSaving(true);
-      await axios.post(
+      await enableTeacherPushNotifications();
+      const addRes = await axios.post(
         `${gatewayBaseUrl}/api/sections/${encodeURIComponent(String(sectionId))}/subsections`,
         formData,
         {
@@ -408,8 +430,18 @@ function NewSubsectionForm({
           maxContentLength: Infinity,
         }
       );
+      const created = addRes.data?.data?.subsection;
+      if (created?.id) {
+        trackProcessingSubsection({
+          id: created.id,
+          sectionId,
+          label: 'New subsection',
+        });
+      }
       clearFiles();
-      setLocalMsg('New subsection added.');
+      setLocalMsg(
+        'Files saved. Processing is running in the background. You will get a Chrome notification when it is ready.'
+      );
       onAdded();
     } catch (error) {
       if (error.response?.status === 401 || error.response?.status === 403) {

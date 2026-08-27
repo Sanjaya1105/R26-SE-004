@@ -67,14 +67,19 @@ async function rebuildSubsectionKnowledge(subsectionId) {
     equations,
   });
 
+  const uniqueLen = [dedupeResult.ppt, dedupeResult.pdf, dedupeResult.transcript]
+    .map((text) => String(text || "").trim())
+    .join("\n").length;
+  const usable = uniqueLen > 0 || String(doc.transcriptText || "").trim().length > 0;
   applyUniqueKnowledge(doc, {
     transcriptText: doc.transcriptText || "",
     dedupeResult,
     equations,
     containsMath: Boolean(doc.containsMath),
-    quality: quality.ok
-      ? quality
-      : { status: "failed", reasons: quality.reasons },
+    quality: {
+      status: usable ? "ready" : "failed",
+      reasons: usable ? [] : quality.reasons,
+    },
   });
   await doc.save();
 

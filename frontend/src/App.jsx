@@ -26,6 +26,7 @@ import ExamMaterialUpload from './pages/ExamMaterialUpload';
 import ObjectSpacialVerbalQuestionnaire from './pages/cognitiveStyleAndLearnerProfile/CognitiveStyle/SplitScreenModule/ObjectSpacialVerbalQuestionnaire/ObjectSpacialVerbalQuestionnaire';
 import GetExam from './pages/GetExam';
 import NextLessonRecommendation from './pages/NextLessonRecommendation';
+import TeacherPushBridge from './components/TeacherPushBridge';
 import './index.css';
 
 const getStoredUser = () => {
@@ -52,6 +53,7 @@ const StudentRoute = ({ children }) => {
 function App() {
   return (
     <Router>
+      <TeacherPushBridge />
       <Routes>
         <Route path="/" element={<Navigate to="/course" replace />} />
         <Route path="/student/login" element={<StudentLogin />} />

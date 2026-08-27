@@ -5,6 +5,19 @@ import { getGatewayBaseUrl } from '../config/gateway';
 import AssistantMarkdown from '../components/AssistantMarkdown';
 import { selectBestOutputLocally } from '../utils/selectBestOutputLocal';
 import { parseCanonicalEquations } from '../utils/assistantMath';
+import {
+  addPlaybackInterval,
+  coveredSeconds,
+  getWatchUserId,
+  loadLocalProgress,
+  mergeLessonMaps,
+  probeVideoDuration,
+  saveLocalProgress,
+  seedDurationsFromSections,
+  summarizeCourseWatch,
+} from '../utils/videoWatchProgress';
+import { CourseWatchRing, MiniWatchRing } from '../components/CourseWatchRing';
+import './CourseDetail.css';
 
 function buildGptAskUrls() {
   const base = getGatewayBaseUrl();
@@ -69,19 +82,7 @@ function PlaybackPersonalizationPrompt({ kind, onYes, onNo, busy }) {
       role="status"
       aria-live="polite"
       aria-labelledby="playback-personalization-title"
-      style={{
-        position: 'fixed',
-        right: '1.1rem',
-        bottom: '1.1rem',
-        width: 'min(360px, calc(100vw - 2rem))',
-        zIndex: 40,
-        padding: '0.9rem 1rem',
-        borderRadius: '12px',
-        border: '1px solid rgba(148, 163, 184, 0.35)',
-        background: '#1e293b',
-        boxShadow: '0 12px 32px rgba(0, 0, 0, 0.38)',
-        color: '#e2e8f0',
-      }}
+      className="course-learn__toast"
     >
       <p
         id="playback-personalization-title"
@@ -613,11 +614,12 @@ const CourseDetail = () => {
   /** Below this width, sidebar stacks full-width (fixed ¼ width is unreadable). */
   const [stackLayout, setStackLayout] = useState(() =>
     typeof window !== 'undefined'
-      ? window.matchMedia('(max-width: 760px)').matches
+      ? window.matchMedia('(max-width: 860px)').matches
       : false
   );
   const [course, setCourse] = useState(null);
   const [sections, setSections] = useState([]);
+  const [preparingLessonCount, setPreparingLessonCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   /** section id → expanded */
@@ -659,6 +661,7 @@ const CourseDetail = () => {
   const [cognitiveLoadLoading, setCognitiveLoadLoading] = useState(false);
   const [videoSessionId, setVideoSessionId] = useState('');
   const [rawEventStats, setRawEventStats] = useState(createEmptyRawEventStats);
+  const [watchLessons, setWatchLessons] = useState({});
   const videoRef = useRef(null);
   const askPanelRef = useRef(null);
   const playbackPromptRef = useRef(null);
@@ -686,6 +689,12 @@ const CourseDetail = () => {
   const activeRawEventWindowKeyRef = useRef('');
   const rawEventQueueRef = useRef(Promise.resolve());
   const windowStatsByKeyRef = useRef({});
+  const watchLessonsRef = useRef({});
+  const lastPlaybackMarkRef = useRef(null);
+  const persistWatchTimeoutRef = useRef(null);
+  const watchUiTimeoutRef = useRef(null);
+  const watchUserIdRef = useRef(getWatchUserId());
+  const courseIdRef = useRef(courseId);
 
   const toggleSection = (sectionId) => {
     const k = String(sectionId);
@@ -697,6 +706,8 @@ const CourseDetail = () => {
     setOpenSubsectionId((prev) => (prev === k ? null : k));
   };
 
+  courseIdRef.current = courseId;
+  watchUserIdRef.current = getWatchUserId();
   const livePredictionSummary = getLivePredictionSummary(cognitiveLoadResult);
   const liveLoadStatus = livePredictionSummary?.predictedLoad || 'Collecting data';
   const liveLoadTheme = getCognitiveLoadTheme(liveLoadStatus);
@@ -790,6 +801,7 @@ const CourseDetail = () => {
       isSeekingRef.current = false;
       lastSeekEventTimeRef.current = 0;
       lastRewatchEventTimeRef.current = 0;
+      lastPlaybackMarkRef.current = null;
       suppressPauseCountUntilRef.current = 0;
       seekGestureStartTimeRef.current = 0;
       seekDragActiveRef.current = false;
@@ -991,6 +1003,112 @@ const CourseDetail = () => {
     idleStartRef.current = null;
   };
 
+  const applyWatchLessons = (next, { persistLocal = true } = {}) => {
+    watchLessonsRef.current = next;
+    setWatchLessons(next);
+    if (persistLocal && courseIdRef.current) {
+      saveLocalProgress(courseIdRef.current, watchUserIdRef.current, next);
+    }
+  };
+
+  const flushWatchToServer = (subsectionId, lesson, { immediate = false } = {}) => {
+    const id = String(subsectionId || '');
+    const activeCourseId = String(courseIdRef.current || '').trim();
+    if (!id || !activeCourseId || !lesson) return;
+
+    const send = async () => {
+      persistWatchTimeoutRef.current = null;
+      const token = localStorage.getItem('token');
+      try {
+        await axios.put(
+          `${getGatewayBaseUrl()}/api/public/courses/${encodeURIComponent(activeCourseId)}/watch-progress`,
+          {
+            subsectionId: id,
+            durationSec: Number(lesson.durationSec) || 0,
+            intervals: lesson.intervals || [],
+          },
+          {
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          }
+        );
+      } catch {
+        // Local progress still stands if the server is unavailable.
+      }
+    };
+
+    if (persistWatchTimeoutRef.current) {
+      window.clearTimeout(persistWatchTimeoutRef.current);
+      persistWatchTimeoutRef.current = null;
+    }
+    if (immediate) {
+      send();
+      return;
+    }
+    persistWatchTimeoutRef.current = window.setTimeout(send, 1500);
+  };
+
+  const recordWatchRange = (from, to, durationSec) => {
+    const subsectionId = String(mainVideo?.subsectionId || '');
+    if (!subsectionId) return;
+
+    const prev = watchLessonsRef.current[subsectionId] || {
+      durationSec: 0,
+      intervals: [],
+    };
+    const nextDuration = Math.max(Number(prev.durationSec) || 0, Number(durationSec) || 0);
+    const intervals = addPlaybackInterval(prev.intervals, from, to, nextDuration);
+    if (
+      nextDuration === (Number(prev.durationSec) || 0) &&
+      coveredSeconds(intervals) === coveredSeconds(prev.intervals)
+    ) {
+      return;
+    }
+
+    const nextLesson = { durationSec: nextDuration, intervals };
+    watchLessonsRef.current = {
+      ...watchLessonsRef.current,
+      [subsectionId]: nextLesson,
+    };
+
+    if (!watchUiTimeoutRef.current) {
+      watchUiTimeoutRef.current = window.setTimeout(() => {
+        watchUiTimeoutRef.current = null;
+        applyWatchLessons(watchLessonsRef.current);
+      }, 250);
+    }
+
+    flushWatchToServer(subsectionId, nextLesson);
+  };
+
+  const rememberVideoDuration = (durationSec) => {
+    const subsectionId = String(mainVideo?.subsectionId || '');
+    const duration = Number(durationSec) || 0;
+    if (!subsectionId || duration < 1) return;
+    const prev = watchLessonsRef.current[subsectionId] || {
+      durationSec: 0,
+      intervals: [],
+    };
+    if ((Number(prev.durationSec) || 0) >= duration) return;
+    const nextLesson = { ...prev, durationSec: duration };
+    applyWatchLessons({
+      ...watchLessonsRef.current,
+      [subsectionId]: nextLesson,
+    });
+    flushWatchToServer(subsectionId, nextLesson);
+  };
+
+  const flushCurrentWatch = () => {
+    if (watchUiTimeoutRef.current) {
+      window.clearTimeout(watchUiTimeoutRef.current);
+      watchUiTimeoutRef.current = null;
+      applyWatchLessons(watchLessonsRef.current);
+    }
+    const subsectionId = String(mainVideo?.subsectionId || '');
+    if (!subsectionId) return;
+    const lesson = watchLessonsRef.current[subsectionId];
+    if (lesson) flushWatchToServer(subsectionId, lesson, { immediate: true });
+  };
+
   const isPauseFromSeek = () => {
     const now = Date.now();
     const recentlySought = now - lastSeekEventTimeRef.current < 600;
@@ -1079,6 +1197,7 @@ const CourseDetail = () => {
     }, 350);
 
     markInteraction();
+    flushCurrentWatch();
   };
 
   const handleVideoPlay = () => {
@@ -1086,10 +1205,12 @@ const CourseDetail = () => {
       window.clearTimeout(pauseConfirmTimeoutRef.current);
       pauseConfirmTimeoutRef.current = null;
     }
+    lastPlaybackMarkRef.current = Number(videoRef.current?.currentTime || 0);
     markInteraction();
   };
 
   const handleVideoSeeking = () => {
+    lastPlaybackMarkRef.current = null;
     seekStartTimeRef.current = lastVideoTimeRef.current;
     isSeekingRef.current = true;
     lastSeekEventTimeRef.current = Date.now();
@@ -1099,6 +1220,7 @@ const CourseDetail = () => {
   };
 
   const handleVideoSeeked = () => {
+    lastPlaybackMarkRef.current = Number(videoRef.current?.currentTime || 0);
     lastSeekEventTimeRef.current = Date.now();
     suppressPauseCountUntilRef.current = Date.now() + 2000;
 
@@ -1170,6 +1292,25 @@ const CourseDetail = () => {
     const currentTime = Number(videoRef.current?.currentTime || 0);
     const previousTime = Number(lastVideoTimeRef.current || 0);
     const jumpDistance = Math.abs(currentTime - previousTime);
+    const duration = Number(videoRef.current?.duration || 0);
+    const isPlaying =
+      Boolean(videoRef.current) &&
+      !videoRef.current.paused &&
+      !videoRef.current.ended &&
+      !isSeekingRef.current &&
+      !videoRef.current.seeking;
+
+    if (isPlaying) {
+      const prevMark = lastPlaybackMarkRef.current;
+      if (prevMark == null) {
+        lastPlaybackMarkRef.current = currentTime;
+      } else if (currentTime >= prevMark && currentTime - prevMark <= 1.25) {
+        recordWatchRange(prevMark, currentTime, duration);
+        lastPlaybackMarkRef.current = currentTime;
+      } else {
+        lastPlaybackMarkRef.current = currentTime;
+      }
+    }
 
     if (jumpDistance > SEEK_JUMP_THRESHOLD_SECONDS) {
       commitVideoNavigationEvent({
@@ -1180,7 +1321,6 @@ const CourseDetail = () => {
 
     lastVideoTimeRef.current = currentTime;
 
-    const duration = Number(videoRef.current?.duration || 0);
     if (!Number.isFinite(duration) || duration <= 0) {
       return;
     }
@@ -1193,7 +1333,19 @@ const CourseDetail = () => {
     }
   };
 
+  const handleVideoLoadedMetadata = () => {
+    rememberVideoDuration(Number(videoRef.current?.duration || 0));
+  };
+
   const handleVideoEnded = () => {
+    const duration = Number(videoRef.current?.duration || 0);
+    const currentTime = Number(videoRef.current?.currentTime || 0);
+    if (duration > 0) {
+      recordWatchRange(Math.max(0, duration - 0.5), duration, duration);
+    } else if (currentTime > 0) {
+      recordWatchRange(Math.max(0, currentTime - 0.5), currentTime, currentTime);
+    }
+    flushCurrentWatch();
     openPlaybackPersonalizationPrompt('end');
     markInteraction();
   };
@@ -1363,7 +1515,7 @@ const CourseDetail = () => {
   ]);
 
   useEffect(() => {
-    const mq = window.matchMedia('(max-width: 760px)');
+    const mq = window.matchMedia('(max-width: 860px)');
     const sync = () => setStackLayout(mq.matches);
     sync();
     mq.addEventListener('change', sync);
@@ -1378,44 +1530,227 @@ const CourseDetail = () => {
       return undefined;
     }
 
-    (async () => {
-      setError('');
-      setLoading(true);
+    const loadCourse = async ({ silent } = {}) => {
+      if (!silent) {
+        setError('');
+        setLoading(true);
+      }
       try {
         const res = await axios.get(
           `${getGatewayBaseUrl()}/api/public/courses/${encodeURIComponent(courseId.trim())}`
         );
         const payload = res.data?.data;
-        if (!cancelled) {
-          setCourse(payload?.course ?? null);
-          setSections(Array.isArray(payload?.sections) ? payload.sections : []);
-        }
-      } catch (e) {
-        if (!cancelled) {
-          setCourse(null);
-          setSections([]);
-          setError(
-            e.response?.status === 404
-              ? 'Course not found.'
-              : e.response?.data?.message ||
-                  e.message ||
-                  'Could not load course.'
+        if (cancelled) return;
+        const nextSections = Array.isArray(payload?.sections)
+          ? payload.sections
+          : [];
+        setCourse(payload?.course ?? null);
+        setSections(nextSections);
+        setPreparingLessonCount(Number(payload?.preparingLessonCount || 0));
+        setMainVideo((current) => {
+          if (!current?.subsectionId) return current;
+          const stillVisible = nextSections.some((section) =>
+            (section.subsections || []).some(
+              (sub) => String(sub.id) === String(current.subsectionId)
+            )
           );
-        }
+          return stillVisible ? current : null;
+        });
+      } catch (e) {
+        if (cancelled || silent) return;
+        setCourse(null);
+        setSections([]);
+        setPreparingLessonCount(0);
+        setError(
+          e.response?.status === 404
+            ? 'Course not found.'
+            : e.response?.data?.message ||
+                e.message ||
+                'Could not load course.'
+        );
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && !silent) setLoading(false);
+      }
+    };
+
+    loadCourse();
+    return () => {
+      cancelled = true;
+    };
+  }, [courseId]);
+
+  useEffect(() => {
+    if (!courseId?.trim() || preparingLessonCount <= 0) return undefined;
+    let cancelled = false;
+    const timer = window.setInterval(async () => {
+      try {
+        const res = await axios.get(
+          `${getGatewayBaseUrl()}/api/public/courses/${encodeURIComponent(courseId.trim())}`
+        );
+        if (cancelled) return;
+        const payload = res.data?.data;
+        const nextSections = Array.isArray(payload?.sections)
+          ? payload.sections
+          : [];
+        setCourse(payload?.course ?? null);
+        setSections(nextSections);
+        setPreparingLessonCount(Number(payload?.preparingLessonCount || 0));
+        setMainVideo((current) => {
+          if (!current?.subsectionId) return current;
+          const stillVisible = nextSections.some((section) =>
+            (section.subsections || []).some(
+              (sub) => String(sub.id) === String(current.subsectionId)
+            )
+          );
+          return stillVisible ? current : null;
+        });
+      } catch {
+        // Keep the last successful course view if a quiet refresh fails.
+      }
+    }, 8000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [courseId, preparingLessonCount]);
+
+  useEffect(() => {
+    if (!courseId?.trim()) {
+      watchLessonsRef.current = {};
+      setWatchLessons({});
+      return undefined;
+    }
+
+    let cancelled = false;
+    const userId = getWatchUserId();
+    const local = loadLocalProgress(courseId, userId);
+    watchLessonsRef.current = local;
+    setWatchLessons(local);
+
+    const token = localStorage.getItem('token');
+    (async () => {
+      try {
+        const res = await axios.get(
+          `${getGatewayBaseUrl()}/api/public/courses/${encodeURIComponent(
+            courseId.trim()
+          )}/watch-progress`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : undefined }
+        );
+        if (cancelled) return;
+        const remoteLessons = {};
+        Object.entries(res.data?.data?.lessons || {}).forEach(([id, lesson]) => {
+          remoteLessons[String(id)] = {
+            durationSec: Number(lesson?.durationSec) || 0,
+            intervals: Array.isArray(lesson?.intervals) ? lesson.intervals : [],
+          };
+        });
+        const merged = mergeLessonMaps(
+          watchLessonsRef.current,
+          loadLocalProgress(courseId, userId),
+          remoteLessons
+        );
+        watchLessonsRef.current = merged;
+        setWatchLessons(merged);
+        saveLocalProgress(courseId, userId, merged);
+      } catch {
+        // Keep the local ring if the progress API is unavailable.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (persistWatchTimeoutRef.current) {
+        window.clearTimeout(persistWatchTimeoutRef.current);
+        persistWatchTimeoutRef.current = null;
+      }
+      if (watchUiTimeoutRef.current) {
+        window.clearTimeout(watchUiTimeoutRef.current);
+        watchUiTimeoutRef.current = null;
+      }
+    };
+  }, [courseId]);
+
+  useEffect(() => {
+    if (!sections.length) return;
+    const next = seedDurationsFromSections(sections, watchLessonsRef.current);
+    watchLessonsRef.current = next;
+    setWatchLessons(next);
+  }, [sections]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const missing = [];
+    sections.forEach((section) => {
+      (section.subsections || []).forEach((sub) => {
+        if (!sub?.videoUrl) return;
+        const id = String(sub.id);
+        const known =
+          Number(watchLessonsRef.current[id]?.durationSec) ||
+          Number(sub.videoDurationSec) ||
+          0;
+        if (known <= 0) missing.push({ id, url: sub.videoUrl });
+      });
+    });
+    if (!missing.length) return undefined;
+
+    (async () => {
+      const found = {};
+      await Promise.all(
+        missing.map(async ({ id, url }) => {
+          const duration = await probeVideoDuration(url);
+          if (duration >= 1) found[id] = duration;
+        })
+      );
+      if (cancelled || !Object.keys(found).length) return;
+      const next = { ...watchLessonsRef.current };
+      Object.entries(found).forEach(([id, durationSec]) => {
+        const prev = next[id] || { durationSec: 0, intervals: [] };
+        next[id] = {
+          ...prev,
+          durationSec: Math.max(Number(prev.durationSec) || 0, durationSec),
+        };
+      });
+      watchLessonsRef.current = next;
+      setWatchLessons(next);
+      if (courseIdRef.current) {
+        saveLocalProgress(courseIdRef.current, watchUserIdRef.current, next);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [courseId]);
+  }, [sections]);
 
-  const keywords =
-    Array.isArray(course?.keywords) && course.keywords.length > 0
-      ? course.keywords
-      : [];
+  useEffect(() => {
+    const persistHidden = () => {
+      const id = String(mainVideo?.subsectionId || '');
+      if (watchUiTimeoutRef.current) {
+        window.clearTimeout(watchUiTimeoutRef.current);
+        watchUiTimeoutRef.current = null;
+        applyWatchLessons(watchLessonsRef.current);
+      }
+      const lesson = id ? watchLessonsRef.current[id] : null;
+      if (lesson) flushWatchToServer(id, lesson, { immediate: true });
+    };
+    const onVis = () => {
+      if (document.visibilityState === 'hidden') persistHidden();
+    };
+    window.addEventListener('pagehide', persistHidden);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      persistHidden();
+      window.removeEventListener('pagehide', persistHidden);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [mainVideo?.subsectionId]);
+
+  const visibleLessonCount = sections.reduce(
+    (count, section) =>
+      count + (Array.isArray(section.subsections) ? section.subsections.length : 0),
+    0
+  );
+  const watchSummary = summarizeCourseWatch(sections, watchLessons);
   const canonicalEquations = parseCanonicalEquations(mainVideo?.knowledgeChunk);
 
   const askCourseGpt = async (extraInstruction) => {
@@ -1511,11 +1846,11 @@ const CourseDetail = () => {
       if (deepseekResult.status === 'fulfilled') {
         dsText = String(deepseekResult.value.data?.data?.answer || '').trim();
         setDeepseekAnswer(dsText);
+        if (!dsText) {
+          setDeepseekError('DeepSeek returned an empty answer.');
+        }
       } else {
         const err = deepseekResult.reason;
-        if (err?.response?.status === 401 || err?.response?.status === 403) {
-          throw err;
-        }
         setDeepseekError(
           [
             err?.response?.data?.message,
@@ -1590,54 +1925,12 @@ const CourseDetail = () => {
   };
 
   return (
-    <div
-      style={{
-        width: '100%',
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
+    <div className="course-learn">
       <div
-        style={{
-          flex: 1,
-          display: 'grid',
-          gridTemplateColumns: stackLayout
-            ? 'minmax(0, 1fr)'
-            : 'minmax(0, 1fr) minmax(0, 3fr)',
-          alignItems: 'start',
-          maxWidth: '1400px',
-          margin: '0 auto',
-          width: '100%',
-          padding: '1.25rem',
-          gap: '1.25rem',
-          boxSizing: 'border-box',
-        }}
+        className={`course-learn__grid${stackLayout ? ' is-stack' : ''}`}
       >
-        <aside
-          className="glass-panel"
-          style={{
-            minWidth: 0,
-            width: '100%',
-            alignSelf: 'start',
-            position: 'sticky',
-            top: '1.25rem',
-            maxHeight: 'calc(100vh - 2.5rem)',
-            overflowY: 'auto',
-            padding: '1.25rem',
-            borderRadius: '14px',
-          }}
-        >
-          <Link
-            to="/course"
-            style={{
-              fontSize: '0.85rem',
-              color: 'var(--primary, #818cf8)',
-              textDecoration: 'none',
-              display: 'inline-block',
-              marginBottom: '1rem',
-            }}
-          >
+        <aside className="glass-panel course-learn__curriculum">
+          <Link to="/course" className="course-learn__back">
             ← All courses
           </Link>
 
@@ -1651,87 +1944,26 @@ const CourseDetail = () => {
           )}
           {!loading && !error && course && (
             <>
-              <div
-                style={{
-                  borderRadius: '10px',
-                  overflow: 'hidden',
-                  marginBottom: '1rem',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  aspectRatio: '16 / 10',
-                  background: 'var(--surface)',
-                }}
-              >
+              <div className="course-learn__cover">
                 {course.thumbnailUrl ? (
                   <img
                     src={course.thumbnailUrl}
                     alt={course.courseName || 'Course thumbnail'}
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover',
-                      display: 'block',
-                    }}
                   />
                 ) : null}
               </div>
 
-              <h1
-                style={{
-                  fontSize: '1.15rem',
-                  fontWeight: 700,
-                  lineHeight: 1.35,
-                  marginBottom: '0.5rem',
-                  color: 'var(--text)',
-                }}
-              >
+              <h1 className="course-learn__title">
                 {course.courseName || 'Untitled course'}
               </h1>
 
-              <p
-                style={{
-                  fontSize: '0.85rem',
-                  color: 'var(--text-muted)',
-                  marginBottom: '1rem',
-                }}
-              >
+              <p className="course-learn__educator">
                 {course.educatorName
                   ? `Educator: ${course.educatorName}`
                   : 'Educator: —'}
               </p>
 
-              {keywords.length > 0 && (
-                <div style={{ marginBottom: '1rem' }}>
-                  <p
-                    className="form-label"
-                    style={{ marginBottom: '0.35rem', fontSize: '0.75rem' }}
-                  >
-                    Keywords
-                  </p>
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: '0.35rem',
-                    }}
-                  >
-                    {keywords.map((k) => (
-                      <span
-                        key={k}
-                        style={{
-                          fontSize: '0.75rem',
-                          padding: '0.2rem 0.5rem',
-                          borderRadius: '6px',
-                          background: 'rgba(79, 70, 229, 0.2)',
-                          color: '#c7d2fe',
-                          border: '1px solid rgba(129, 140, 248, 0.35)',
-                        }}
-                      >
-                        {k}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <CourseWatchRing summary={watchSummary} />
 
               {course.description ? (
                 <div style={{ marginBottom: '1.25rem' }}>
@@ -1824,8 +2056,22 @@ const CourseDetail = () => {
                   letterSpacing: '0.02em',
                 }}
               >
-                Sections
+                Course content
               </p>
+              {preparingLessonCount > 0 ? (
+                <p
+                  style={{
+                    margin: '0 0 0.75rem 0',
+                    fontSize: '0.8rem',
+                    color: '#fbbf24',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  {visibleLessonCount
+                    ? 'A new lesson is still processing. It will appear here when it is ready.'
+                    : 'Lessons are still processing. They will appear here when they are ready.'}
+                </p>
+              ) : null}
               {sections.length === 0 ? (
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                   No sections yet.
@@ -1850,11 +2096,7 @@ const CourseDetail = () => {
                     return (
                       <div
                         key={sid}
-                        style={{
-                          paddingBottom: '0.65rem',
-                          borderBottom:
-                            '1px solid rgba(255, 255, 255, 0.06)',
-                        }}
+                        className="course-learn__section"
                       >
                         <div
                           style={{
@@ -1872,19 +2114,8 @@ const CourseDetail = () => {
                             }
                             style={{
                               flexShrink: 0,
-                              width: '28px',
-                              height: '28px',
-                              padding: 0,
-                              border: '1px solid rgba(255,255,255,0.12)',
-                              borderRadius: '8px',
-                              background: 'rgba(15, 23, 42, 0.45)',
-                              color: '#94a3b8',
-                              cursor: 'pointer',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              lineHeight: 1,
                             }}
+                            className="course-learn__icon-btn"
                           >
                             <span
                               style={{
@@ -1970,15 +2201,24 @@ const CourseDetail = () => {
                                     Array.isArray(sub.images) &&
                                     sub.images.length > 0;
 
+                                  const isActive =
+                                    String(mainVideo?.subsectionId || '') ===
+                                    subKey;
+
                                   return (
-                                    <li key={subKey}>
-                                      <div
-                                        style={{
-                                          display: 'flex',
-                                          alignItems: 'flex-start',
-                                          gap: '0.35rem',
-                                        }}
-                                      >
+                                    <li
+                                      key={subKey}
+                                      className={`course-learn__lecture${
+                                        linksOpen ? ' is-open' : ''
+                                      }${isActive ? ' is-active' : ''}`}
+                                    >
+                                        <div
+                                          style={{
+                                            display: 'flex',
+                                            alignItems: 'flex-start',
+                                            gap: '0.35rem',
+                                          }}
+                                        >
                                         <button
                                           type="button"
                                           onClick={() =>
@@ -1990,23 +2230,12 @@ const CourseDetail = () => {
                                               ? 'Hide download links'
                                               : 'Show video and file links'
                                           }
+                                          className="course-learn__icon-btn"
                                           style={{
                                             flexShrink: 0,
-                                            width: '26px',
-                                            height: '26px',
-                                            padding: 0,
-                                            border:
-                                              '1px solid rgba(255,255,255,0.12)',
-                                            borderRadius: '6px',
                                             background: linksOpen
-                                              ? 'rgba(79, 70, 229, 0.25)'
-                                              : 'rgba(15, 23, 42, 0.45)',
-                                            color: '#94a3b8',
-                                            cursor: 'pointer',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            lineHeight: 1,
+                                              ? 'rgba(124, 58, 237, 0.35)'
+                                              : undefined,
                                           }}
                                         >
                                           <span
@@ -2026,59 +2255,43 @@ const CourseDetail = () => {
                                         <div style={{ flex: 1, minWidth: 0 }}>
                                           <span
                                             style={{
-                                              fontWeight: 500,
+                                              fontWeight: 600,
                                               color: 'var(--text)',
                                             }}
                                           >
-                                            Subsection {n}
+                                            Lecture {n}
                                           </span>
                                           {hasVideo ? (
-                                            <span
-                                              style={{
-                                                marginLeft: '0.35rem',
-                                                fontSize: '0.68rem',
-                                                color: '#86efac',
-                                              }}
-                                            >
-                                              · video
+                                            <span className="course-learn__badge">
+                                              Video
                                             </span>
                                           ) : (
-                                            <span
-                                              style={{
-                                                marginLeft: '0.35rem',
-                                                fontSize: '0.68rem',
-                                                color: 'var(--text-muted)',
-                                              }}
-                                            >
-                                              · materials
+                                            <span className="course-learn__badge is-files">
+                                              Files
                                             </span>
                                           )}
                                         </div>
+                                        {hasVideo ? (
+                                          <MiniWatchRing
+                                            percent={
+                                              watchSummary.byLesson[subKey]
+                                                ?.percent || 0
+                                            }
+                                            complete={Boolean(
+                                              watchSummary.byLesson[subKey]
+                                                ?.complete
+                                            )}
+                                          />
+                                        ) : null}
                                       </div>
 
                                       {linksOpen && (
-                                        <div
-                                          style={{
-                                            marginTop: '0.5rem',
-                                            marginLeft: '2rem',
-                                            padding: '0.45rem 0 0 0.5rem',
-                                            borderLeft:
-                                              '1px solid rgba(148, 163, 184, 0.25)',
-                                          }}
-                                        >
-                                          <div
-                                            style={{
-                                              display: 'flex',
-                                              flexDirection: 'column',
-                                              gap: '0.35rem',
-                                              fontSize: '0.78rem',
-                                            }}
-                                          >
+                                        <div className="course-learn__resources">
                                             {sub.videoUrl ? (
                                               <a
+                                                className="course-learn__resource course-learn__resource--video"
                                                 href={sub.videoUrl}
                                                 rel="noopener noreferrer"
-                                                style={{ color: '#93c5fd' }}
                                                 onClick={(e) => {
                                                   if (
                                                     e.metaKey ||
@@ -2095,9 +2308,11 @@ const CourseDetail = () => {
                                                     title: `${
                                                       s.sectionName ||
                                                       'Section'
-                                                    } · Subsection ${n}`,
+                                                    } · Lecture ${n}`,
                                                     knowledgeChunk:
                                                       sub.knowledgeChunk || '',
+                                                    knowledgeStatus:
+                                                      sub.knowledgeStatus || 'ready',
                                                     containsMath: Boolean(
                                                       sub.containsMath
                                                     ),
@@ -2116,20 +2331,16 @@ const CourseDetail = () => {
                                                   });
                                                 }}
                                               >
-                                                Video link
-                                                {' '}
-                                                <span
-                                                  style={{
-                                                    fontSize: '0.68rem',
-                                                    color: 'var(--text-muted)',
-                                                  }}
-                                                >
-                                                  (plays here →)
+                                                <span className="course-learn__resource-icon">▶</span>
+                                                <span className="course-learn__resource-copy">
+                                                  <strong>Play lecture</strong>
+                                                  <em>Watch in this page</em>
                                                 </span>
                                               </a>
                                             ) : null}
                                             {sub.pptUrl ? (
                                               <a
+                                                className="course-learn__resource course-learn__resource--ppt"
                                                 href={subsectionDownloadUrl(
                                                   courseId,
                                                   sub.id,
@@ -2138,13 +2349,17 @@ const CourseDetail = () => {
                                                 download={
                                                   sub.pptFileName || 'lesson.pptx'
                                                 }
-                                                style={{ color: '#93c5fd' }}
                                               >
-                                                Download PPT
+                                                <span className="course-learn__resource-icon">PPT</span>
+                                                <span className="course-learn__resource-copy">
+                                                  <strong>Download slides</strong>
+                                                  <em>{sub.pptFileName || 'PowerPoint file'}</em>
+                                                </span>
                                               </a>
                                             ) : null}
                                             {sub.pdfUrl ? (
                                               <a
+                                                className="course-learn__resource course-learn__resource--pdf"
                                                 href={subsectionDownloadUrl(
                                                   courseId,
                                                   sub.id,
@@ -2153,9 +2368,12 @@ const CourseDetail = () => {
                                                 download={
                                                   sub.pdfFileName || 'lesson.pdf'
                                                 }
-                                                style={{ color: '#93c5fd' }}
                                               >
-                                                Download PDF
+                                                <span className="course-learn__resource-icon">PDF</span>
+                                                <span className="course-learn__resource-copy">
+                                                  <strong>Download notes</strong>
+                                                  <em>{sub.pdfFileName || 'PDF file'}</em>
+                                                </span>
                                               </a>
                                             ) : null}
                                             {hasImages
@@ -2163,15 +2381,16 @@ const CourseDetail = () => {
                                                   img?.url ? (
                                                     <a
                                                       key={`${subKey}-img-${ii}`}
+                                                      className="course-learn__resource course-learn__resource--image"
                                                       href={img.url}
                                                       target="_blank"
                                                       rel="noopener noreferrer"
-                                                      style={{
-                                                        color: '#93c5fd',
-                                                        wordBreak: 'break-all',
-                                                      }}
                                                     >
-                                                      Image {ii + 1} link
+                                                      <span className="course-learn__resource-icon">IMG</span>
+                                                      <span className="course-learn__resource-copy">
+                                                        <strong>Open image {ii + 1}</strong>
+                                                        <em>View in a new tab</em>
+                                                      </span>
                                                     </a>
                                                   ) : null
                                                 )
@@ -2180,16 +2399,10 @@ const CourseDetail = () => {
                                             !sub.pptUrl &&
                                             !sub.pdfUrl &&
                                             !hasImages ? (
-                                              <span
-                                                style={{
-                                                  color: 'var(--text-muted)',
-                                                  fontSize: '0.76rem',
-                                                }}
-                                              >
-                                                No files for this subsection.
+                                              <span className="course-learn__resource-empty">
+                                                No files for this lecture.
                                               </span>
                                             ) : null}
-                                          </div>
                                         </div>
                                       )}
                                     </li>
@@ -2209,87 +2422,48 @@ const CourseDetail = () => {
         </aside>
 
         <main
-          className="glass-panel"
-          style={{
-            minWidth: 0,
-            width: '100%',
-            minHeight: '280px',
-            padding: mainVideo ? '1.25rem 1.5rem' : '2rem',
-            borderRadius: '14px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: mainVideo ? 'stretch' : 'center',
-            justifyContent: mainVideo ? 'flex-start' : 'center',
-          }}
+          className={`glass-panel course-learn__stage${
+            mainVideo ? ' is-playing' : ''
+          }`}
         >
           {mainVideo ? (
             <>
-              <div
-                style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  alignItems: 'baseline',
-                  justifyContent: 'space-between',
-                  gap: '0.75rem',
-                  marginBottom: '1rem',
-                }}
-              >
-                <p
-                  style={{
-                    fontSize: '0.85rem',
-                    color: 'var(--text-muted)',
-                    margin: 0,
-                  }}
-                >
-                  {mainVideo.title}
-                </p>
+              <div className="course-learn__bar">
+                <p>{mainVideo.title}</p>
                 <button
                   type="button"
                   className="btn"
                   onClick={() => setMainVideo(null)}
                   style={{
-                    fontSize: '0.82rem',
-                    padding: '0.35rem 0.75rem',
-                    border: '1px solid rgba(255,255,255,0.15)',
+                    fontSize: '0.78rem',
+                    padding: '0.28rem 0.7rem',
                   }}
                 >
                   Close video
                 </button>
               </div>
-              <div
-                style={{
-                  borderRadius: '12px',
-                  overflow: 'hidden',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  background: '#0f172a',
-                  width: '100%',
-                  maxHeight: 'min(72vh, 720px)',
-                }}
-              >
-                <video
-                  key={mainVideo.url}
-                  ref={videoRef}
-                  controls
-                  playsInline
-                  preload="metadata"
-                  src={mainVideo.url}
-                  onPlay={handleVideoPlay}
-                  onPause={handleVideoPause}
-                  onSeeking={handleVideoSeeking}
-                  onSeeked={handleVideoSeeked}
-                  onRateChange={handleVideoRateChange}
-                  onTimeUpdate={handleVideoTimeUpdate}
-                  onEnded={handleVideoEnded}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    maxHeight: 'min(72vh, 720px)',
-                    display: 'block',
-                    objectFit: 'contain',
-                  }}
-                />
+              <div className="course-learn__theater">
+                <div className="course-learn__player">
+                  <video
+                    key={mainVideo.url}
+                    ref={videoRef}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    src={mainVideo.url}
+                    onPlay={handleVideoPlay}
+                    onPause={handleVideoPause}
+                    onSeeking={handleVideoSeeking}
+                    onSeeked={handleVideoSeeked}
+                    onRateChange={handleVideoRateChange}
+                    onTimeUpdate={handleVideoTimeUpdate}
+                    onLoadedMetadata={handleVideoLoadedMetadata}
+                    onEnded={handleVideoEnded}
+                  />
+                </div>
               </div>
-              <p style={{ marginTop: '0.75rem', marginBottom: 0 }}>
+              <div className="course-learn__below">
+              <p style={{ marginTop: 0, marginBottom: 0 }}>
                 <a
                   href={mainVideo.url}
                   target="_blank"
@@ -2921,6 +3095,17 @@ const CourseDetail = () => {
                     >
                       Knowledge chunk
                     </p>
+                    <p
+                      style={{
+                        margin: '0 0 0.45rem 0',
+                        fontSize: '0.75rem',
+                        color: 'var(--text-muted)',
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      Copied from this subsection’s PPT, PDF, and video transcript.
+                      Repeated lines are removed. Nothing is generated.
+                    </p>
                     <div
                       style={{
                         maxHeight: '280px',
@@ -3009,6 +3194,20 @@ const CourseDetail = () => {
                 >
                   Ask the assistant
                 </p>
+                {mainVideo.knowledgeStatus === 'processing' ||
+                mainVideo.knowledgeStatus === 'rebuilding' ? (
+                  <p
+                    style={{
+                      margin: '0 0 0.65rem 0',
+                      fontSize: '0.8rem',
+                      color: '#fbbf24',
+                      lineHeight: 1.45,
+                    }}
+                  >
+                    This lesson is still processing in the background (Whisper + MiniLM).
+                    Ask will work once the knowledge chunk is ready.
+                  </p>
+                ) : null}
                 <p
                   style={{
                     margin: '0 0 0.65rem 0',
@@ -3054,13 +3253,32 @@ const CourseDetail = () => {
                   type="button"
                   className="btn btn-primary"
                   onClick={() => askCourseGpt()}
-                  disabled={gptLoading || !pedagogicalPrompt.trim()}
+                      disabled={
+                        gptLoading ||
+                        !pedagogicalPrompt.trim() ||
+                        mainVideo.knowledgeStatus === 'processing' ||
+                        mainVideo.knowledgeStatus === 'rebuilding'
+                      }
                   style={{ marginTop: '0.5rem', width: '100%', fontSize: '0.85rem' }}
                 >
                   {gptLoading
                     ? 'Generating + selecting best output…'
                     : 'Ask both models'}
                 </button>
+
+                {deepseekError ? (
+                  <p
+                    style={{
+                      marginTop: '0.65rem',
+                      marginBottom: 0,
+                      fontSize: '0.82rem',
+                      color: 'var(--danger)',
+                      whiteSpace: 'pre-wrap',
+                    }}
+                  >
+                    DeepSeek: {deepseekError}
+                  </p>
+                ) : null}
 
                 {selectionError ? (
                   <p
@@ -3302,22 +3520,14 @@ const CourseDetail = () => {
                   />
                 ) : null}
               </div>
+              </div>
             </>
           ) : (
-           <p
-              style={{
-                color: 'var(--text-muted)',
-                fontSize: '0.95rem',
-                textAlign: 'center',
-                maxWidth: '420px',
-                lineHeight: 1.55,
-              }}
-            >
-              {/* Use the sidebar to browse sections and subsections. Toggle ▼ on a
-              subsection for links; click{' '}
-              <strong style={{ color: 'var(--text)' }}>Video link</strong> to
-              watch here in this column. */}
-            </p> 
+           <p className="course-learn__empty">
+              {preparingLessonCount > 0 && visibleLessonCount === 0
+                ? 'This lesson is still being prepared. The video will appear here after processing finishes.'
+                : 'Choose a lecture from Course content on the right, then play the video.'}
+            </p>
           )}
         </main>
       </div>

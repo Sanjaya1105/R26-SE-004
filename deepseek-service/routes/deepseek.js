@@ -14,12 +14,33 @@ function getDeepseekConfig() {
     process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com"
   )
     .trim()
-    .replace(/\/$/, "");
-  const model = String(process.env.DEEPSEEK_MODEL || "deepseek-chat").trim();
+    .replace(/\/$/, "")
+    .replace(/\/v1$/i, "");
+  const model = String(
+    process.env.DEEPSEEK_MODEL || "deepseek-v4-flash"
+  ).trim();
   return { apiKey, baseUrl, model };
 }
 
-async function callDeepseekChat(messages, { maxTokens = 1024 } = {}) {
+function modelCandidates(preferred) {
+  const defaults = ["deepseek-v4-flash", "deepseek-v4-pro"];
+  return [preferred, ...defaults].filter(
+    (name, index, list) => Boolean(name) && list.indexOf(name) === index
+  );
+}
+
+function extractAnswer(payload) {
+  const choice = payload?.choices?.[0] || {};
+  const message = choice.message || {};
+  return String(
+    message.content ||
+      message.reasoning_content ||
+      choice.text ||
+      ""
+  ).trim();
+}
+
+async function callDeepseekChat(messages, { maxTokens = 2048 } = {}) {
   const { apiKey, baseUrl, model } = getDeepseekConfig();
   if (!apiKey) {
     const error = new Error("DEEPSEEK_API_KEY is not configured.");
@@ -27,47 +48,67 @@ async function callDeepseekChat(messages, { maxTokens = 1024 } = {}) {
     throw error;
   }
 
-  const response = await axios.post(
-    `${baseUrl}/chat/completions`,
-    {
-      model,
-      messages,
-      max_tokens: maxTokens,
-      temperature: 0.7,
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
+  let lastFailure = null;
+  for (const candidate of modelCandidates(model)) {
+    const response = await axios.post(
+      `${baseUrl}/chat/completions`,
+      {
+        model: candidate,
+        messages,
+        max_tokens: maxTokens,
+        temperature: 0.7,
+        stream: false,
       },
-      timeout: 120000,
-      validateStatus: () => true,
+      {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 120000,
+        validateStatus: () => true,
+      }
+    );
+
+    if (response.status >= 400) {
+      const detail =
+        response.data?.error?.message ||
+        (typeof response.data?.error === "string"
+          ? response.data.error
+          : JSON.stringify(response.data));
+      lastFailure = {
+        status: response.status,
+        detail: `${candidate}: ${detail || "DeepSeek request failed."}`,
+      };
+      console.warn("[deepseek]", lastFailure.detail);
+      if (
+        response.status === 400 ||
+        response.status === 404 ||
+        response.status === 422
+      ) {
+        continue;
+      }
+      const error = new Error(lastFailure.detail);
+      error.status = 502;
+      error.detail = lastFailure.detail;
+      throw error;
     }
+
+    const answer = extractAnswer(response.data);
+    if (answer) {
+      return { answer, model: candidate };
+    }
+    lastFailure = {
+      status: 502,
+      detail: `${candidate}: empty answer payload`,
+    };
+  }
+
+  const error = new Error(
+    lastFailure?.detail || "DeepSeek returned an empty answer."
   );
-
-  if (response.status >= 400) {
-    const detail =
-      response.data?.error?.message ||
-      (typeof response.data?.error === "string"
-        ? response.data.error
-        : JSON.stringify(response.data));
-    const error = new Error(detail || "DeepSeek request failed.");
-    error.status = 502;
-    error.detail = detail;
-    throw error;
-  }
-
-  const answer = String(
-    response.data?.choices?.[0]?.message?.content || ""
-  ).trim();
-
-  if (!answer) {
-    const error = new Error("DeepSeek returned an empty answer.");
-    error.status = 502;
-    throw error;
-  }
-
-  return { answer, model };
+  error.status = 502;
+  error.detail = lastFailure?.detail;
+  throw error;
 }
 
 function normalizeHistory(history) {

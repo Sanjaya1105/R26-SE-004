@@ -41,6 +41,7 @@ const courseSubSectionSchema = new mongoose.Schema(
     order: { type: Number, default: 0 },
     videoUrl: { type: String, default: "" },
     videoPublicId: { type: String, default: "" },
+    videoDurationSec: { type: Number, default: 0 },
     pptUrl: { type: String, default: "" },
     pptPublicId: { type: String, default: "" },
     pptFileName: { type: String, default: "" },
@@ -71,7 +72,7 @@ const courseSubSectionSchema = new mongoose.Schema(
     dedupeStats: { type: Object, default: null },
     knowledgeStatus: {
       type: String,
-      enum: ["ready", "needs_rebuild", "rebuilding", "failed"],
+      enum: ["processing", "ready", "needs_rebuild", "rebuilding", "failed"],
       default: "ready",
     },
     knowledgeStatusReason: { type: String, default: "" },

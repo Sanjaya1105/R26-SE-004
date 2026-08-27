@@ -19,12 +19,47 @@ function fileNameFromUrl(url, fallback) {
   }
 }
 
-async function fetchRemoteBuffer(url) {
+function looksLikeHtml(buffer) {
+  const head = Buffer.isBuffer(buffer)
+    ? buffer.subarray(0, 80).toString("utf8").toLowerCase()
+    : "";
+  return head.includes("<!doctype") || head.includes("<html");
+}
+
+function attachmentUrl(url) {
+  const source = String(url || "");
+  if (!source.includes("/upload/") || source.includes("fl_attachment")) {
+    return "";
+  }
+  return source.replace("/upload/", "/upload/fl_attachment/");
+}
+
+async function fetchOneBuffer(url) {
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Failed to download stored file (${response.status})`);
   }
-  return Buffer.from(await response.arrayBuffer());
+  const buffer = Buffer.from(await response.arrayBuffer());
+  if (!buffer.length) {
+    throw new Error("Downloaded empty file");
+  }
+  if (looksLikeHtml(buffer)) {
+    throw new Error("Downloaded HTML instead of a file");
+  }
+  return buffer;
+}
+
+async function fetchRemoteBuffer(url) {
+  if (!url) {
+    throw new Error("Missing file URL");
+  }
+  try {
+    return await fetchOneBuffer(url);
+  } catch (error) {
+    const fallback = attachmentUrl(url);
+    if (!fallback) throw error;
+    return fetchOneBuffer(fallback);
+  }
 }
 
 async function extractLessonDocuments({ pptBuffer, pptName, pdfBuffer, containsMath }) {

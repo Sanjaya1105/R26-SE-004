@@ -5,6 +5,7 @@ const verifyTeacherJwt = require("../middleware/verifyTeacherJwt.middleware");
 const {
   createSubSection,
   updateSubSection,
+  getSubSection,
 } = require("../controllers/courseSubSection.controller");
 
 const router = express.Router();
@@ -57,6 +58,13 @@ const subsectionUploadMiddleware = (req, res, next) => {
     return res.status(400).json({ message: err.message || "Invalid upload." });
   });
 };
+
+router.get(
+  "/sections/:sectionId/subsections/:subsectionId",
+  ensureGatewayAccess,
+  verifyTeacherJwt,
+  getSubSection
+);
 
 router.patch(
   "/sections/:sectionId/subsections/:subsectionId",

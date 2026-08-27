@@ -184,8 +184,26 @@ app.use(
   createProxyMiddleware({
     target: RESOURCE_UPLOAD_URL,
     changeOrigin: true,
+    pathFilter: (pathname) => pathname.startsWith("/api/push"),
+    pathRewrite: (path) => path.replace(/^\/api\/push/, "/push"),
+    on: {
+      proxyReq: (proxyReq) => {
+        if (GATEWAY_SHARED_SECRET) {
+          proxyReq.setHeader("x-gateway-secret", GATEWAY_SHARED_SECRET);
+        }
+      },
+    },
+  })
+);
+
+app.use(
+  createProxyMiddleware({
+    target: RESOURCE_UPLOAD_URL,
+    changeOrigin: true,
     pathFilter: (pathname) => pathname.startsWith("/api/sections"),
     pathRewrite: (path) => path.replace(/^\/api\/sections/, "/sections"),
+    timeout: 180000,
+    proxyTimeout: 180000,
     on: {
       proxyReq: (proxyReq) => {
         if (GATEWAY_SHARED_SECRET) {
