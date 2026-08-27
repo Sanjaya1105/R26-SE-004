@@ -25,19 +25,36 @@ def load_model():
         model_path = (SERVICE_DIR / settings.COGNITIVE_STYLE_MODEL_PATH).resolve()
         if not model_path.is_file():
             raise ModelClientError(f"Cognitive-style model not found at {model_path}.")
-        _model = joblib.load(model_path)
+        try:
+            _model = joblib.load(model_path)
+        except ModuleNotFoundError as exc:
+            raise ModelClientError(
+                f"Could not load cognitive-style model at {model_path}: missing Python dependency "
+                f"{exc.name!r}. Install the cognitive_style_ai requirements."
+            ) from exc
+        except Exception as exc:
+            raise ModelClientError(f"Could not load cognitive-style model at {model_path}: {exc}") from exc
 
     if _label_encoder is None:
         encoder_path = (SERVICE_DIR / settings.COGNITIVE_STYLE_LABEL_ENCODER_PATH).resolve()
         if not encoder_path.is_file():
             raise ModelClientError(f"Cognitive-style label encoder not found at {encoder_path}.")
-        _label_encoder = joblib.load(encoder_path)
+        try:
+            _label_encoder = joblib.load(encoder_path)
+        except Exception as exc:
+            raise ModelClientError(
+                f"Could not load cognitive-style label encoder at {encoder_path}: {exc}"
+            ) from exc
 
     if _feature_names is None:
         if hasattr(_model, "feature_names_in_"):
             _feature_names = [str(name) for name in _model.feature_names_in_]
         else:
             raise ModelClientError("The visual/verbal model does not expose its feature names.")
+    if not callable(getattr(_model, "predict_proba", None)):
+        raise ModelClientError("The visual/verbal model does not expose prediction probabilities.")
+    if not callable(getattr(_label_encoder, "inverse_transform", None)):
+        raise ModelClientError("The visual/verbal label encoder is invalid.")
     return _model, _feature_names, _label_encoder
 
 
