@@ -10,6 +10,8 @@ import QuestionRunner from './pages/cognitiveStyleAndLearnerProfile/CognitiveSty
 import AHSQuestionnaire from './pages/cognitiveStyleAndLearnerProfile/CognitiveStyle/GeftModule/AHS_Questionnaire/AHSQuestionnaire';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import AdminLogin from './pages/AdminLogin';
+import AdminDashboard from './pages/AdminDashboard';
 import Dashboard from './pages/Dashboard';
 import Upload from './pages/Upload';
 import UploadsView from './pages/UploadsView';
@@ -40,7 +42,9 @@ const getStoredUser = () => {
 // Simple PrivateRoute component (teacher routes)
 const PrivateRoute = ({ children }) => {
   const token = localStorage.getItem('token');
-  return token ? children : <Navigate to="/login" replace />;
+  const user = getStoredUser();
+  const isTeacher = Boolean(token && (!user?.role || user.role === 'Teacher'));
+  return isTeacher ? children : <Navigate to="/login" replace />;
 };
 
 const StudentRoute = ({ children }) => {
@@ -48,6 +52,13 @@ const StudentRoute = ({ children }) => {
   const user = getStoredUser();
   const isStudent = Boolean(token && user?.role === 'Student');
   return isStudent ? children : <Navigate to="/student/login" replace />;
+};
+
+const AdminRoute = ({ children }) => {
+  const token = localStorage.getItem('token');
+  const user = getStoredUser();
+  const isAdmin = Boolean(token && user?.role === 'Admin');
+  return isAdmin ? children : <Navigate to="/admin/login" replace />;
 };
 
 function App() {
@@ -65,6 +76,12 @@ function App() {
         } />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin" element={
+          <AdminRoute>
+            <AdminDashboard />
+          </AdminRoute>
+        } />
         <Route path="/course/:courseId" element={
           <StudentRoute>
             <CourseDetail />

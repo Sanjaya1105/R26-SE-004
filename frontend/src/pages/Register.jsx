@@ -20,8 +20,11 @@ const Register = () => {
     setError('');
 
     try {
-      await axios.post(`${gatewayBaseUrl}/api/auth/register`, formData);
-      navigate('/login');
+      const response = await axios.post(`${gatewayBaseUrl}/api/auth/register`, formData);
+      navigate('/login', {
+        state: { registrationMessage: response.data.message },
+        replace: true,
+      });
     } catch (err) {
       setError(err.response?.data?.message || 'Registration failed. Please try again.');
     } finally {

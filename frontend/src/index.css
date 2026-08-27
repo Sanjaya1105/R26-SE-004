@@ -151,6 +151,16 @@ body {
   border: 1px solid #fecaca;
 }
 
+.info-message {
+  background-color: #eff6ff;
+  color: #1d4ed8;
+  padding: 0.75rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  font-size: 0.875rem;
+  border: 1px solid #bfdbfe;
+}
+
 /* Dashboard Styles */
 .navbar {
   display: flex;

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { getGatewayBaseUrl } from '../config/gateway';
 import { enableTeacherPushNotifications } from '../utils/pushNotifications';
@@ -9,6 +9,7 @@ const Login = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const gatewayBaseUrl = getGatewayBaseUrl();
 
   const handleChange = (e) => {
@@ -38,6 +39,10 @@ const Login = () => {
       <div className="auth-box glass-panel">
         <h2 className="auth-title gradient-text">Welcome Back</h2>
         <p className="auth-subtitle">Login to access your teacher dashboard.</p>
+
+        {location.state?.registrationMessage && (
+          <div className="info-message">{location.state.registrationMessage}</div>
+        )}
 
         {error && <div className="error-message">{error}</div>}
 
@@ -77,6 +82,11 @@ const Login = () => {
 
         <div style={{ marginTop: '1.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>
           Don't have an account? <Link to="/register" style={{ color: 'var(--primary)', textDecoration: 'none' }}>Register</Link>
+        </div>
+        <div style={{ marginTop: '0.75rem', textAlign: 'center' }}>
+          <Link to="/admin/login" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: '0.875rem' }}>
+            Administrator login
+          </Link>
         </div>
       </div>
     </div>

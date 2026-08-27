@@ -8,6 +8,15 @@ const verifyToken = require('../middleware/verifyToken');
 
 const router = express.Router();
 
+const getJwtSecret = () => process.env.JWT_SECRET || 'fallback_secret_key';
+
+const requireAdmin = (req, res, next) => {
+  if (req.user?.role !== 'Admin') {
+    return res.status(403).json({ message: 'Admin access only.' });
+  }
+  next();
+};
+
 // Helper for sending generic error responses
 const handleServerError = (res, err) => {
   console.error(err);
@@ -69,9 +78,13 @@ router.post('/register', async (req, res) => {
       name: name.trim(),
       email: email.toLowerCase(),
       password: hashedPassword,
+      approvalStatus: 'pending',
     });
 
-    res.status(201).json({ message: 'Teacher registered successfully' });
+    res.status(201).json({
+      message: 'Registration submitted. Please wait for admin approval before logging in.',
+      approvalStatus: 'pending',
+    });
   } catch (err) {
     handleServerError(res, err);
   }
@@ -126,7 +139,8 @@ router.post('/login', async (req, res) => {
 
   try {
     // Find user
-    const user = await Teacher.findOne({ email: email.toLowerCase() });
+    // `lean()` keeps a missing approvalStatus distinguishable for legacy accounts.
+    const user = await Teacher.findOne({ email: email.toLowerCase() }).lean();
     if (!user) {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
@@ -137,9 +151,23 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
+    // Existing teachers created before the approval feature remain approved.
+    const approvalStatus = user.approvalStatus || 'approved';
+    if (approvalStatus === 'pending') {
+      return res.status(403).json({
+        code: 'TEACHER_APPROVAL_PENDING',
+        message: 'Your registration is waiting for admin approval.',
+      });
+    }
+    if (approvalStatus === 'rejected') {
+      return res.status(403).json({
+        code: 'TEACHER_APPROVAL_REJECTED',
+        message: 'Your teacher registration was rejected. Please contact the administrator.',
+      });
+    }
+
     // Generate JWT
-    const secret = process.env.JWT_SECRET || 'fallback_secret_key';
-    const token = jwt.sign({ id: user._id, name: user.name, email: user.email }, secret, {
+    const token = jwt.sign({ id: user._id, name: user.name, email: user.email, role: 'Teacher' }, getJwtSecret(), {
       expiresIn: '1d'
     });
 
@@ -147,14 +175,92 @@ router.post('/login', async (req, res) => {
       message: 'Login successful',
       token,
       user: {
-        id: user.id,
+        id: String(user._id),
         name: user.name,
-        email: user.email
+        email: user.email,
+        role: 'Teacher',
+        approvalStatus,
       }
     });
 
   } catch (err) {
     handleServerError(res, err);
+  }
+});
+
+// Development admin login. Override both values in backend/.env for deployment.
+router.post('/admin/login', (req, res) => {
+  const { email, password } = req.body;
+  const adminEmail = String(process.env.ADMIN_EMAIL || 'admin@gmail.com').trim().toLowerCase();
+  const adminPassword = String(process.env.ADMIN_PASSWORD || 'admin123');
+
+  if (
+    String(email || '').trim().toLowerCase() !== adminEmail ||
+    String(password || '') !== adminPassword
+  ) {
+    return res.status(401).json({ message: 'Invalid admin email or password.' });
+  }
+
+  const token = jwt.sign(
+    { email: adminEmail, role: 'Admin' },
+    getJwtSecret(),
+    { expiresIn: '8h' }
+  );
+
+  return res.json({
+    message: 'Admin login successful',
+    token,
+    user: { email: adminEmail, name: 'Administrator', role: 'Admin' },
+  });
+});
+
+router.get('/admin/teachers', verifyToken, requireAdmin, async (_req, res) => {
+  try {
+    const teachers = await Teacher.find()
+      .select('name email approvalStatus reviewedAt createdAt')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return res.json({
+      teachers: teachers.map((teacher) => ({
+        ...teacher,
+        // Accounts that predate this feature are kept active.
+        approvalStatus: teacher.approvalStatus || 'approved',
+      })),
+    });
+  } catch (err) {
+    return handleServerError(res, err);
+  }
+});
+
+router.patch('/admin/teachers/:teacherId/approval', verifyToken, requireAdmin, async (req, res) => {
+  const { teacherId } = req.params;
+  const { status } = req.body;
+
+  if (!mongoose.Types.ObjectId.isValid(teacherId)) {
+    return res.status(400).json({ message: 'Invalid teacher ID.' });
+  }
+  if (!['approved', 'rejected'].includes(status)) {
+    return res.status(400).json({ message: 'Status must be approved or rejected.' });
+  }
+
+  try {
+    const teacher = await Teacher.findByIdAndUpdate(
+      teacherId,
+      { approvalStatus: status, reviewedAt: new Date() },
+      { new: true, runValidators: true }
+    ).select('name email approvalStatus reviewedAt createdAt');
+
+    if (!teacher) {
+      return res.status(404).json({ message: 'Teacher not found.' });
+    }
+
+    return res.json({
+      message: `Teacher ${status} successfully.`,
+      teacher,
+    });
+  } catch (err) {
+    return handleServerError(res, err);
   }
 });
 
@@ -182,7 +288,6 @@ router.post('/student/login', async (req, res) => {
     }
 
     // Generate JWT
-    const secret = process.env.JWT_SECRET || 'fallback_secret_key';
     const token = jwt.sign(
       {
         id: student._id,
@@ -190,7 +295,7 @@ router.post('/student/login', async (req, res) => {
         email: student.email,
         role: student.role,
       },
-      secret,
+      getJwtSecret(),
       { expiresIn: '1d' }
     );
 
