@@ -3,3 +3,6 @@ __pycache__/
 *.pyc
 *.pyo
 sample.mp4
+CognitiveStyleBackend/__pycache__/main.cpython-313.pyc
+CognitiveStyleBackend/__pycache__/main.cpython-313.pyc
+CognitiveStyleBackend/database/__pycache__/connection.cpython-313.pyc
