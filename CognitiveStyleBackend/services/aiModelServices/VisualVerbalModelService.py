@@ -113,6 +113,8 @@
 import pandas as pd
 import joblib
 from pathlib import Path
+
+from bson import ObjectId
 from fastapi import HTTPException
 
 # ---------------------------------------------------------
@@ -326,6 +328,78 @@ async def predict_user_style_ml(cursor_collection, gaze_collection, user_id: str
         }
 
     # 9. Return structured response (Strictly preserving teammate contract)
+    return {
+        "userId": user_id,
+        "prediction": predicted_label,
+        "probabilities": probabilities,
+        "featuresUsed": feature_row
+    }
+
+
+
+async def predict_user_style_and_save(cursor_collection, gaze_collection, student_collection, user_id: str):
+    """
+    Orchestrates fetching the DB data, formatting it for the ML model,
+    making the prediction, updating the student profile, and returning the result.
+    """
+    # 1. Load Model & Encoder
+    model, le = load_ml_assets()
+
+    # 2. Fetch data from DB using the provided collections
+    cursor_data, gaze_data = await fetch_user_data_from_db(
+        cursor_collection,
+        gaze_collection,
+        user_id
+    )
+
+    # 3. Handle missing data gracefully
+    if not cursor_data:
+         raise HTTPException(status_code=404, detail=f"No cursor data found for user: {user_id}")
+    if not gaze_data:
+         raise HTTPException(status_code=404, detail=f"No gaze/session data found for user: {user_id}")
+
+    # 4. Prepare the feature row exactly matching your training columns
+    interaction_pref = gaze_data.get("FirstInteractionPreference", "TEXT").upper()
+    is_visual_first = 1 if interaction_pref == "VISUAL" else 0
+
+    feature_row = {
+        "imageCursorRatio": cursor_data.get("imageCursorRatio", 0.0),
+        "imageScrollRatio": cursor_data.get("imageScrollRatio", 0.0),
+        "ImageGazeRatio": gaze_data.get("ImageGazeRatio", 0.0),
+        "FirstInteractionPreference_VISUAL": is_visual_first
+    }
+
+    # 5. Convert to Pandas DataFrame for the model
+    df = pd.DataFrame([feature_row])
+
+    # 6. Make Prediction
+    prediction_array = model.predict(df)
+
+    # 7. Decode the prediction ('Verbal', 'Moderate/Intermediatory', or 'Visual')
+    predicted_label = le.inverse_transform(prediction_array)[0]
+
+    # 8. --- NEW: Update the Student in the 'userdb' database ---
+    try:
+        query_filter = {"_id": ObjectId(user_id)}
+    except Exception:
+        query_filter = {"_id": user_id}
+
+    await student_collection.update_one(
+        query_filter,
+        {"$set": {"visualVerbalCognitiveStyle": predicted_label}}
+    )
+    # -----------------------------------------------------------
+
+    # 9. Extract prediction probabilities across all 3 classes
+    probabilities = None
+    if hasattr(model, "predict_proba"):
+        proba = model.predict_proba(df)[0]
+        probabilities = {
+            cls: float(prob)
+            for cls, prob in zip(le.classes_, proba)
+        }
+
+    # 10. Return structured response
     return {
         "userId": user_id,
         "prediction": predicted_label,
