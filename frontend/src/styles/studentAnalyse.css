@@ -271,7 +271,9 @@
   .analysis-orbit-ring,
   .analysis-brain-icon,
   .analysis-loading-steps i,
-  .analysis-loading-bar span {
+  .analysis-loading-bar span,
+  .load-technical-evidence,
+  .technique-technical-evidence {
     animation-duration: 1ms;
     animation-iteration-count: 1;
   }
@@ -483,6 +485,10 @@
   gap: 0.75rem;
 }
 
+.selection-fields-simple {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .selection-field {
   display: flex;
   flex-direction: column;
@@ -643,6 +649,14 @@
 .selection-actions.ready {
   border-color: #bbf7d0;
   background: linear-gradient(135deg, #f0fdf4, #f8fafc);
+}
+
+.selection-actions-simple,
+.selection-actions-simple.ready {
+  justify-content: flex-end;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .selection-ready-message {
@@ -1069,6 +1083,11 @@
   padding: 1.5rem;
   border-color: #cbd5e1;
   background: #f8fafc;
+  /* A filtered ancestor traps position: fixed descendants. This panel is
+     opaque, so removing its glass filter preserves the look and lets the
+     technical-evidence dialogs anchor to the current browser viewport. */
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .guidance-page-heading {
@@ -2121,6 +2140,72 @@
   background: #f8fbff;
 }
 
+/* Cognitive-load evidence dialogs
+   The existing React toggles still control open/close state. When open, the
+   evidence becomes a focused, scrollable overlay instead of lengthening the
+   complete teacher dashboard. */
+.load-technical-evidence,
+.technique-technical-evidence {
+  position: fixed;
+  z-index: 900;
+  top: 4.75rem;
+  left: 50%;
+  width: min(1120px, calc(100vw - 2rem));
+  max-height: calc(100vh - 6rem);
+  margin: 0;
+  padding: 1.35rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-width: 1px;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow:
+    0 0 0 100vmax rgba(15, 23, 42, 0.62),
+    0 28px 70px -25px rgba(15, 23, 42, 0.85);
+  transform: translateX(-50%);
+  animation: technical-dialog-in 180ms ease-out;
+}
+
+.explanation-evidence-button.active,
+.technique-evidence-button.active {
+  position: fixed;
+  z-index: 910;
+  top: 1rem;
+  right: 1rem;
+  width: auto;
+  max-width: min(360px, calc(100vw - 2rem));
+  min-height: 42px;
+  border-color: #fecaca;
+  background: #ffffff;
+  color: #b91c1c;
+  box-shadow: 0 12px 30px -18px rgba(15, 23, 42, 0.8);
+}
+
+.explanation-evidence-button.active:hover,
+.technique-evidence-button.active:hover {
+  border-color: #f87171;
+  background: #fef2f2;
+}
+
+.load-technical-evidence .results-table-wrapper,
+.technique-technical-evidence .results-table-wrapper {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+@keyframes technical-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
 .technical-subheading {
   margin-top: 1.25rem !important;
 }
@@ -2180,7 +2265,408 @@
   padding: 0.75rem 0;
 }
 
+/* Professional teacher guidance workspace
+   Strengthen hierarchy and scanability without changing the component flow. */
+.guidance-review-panel {
+  --guidance-section-pad: 1.35rem;
+  padding: 1.5rem;
+  border: 1px solid #cbd5e1;
+  border-top: 4px solid #163a63;
+  background: #eef2f7;
+  box-shadow: 0 24px 60px -42px rgba(15, 23, 42, 0.72);
+}
+
+.guidance-review-panel .guidance-page-heading {
+  align-items: center;
+  margin: -1.5rem -1.5rem 1.5rem;
+  padding: 1.35rem 1.5rem;
+  border: 0;
+  border-radius: 12px 12px 0 0;
+  background:
+    linear-gradient(115deg, rgba(255, 255, 255, 0.06), transparent 45%),
+    #163a63;
+  box-shadow: 0 12px 28px -22px rgba(15, 23, 42, 0.85);
+}
+
+.guidance-review-panel .guidance-page-heading .eyebrow {
+  margin: 0 0 0.3rem;
+  color: #bfdbfe;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.guidance-review-panel .guidance-page-heading h2 {
+  margin: 0 0 0.35rem;
+  color: #ffffff;
+  font-size: clamp(1.35rem, 2vw, 1.75rem);
+  letter-spacing: -0.015em;
+}
+
+.guidance-review-panel .guidance-page-heading p:last-child {
+  max-width: 72ch;
+  color: #dbeafe;
+  font-size: 0.88rem;
+}
+
+.guidance-review-panel .guidance-page-heading > .review-status {
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  background: #ffffff;
+  box-shadow: 0 8px 20px -16px rgba(0, 0, 0, 0.8);
+}
+
+.guidance-review-panel .guidance-review-flow {
+  gap: 1.25rem;
+}
+
+.guidance-review-panel .guidance-review-section {
+  gap: 1.1rem;
+  padding: var(--guidance-section-pad);
+  overflow: visible;
+  border: 1px solid #d7dee8;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 9px 24px -22px rgba(15, 23, 42, 0.7);
+}
+
+.guidance-review-panel .guidance-review-section::before {
+  width: 4px;
+  border-radius: 12px 0 0 12px;
+}
+
+.guidance-review-panel .guidance-section-heading {
+  margin:
+    calc(var(--guidance-section-pad) * -1)
+    calc(var(--guidance-section-pad) * -1)
+    0;
+  padding: 1rem var(--guidance-section-pad);
+  border-bottom: 1px solid #dbe4ef;
+  border-radius: 12px 12px 0 0;
+  background: #f4f7fb;
+}
+
+.guidance-review-panel .explanation-review-section .guidance-section-heading {
+  background: #f0f6ff;
+}
+
+.guidance-review-panel .recommendation-review-section .guidance-section-heading {
+  background: #f1f8f4;
+}
+
+.guidance-review-panel .technique-review-section .guidance-section-heading {
+  background: #f7f4fb;
+}
+
+.guidance-review-panel .guidance-section-number {
+  flex-basis: 40px;
+  height: 40px;
+  border: 1px solid #9dc2ed;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #174b82;
+  font-size: 0.95rem;
+  box-shadow: 0 5px 12px -9px rgba(30, 64, 175, 0.8);
+}
+
+.guidance-review-panel .recommendation-review-section .guidance-section-number {
+  border-color: #9bc8ad;
+  background: #ffffff;
+  color: #24613b;
+}
+
+.guidance-review-panel .technique-review-section .guidance-section-number {
+  border-color: #c4addb;
+  background: #ffffff;
+  color: #68418a;
+}
+
+.guidance-review-panel .guidance-section-heading h3 {
+  color: #172033;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+}
+
+.guidance-review-panel .guidance-section-heading p {
+  max-width: 68ch;
+  color: #5f6f82;
+  font-size: 0.82rem;
+}
+
+.guidance-review-panel .load-human-explanation {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.guidance-review-panel .human-explanation-title {
+  margin: 0 0 0.2rem;
+  color: #21334a;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.guidance-review-panel .human-explanation-source {
+  margin-bottom: 0.75rem;
+  color: #758397;
+  font-size: 0.72rem;
+}
+
+.guidance-review-panel .load-meaning-section {
+  padding: 1rem;
+  border: 1px solid #c9d9ec;
+  border-left: 4px solid #2d6da8;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.guidance-review-panel .teacher-explanation-section .human-explanation-text {
+  color: #26384d;
+  font-size: 0.94rem;
+  line-height: 1.72;
+}
+
+.guidance-review-panel .recommendation-content-card {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.guidance-review-panel .recommendation-list {
+  gap: 0.65rem;
+}
+
+.guidance-review-panel .recommendation-content-card .recommendation-item {
+  gap: 0.75rem;
+  padding: 0.85rem;
+  border: 1px solid #d6e2da;
+  border-left: 3px solid #47815d;
+  border-radius: 8px;
+  background: #fbfdfb;
+}
+
+.guidance-review-panel .recommendation-content-card .recommendation-item-number {
+  min-width: 1.7rem;
+  height: 1.7rem;
+  border: 0;
+  background: #2f6d47;
+  color: #ffffff;
+  font-size: 0.75rem;
+}
+
+.guidance-review-panel .recommendation-item-text {
+  color: #293b31;
+  font-size: 0.87rem;
+  line-height: 1.58;
+}
+
+.guidance-review-panel .technique-review-section > .student-support-card {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.guidance-review-panel .technique-review-section .support-card-header {
+  margin-bottom: 0.9rem;
+  padding: 0 0 0.8rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.guidance-review-panel .technique-review-section .support-card-title {
+  color: #352149;
+  font-size: 0.94rem;
+  font-weight: 800;
+}
+
+.guidance-review-panel .support-source {
+  padding: 0.3rem 0.55rem;
+  border: 1px solid #d9cce6;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #6a547c;
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.guidance-review-panel .technique-guide-card {
+  padding: 1rem;
+  border: 1px solid #d9d3e1;
+  border-top: 3px solid #74528f;
+  border-radius: 9px;
+  background: #ffffff;
+  box-shadow: 0 8px 18px -20px rgba(59, 32, 79, 0.75);
+}
+
+.guidance-review-panel .technique-emoji-title {
+  color: #3f2b50;
+  font-size: 0.95rem;
+}
+
+.guidance-review-panel .technique-description {
+  color: #5e6877;
+  font-size: 0.84rem;
+}
+
+.guidance-review-panel .technique-time-badge {
+  border-color: #d9cce6;
+  background: #f5f1f8;
+  color: #59406e;
+}
+
+.guidance-review-panel .technique-best-for {
+  border-left: 3px solid #8b6aa3;
+  border-radius: 6px;
+  background: #f7f5f9;
+  color: #4c385d;
+}
+
+.guidance-review-panel .technique-how-to {
+  border-color: #dde2e9;
+  background: #fafbfc;
+}
+
+.guidance-review-panel .technique-how-to summary {
+  color: #28364a;
+}
+
+.guidance-review-panel .technique-how-to li::marker {
+  color: #72518d;
+  font-weight: 800;
+}
+
+.guidance-review-panel .evidence-toggle-button {
+  border-radius: 8px;
+  background: #f7f9fc;
+  box-shadow: none;
+}
+
+.guidance-review-panel .final-guidance-decision {
+  padding: 1.25rem;
+  border: 1px solid #9fb1c5;
+  border-top: 4px solid #274e78;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 14px 30px -28px rgba(15, 23, 42, 0.72);
+}
+
+.guidance-review-panel .decision-step-label {
+  border-radius: 5px;
+  background: #e7eef6;
+  color: #274e78;
+}
+
+.guidance-review-panel .final-guidance-decision .guidance-rejection-field {
+  border: 1px solid #dce3eb;
+  background: #f7f9fc;
+}
+
+.guidance-review-panel .final-guidance-decision .teacher-guidance-actions {
+  border-color: #dce3eb;
+}
+
+.guidance-review-panel .teacher-guidance-actions .support-button {
+  min-height: 42px;
+  padding: 0.65rem 1rem;
+  border-radius: 7px;
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+/* Desktop review workspace
+   Keep the complete teacher analysis visible while reducing unnecessary
+   vertical travel. The existing single-column document flow remains the
+   responsive fallback below this breakpoint. */
+@media (min-width: 1100px) {
+  .student-analyse-shell {
+    max-width: 1440px;
+  }
+
+  .student-analyse-header {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    column-gap: 1.5rem;
+  }
+
+  .selection-workflow {
+    display: grid;
+    grid-template-columns: minmax(250px, 0.72fr) minmax(0, 2fr);
+    align-items: start;
+  }
+
+  .selection-workflow-heading {
+    display: grid;
+    grid-column: 1;
+    gap: 0.75rem;
+  }
+
+  .selection-workflow-heading .selection-progress-badge {
+    justify-self: start;
+  }
+
+  .selection-fields {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .selection-fields-simple {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+
+  .selection-actions {
+    grid-column: 1 / -1;
+  }
+
+  .lime-panel .guidance-review-flow {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    align-items: start;
+    gap: 1.25rem;
+  }
+
+  .explanation-review-section {
+    grid-column: span 7;
+  }
+
+  .recommendation-review-section {
+    grid-column: span 5;
+  }
+
+  .technique-review-section,
+  .final-guidance-decision {
+    grid-column: 1 / -1;
+  }
+
+  .technique-review-section .techniques-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .guidance-review-section,
+  .technique-guide-card,
+  .final-guidance-decision {
+    scroll-margin-top: 1.25rem;
+  }
+}
+
 @media (max-width: 768px) {
+  .guidance-review-panel {
+    --guidance-section-pad: 1rem;
+  }
+
+  .guidance-review-panel .guidance-page-heading {
+    margin: -1rem -1rem 1.1rem;
+    padding: 1.1rem;
+  }
+
+  .guidance-review-panel .guidance-page-heading > .review-status {
+    align-self: flex-start;
+  }
+
   .student-analyse-shell {
     padding: 1rem;
   }
@@ -2254,6 +2740,22 @@
     flex-direction: column;
   }
 
+  .load-technical-evidence,
+  .technique-technical-evidence {
+    top: 4.25rem;
+    width: calc(100vw - 1rem);
+    max-height: calc(100vh - 4.75rem);
+    padding: 1rem;
+    border-radius: 14px;
+  }
+
+  .explanation-evidence-button.active,
+  .technique-evidence-button.active {
+    top: 0.65rem;
+    right: 0.5rem;
+    max-width: calc(100vw - 1rem);
+  }
+
   .guidance-review-panel,
   .guidance-review-section {
     padding: 1rem;
@@ -2287,5 +2789,733 @@
 
   .technique-feedback-ratings {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Dashboard-aligned Student Analyse frame.
+   The analysis controls and result flow remain unchanged inside this shell. */
+.student-analysis-dashboard-layout {
+  min-height: 100vh;
+  background: #f4f7fc;
+}
+
+.student-analysis-dashboard-main {
+  min-width: 0;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(191, 219, 254, 0.35), transparent 24rem),
+    #f4f7fc;
+}
+
+.student-analysis-dashboard-main .student-analyse-shell {
+  width: min(1440px, 100%);
+  max-width: none;
+  margin: 0 auto;
+  padding: clamp(1.25rem, 3vw, 2.5rem);
+  border-radius: 0;
+  background: transparent;
+}
+
+.student-analysis-dashboard-main .student-analyse-header {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr;
+  min-height: 190px;
+  padding: clamp(1.65rem, 4vw, 2.75rem);
+  overflow: hidden;
+  border: 0;
+  border-radius: 22px;
+  color: #ffffff;
+  background:
+    radial-gradient(circle at 86% 18%, rgba(147, 197, 253, 0.32), transparent 27%),
+    linear-gradient(135deg, #102b6a, #2563eb);
+  box-shadow: 0 24px 50px -30px rgba(30, 64, 175, 0.72);
+}
+
+.student-analysis-dashboard-main .student-analyse-header::after {
+  content: '';
+  position: absolute;
+  right: -65px;
+  bottom: -120px;
+  width: 280px;
+  height: 280px;
+  border: 46px solid rgba(255, 255, 255, 0.07);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.student-analysis-dashboard-main .student-analyse-header > div {
+  position: relative;
+  z-index: 1;
+  align-self: center;
+  max-width: 800px;
+}
+
+.student-analysis-dashboard-main .student-analyse-header .eyebrow {
+  margin-bottom: 0.55rem;
+  color: #bfdbfe;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+}
+
+.student-analysis-dashboard-main .student-analyse-header h1 {
+  margin: 0;
+  color: #ffffff;
+  font-size: clamp(1.65rem, 3vw, 2.35rem);
+  line-height: 1.2;
+}
+
+.student-analysis-dashboard-main .student-analyse-header .hero-copy {
+  margin-top: 0.75rem;
+  color: #dbeafe;
+  font-size: 0.94rem;
+  line-height: 1.7;
+}
+
+.student-analysis-dashboard-main .glass-panel {
+  border-color: #dfe7f3;
+  box-shadow: 0 16px 34px -30px rgba(15, 39, 92, 0.6);
+}
+
+.student-analysis-dashboard-main .selection-workflow {
+  border-top: 3px solid #2563eb;
+  border-left: 1px solid #dfe7f3;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.student-analysis-dashboard-main .selection-workflow::before {
+  display: none;
+}
+
+.student-analysis-dashboard-main .selection-start-badge {
+  color: #1d4ed8;
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.student-analysis-dashboard-main .selection-workflow-heading h2 {
+  color: #172033;
+}
+
+.student-analysis-dashboard-main .student-analyse-results:not(.guidance-review-panel) {
+  border-color: #dfe7f3;
+  background: #ffffff;
+}
+
+@media (max-width: 560px) {
+  .student-analysis-dashboard-main .student-analyse-shell {
+    padding: 1rem;
+  }
+
+  .student-analysis-dashboard-main .student-analyse-header {
+    min-height: 0;
+    padding: 1.5rem 1.25rem;
+    border-radius: 16px;
+  }
+
+}
+
+/* Unified blue visual language.
+   Green/red/orange remain only where they communicate success, errors, or load severity. */
+.student-analysis-dashboard-main .style-loading-modal {
+  border-color: #bfdbfe;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(191, 219, 254, 0.8), transparent 32%),
+    radial-gradient(circle at 90% 90%, rgba(219, 234, 254, 0.72), transparent 34%),
+    #ffffff;
+}
+
+.student-analysis-dashboard-main .style-analysis-orbit .orbit-ring-one {
+  border-top-color: #2563eb;
+  border-right-color: #93c5fd;
+}
+
+.student-analysis-dashboard-main .style-analysis-orbit .orbit-ring-two {
+  border-bottom-color: #1e40af;
+  border-left-color: #bfdbfe;
+}
+
+.student-analysis-dashboard-main .style-brain-icon,
+.student-analysis-dashboard-main .analysis-brain-icon {
+  background: linear-gradient(135deg, #2563eb, #17409a);
+}
+
+.student-analysis-dashboard-main .style-loading-kicker {
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.student-analysis-dashboard-main .style-loading-steps span {
+  border-color: #bfdbfe;
+}
+
+.student-analysis-dashboard-main .style-loading-steps i {
+  background: #2563eb;
+}
+
+.student-analysis-dashboard-main .style-loading-bar span,
+.student-analysis-dashboard-main .analysis-loading-bar span {
+  background: linear-gradient(90deg, #1d4ed8, #60a5fa, #1d4ed8);
+}
+
+.student-analysis-dashboard-main .student-analyse-toolbar .analyse-style-btn {
+  border-color: #2563eb;
+  background: linear-gradient(135deg, #2563eb, #17409a);
+}
+
+.student-analysis-dashboard-main .cognitive-style-panel {
+  border-top-color: #2563eb;
+}
+
+.student-analysis-dashboard-main .style-summary-row,
+.student-analysis-dashboard-main .technique-evidence-metadata span {
+  background: #eff6ff;
+}
+
+.student-analysis-dashboard-main .style-name,
+.student-analysis-dashboard-main .technical-evidence-summary,
+.student-analysis-dashboard-main .technique-selection-evidence h5,
+.student-analysis-dashboard-main .feature-rank {
+  color: #1d4ed8;
+}
+
+.student-analysis-dashboard-main .style-human-explanation {
+  border-color: #bfdbfe;
+  background: linear-gradient(145deg, #ffffff, #f5f9ff);
+  box-shadow: 0 12px 30px -24px rgba(30, 64, 175, 0.65);
+}
+
+.student-analysis-dashboard-main .teacher-explanation-section,
+.student-analysis-dashboard-main .technical-evidence-panel,
+.student-analysis-dashboard-main .technique-selection-evidence,
+.student-analysis-dashboard-main .style-feature-card {
+  border-color: #cfe0f5;
+}
+
+.student-analysis-dashboard-main .teacher-explanation-step {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.student-analysis-dashboard-main .teacher-explanation-section-title {
+  color: #1e40af;
+}
+
+.student-analysis-dashboard-main .technical-evidence-panel,
+.student-analysis-dashboard-main .style-feature-card {
+  background: #f8fbff;
+}
+
+.student-analysis-dashboard-main .load-reason-button {
+  border-color: #2563eb;
+  color: #ffffff;
+  background: #2563eb;
+  box-shadow: 0 10px 22px -16px rgba(30, 64, 175, 0.85);
+}
+
+.student-analysis-dashboard-main .load-reason-button:hover:not(:disabled),
+.student-analysis-dashboard-main .load-reason-button.active {
+  border-color: #1d4ed8;
+  color: #ffffff;
+  background: #1d4ed8;
+  box-shadow: 0 10px 22px -16px rgba(30, 64, 175, 0.7);
+}
+
+.student-analysis-dashboard-main .load-reason-button:focus-visible {
+  outline-color: rgba(37, 99, 235, 0.2);
+}
+
+.student-analysis-dashboard-main .load-reason-icon,
+.student-analysis-dashboard-main .load-reason-button.active .load-reason-icon {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.student-analysis-dashboard-main .load-reason-button small {
+  color: #dbeafe;
+}
+
+.student-analysis-dashboard-main .summary-results-panel.student-analyse-results {
+  border-color: #bfdbfe;
+  background: linear-gradient(145deg, #eff6ff, #e5f0ff);
+  box-shadow: 0 18px 45px -34px rgba(30, 64, 175, 0.5);
+}
+
+.student-analysis-dashboard-main .cognitive-summary-card {
+  border-color: #c9dcf5;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.student-analysis-dashboard-main .recommendation-review-section,
+.student-analysis-dashboard-main .technique-review-section {
+  border-color: #cfe0f5;
+}
+
+.student-analysis-dashboard-main .recommendation-review-section::before,
+.student-analysis-dashboard-main .technique-review-section::before {
+  background: #2563eb;
+}
+
+.student-analysis-dashboard-main .recommendation-review-section .guidance-section-number,
+.student-analysis-dashboard-main .technique-review-section .guidance-section-number {
+  border-color: #9dc2ed;
+  color: #174b82;
+  background: #ffffff;
+}
+
+.student-analysis-dashboard-main .guidance-review-panel .recommendation-review-section .guidance-section-heading,
+.student-analysis-dashboard-main .guidance-review-panel .technique-review-section .guidance-section-heading {
+  background: #f0f6ff;
+}
+
+.student-analysis-dashboard-main .guidance-review-panel .recommendation-content-card .recommendation-item {
+  border-color: #c9d9ec;
+  border-left-color: #2d6da8;
+  background: #f8fbff;
+}
+
+.student-analysis-dashboard-main .guidance-review-panel .recommendation-content-card .recommendation-item-number {
+  background: #2563eb;
+}
+
+.student-analysis-dashboard-main .guidance-review-panel .recommendation-item-text {
+  color: #26384d;
+}
+
+.student-analysis-dashboard-main .technique-review-section > .student-support-card,
+.student-analysis-dashboard-main .guidance-review-panel .technique-review-section .support-card-title {
+  color: #21334a;
+  border-color: #cfe0f5;
+}
+
+.student-analysis-dashboard-main .study-technique-card {
+  border-left-color: #2563eb;
+}
+
+.student-analysis-dashboard-main .technique-guide-card,
+.student-analysis-dashboard-main .guidance-review-panel .technique-guide-card {
+  border-color: #cfe0f5;
+  border-top-color: #2563eb;
+  background: #ffffff;
+  box-shadow: 0 8px 18px -20px rgba(30, 64, 175, 0.7);
+}
+
+.student-analysis-dashboard-main .technique-emoji-title,
+.student-analysis-dashboard-main .guidance-review-panel .technique-emoji-title {
+  color: #1e3a8a;
+}
+
+.student-analysis-dashboard-main .technique-time-badge,
+.student-analysis-dashboard-main .guidance-review-panel .technique-time-badge {
+  border-color: #bfdbfe;
+  color: #1e40af;
+  background: #eff6ff;
+}
+
+.student-analysis-dashboard-main .technique-best-for,
+.student-analysis-dashboard-main .guidance-review-panel .technique-best-for {
+  border-left-color: #60a5fa;
+  color: #274e78;
+  background: #f0f6ff;
+}
+
+.student-analysis-dashboard-main .technique-how-to li::marker,
+.student-analysis-dashboard-main .guidance-review-panel .technique-how-to li::marker {
+  color: #2563eb;
+}
+
+.student-analysis-dashboard-main .technique-link-info,
+.student-analysis-dashboard-main .technique-fallback-note {
+  border-left-color: #60a5fa;
+  color: #274e78;
+  background: #eff6ff;
+}
+
+.student-analysis-dashboard-main .technique-link-btn {
+  border-color: #2563eb;
+  background: #2563eb;
+}
+
+.student-analysis-dashboard-main .technique-link-btn:hover {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+}
+
+.student-analysis-dashboard-main .technique-evidence-button,
+.student-analysis-dashboard-main .study-technique-button,
+.student-analysis-dashboard-main .regenerate-guidance-btn {
+  border-color: #bfdbfe;
+  color: #1e40af;
+  background: #eff6ff;
+}
+
+.student-analysis-dashboard-main .technique-evidence-button > span:last-child {
+  background: #dbeafe;
+}
+
+.student-analysis-dashboard-main .technique-evidence-button:hover,
+.student-analysis-dashboard-main .technique-evidence-button.active,
+.student-analysis-dashboard-main .study-technique-button:hover,
+.student-analysis-dashboard-main .regenerate-guidance-btn:hover {
+  border-color: #60a5fa;
+  color: #1e3a8a;
+  background: #dbeafe;
+}
+
+.student-analysis-dashboard-main .technique-technical-evidence {
+  border-color: #bfdbfe;
+  background: #f8fbff;
+}
+
+.student-analysis-dashboard-main .guidance-review-panel .support-source {
+  border-color: #bfdbfe;
+  color: #315d8e;
+}
+
+.student-analysis-dashboard-main .review-status:not(.approved):not(.rejected) {
+  color: #475569;
+  background: #e7eef6;
+}
+
+/* Guided teacher review: one clear decision step at a time. */
+.guidance-stepper {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin: 0 0 1.25rem;
+  overflow: hidden;
+  border: 1px solid #c9d9ec;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.guidance-stepper::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 16.66%;
+  left: 16.66%;
+  height: 2px;
+  background: #dbe7f5;
+  transform: translateY(-50%);
+}
+
+.guidance-stepper button {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  min-height: 64px;
+  padding: 0.75rem;
+  border: 0;
+  color: #64748b;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+  transition: color 160ms ease, background 160ms ease;
+}
+
+.guidance-stepper button + button {
+  border-left: 1px solid #e3eaf3;
+}
+
+.guidance-stepper button:hover,
+.guidance-stepper button:focus-visible {
+  color: #1e40af;
+  background: #f8fbff;
+  outline: none;
+}
+
+.guidance-stepper button.is-current {
+  color: #ffffff;
+  background: linear-gradient(135deg, #17409a, #2563eb);
+}
+
+.guidance-stepper button > span {
+  display: grid;
+  flex: 0 0 30px;
+  place-items: center;
+  height: 30px;
+  border: 1px solid #bfdbfe;
+  border-radius: 9px;
+  color: #1d4ed8;
+  background: #eff6ff;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.guidance-stepper button.is-current > span {
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #17409a;
+  background: #ffffff;
+}
+
+.guidance-stepper button strong {
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+
+.guidance-step-page {
+  display: none !important;
+}
+
+.guidance-step-page.is-current {
+  display: grid !important;
+  grid-column: 1 / -1;
+  animation: guidance-step-enter 180ms ease-out;
+}
+
+.guidance-step-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid #dbe4ef;
+}
+
+.guidance-step-navigation > span {
+  max-width: 46ch;
+  color: #64748b;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.guidance-step-navigation button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 42px;
+  padding: 0.65rem 1rem;
+  border: 1px solid #2563eb;
+  border-radius: 8px;
+  color: #ffffff;
+  background: #2563eb;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 750;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.guidance-step-navigation button:hover,
+.guidance-step-navigation button:focus-visible {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.guidance-step-navigation .guidance-previous-button {
+  border-color: #bfdbfe;
+  color: #1e40af;
+  background: #eff6ff;
+}
+
+.guidance-step-navigation .guidance-previous-button:hover,
+.guidance-step-navigation .guidance-previous-button:focus-visible {
+  border-color: #93c5fd;
+  color: #1e3a8a;
+  background: #dbeafe;
+}
+
+.guidance-step-navigation.is-next-only {
+  justify-content: flex-end;
+}
+
+.guidance-technique-navigation {
+  flex-direction: row;
+}
+
+.guidance-step-workspace .final-guidance-decision.is-current {
+  margin-top: 0;
+}
+
+@keyframes guidance-step-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 680px) {
+  .guidance-stepper button {
+    min-height: 74px;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.6rem 0.3rem;
+  }
+
+  .guidance-stepper button strong {
+    font-size: 0.65rem;
+  }
+
+  .guidance-step-navigation,
+  .guidance-step-navigation.is-next-only,
+  .guidance-technique-navigation {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .guidance-step-navigation button {
+    width: 100%;
+  }
+}
+
+/* Compact page introduction and blue selection workflow. */
+.student-analysis-dashboard-main .student-analyse-header {
+  min-height: 140px;
+  padding: clamp(1.25rem, 2.5vw, 2rem);
+}
+
+.student-analysis-dashboard-main .student-analyse-header::after {
+  right: -45px;
+  bottom: -105px;
+  width: 225px;
+  height: 225px;
+  border-width: 36px;
+}
+
+.student-analysis-dashboard-main .student-analyse-header .eyebrow {
+  margin-bottom: 0.4rem;
+  font-size: 0.66rem;
+}
+
+.student-analysis-dashboard-main .student-analyse-header h1 {
+  font-size: clamp(1.45rem, 2.25vw, 1.9rem);
+}
+
+.student-analysis-dashboard-main .student-analyse-header .hero-copy {
+  max-width: 72ch;
+  margin-top: 0.55rem;
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.student-analysis-dashboard-main .selection-workflow {
+  gap: 1rem;
+  padding: 1.25rem;
+  border-color: #c9d9ec;
+  border-top: 3px solid #2563eb;
+  background: linear-gradient(145deg, #ffffff, #f8fbff);
+}
+
+.student-analysis-dashboard-main .selection-start-badge,
+.student-analysis-dashboard-main .selection-progress-badge,
+.student-analysis-dashboard-main .selection-progress-badge.ready {
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.student-analysis-dashboard-main .selection-field,
+.student-analysis-dashboard-main .selection-field.completed {
+  border-color: #cfe0f5;
+  background: #ffffff;
+}
+
+.student-analysis-dashboard-main .selection-field:hover {
+  border-color: #93c5fd;
+}
+
+.student-analysis-dashboard-main .selection-field.active {
+  border-color: #60a5fa;
+  background: #f8fbff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+}
+
+.student-analysis-dashboard-main .selection-field.completed {
+  border-color: #93c5fd;
+  background: linear-gradient(145deg, #ffffff, #eff6ff);
+}
+
+.student-analysis-dashboard-main .selection-field.locked {
+  border-color: #dbe4ef;
+  background: #f4f7fb;
+}
+
+.student-analysis-dashboard-main .selection-step-number,
+.student-analysis-dashboard-main .selection-field.completed .selection-step-number {
+  border-radius: 9px;
+  color: #ffffff;
+  background: #2563eb;
+  box-shadow: 0 7px 15px -10px rgba(30, 64, 175, 0.8);
+}
+
+.student-analysis-dashboard-main .selection-field.locked .selection-step-number {
+  color: #64748b;
+  background: #e2e8f0;
+  box-shadow: none;
+}
+
+.student-analysis-dashboard-main .selection-select-wrap::after {
+  color: #2563eb;
+}
+
+.student-analysis-dashboard-main .student-analyse-toolbar select {
+  border-color: #bfdbfe;
+  color: #1e3a5f;
+  background: #f8fbff;
+}
+
+.student-analysis-dashboard-main .student-analyse-toolbar select:hover:not(:disabled) {
+  border-color: #60a5fa;
+  background: #ffffff;
+}
+
+.student-analysis-dashboard-main .student-analyse-toolbar select:focus {
+  border-color: #2563eb;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.13);
+}
+
+.student-analysis-dashboard-main .student-analyse-toolbar select:disabled {
+  border-color: #dbe4ef;
+  color: #94a3b8;
+  background: #eef2f7;
+}
+
+.student-analysis-dashboard-main .selection-field.completed .selection-field-status {
+  color: #1d4ed8;
+}
+
+.student-analysis-dashboard-main .selection-connector span,
+.student-analysis-dashboard-main .selection-connector.active span {
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.student-analysis-dashboard-main .selection-actions,
+.student-analysis-dashboard-main .selection-actions.ready {
+  border-color: #cfe0f5;
+  background: #f4f8fd;
+}
+
+.student-analysis-dashboard-main .selection-actions-simple,
+.student-analysis-dashboard-main .selection-actions-simple.ready {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.student-analysis-dashboard-main .selection-ready-dot,
+.student-analysis-dashboard-main .selection-actions.ready .selection-ready-dot {
+  background: #2563eb;
+  box-shadow: 0 0 0 5px #dbeafe;
+}
+
+@media (max-width: 560px) {
+  .student-analysis-dashboard-main .student-analyse-header {
+    min-height: 0;
+    padding: 1.25rem;
+  }
+
+  .student-analysis-dashboard-main .selection-workflow {
+    padding: 1rem;
   }
 }
