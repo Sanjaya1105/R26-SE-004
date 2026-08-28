@@ -28,6 +28,20 @@ const studentSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  // --- New Optional Fields ---
+  visualVerbalCognitiveStyle: {
+    type: String,
+    trim: true,
+  },
+  learnerProfile: {
+    type: String,
+    trim: true,
+  },
+  analyticWholisticCognitiveStyle: {
+    type: String,
+    trim: true,
+  },
+
 }, { timestamps: true });
 
 module.exports = mongoose.model('Student', studentSchema);

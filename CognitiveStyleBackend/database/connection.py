@@ -11,6 +11,7 @@ client = AsyncMongoClient(MONGO_URL)
 
 db = client["cognitive_style_db"]
 user_collection = db["users"]
+userdb = client["userdb"]
 
 
 visual_verbal_cursor_collection = db["visual_verbal_cursor_collection"]
@@ -36,3 +37,4 @@ analytic_wholistic_test_answers = db["analytic_wholistic_test_answers"]
 
 
 ahs_question_collection = db["ahs_questions"]
+student_collection = userdb["students"]

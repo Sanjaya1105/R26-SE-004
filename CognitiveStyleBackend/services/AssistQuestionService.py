@@ -1,14 +1,19 @@
 from datetime import datetime
 from bson import ObjectId
-from database.connection import assist_question_collection
+from database.connection import assist_question_collection,student_collection
 import numpy as np
 from sklearn.cluster import KMeans
+from datetime import datetime
+from bson import ObjectId
 
-# Map the question numbers to their respective scales based on the research paper[cite: 1]
+# Map the question numbers to their respective scales based on the research paper
 DEEP_QUESTIONS = {2, 6, 10, 12, 15, 17}
 STRATEGIC_QUESTIONS = {3, 5, 7, 9, 11, 13}
 SURFACE_QUESTIONS = {1, 4, 8, 14, 16, 18}
 
+# NOTE: Ensure both collections are defined in your database config.
+# assist_question_collection = ...
+# students_collection = ...
 
 async def create_assist_question(data: dict):
     # 1. Calculate the Raw Scores
@@ -31,52 +36,30 @@ async def create_assist_question(data: dict):
     data["strategic_score"] = strategic_score
     data["surface_score"] = surface_score
 
-    # 2. Determine Dominant Profile (Fallback/Direct Categorization)
+    # 2. Determine Dominant Profile
     scores = {
         "Deep Approach": deep_score,
         "Strategic Approach": strategic_score,
         "Surface Approach": surface_score
     }
-    data["dominant_profile"] = max(scores, key=scores.get)
+    dominant_profile = max(scores, key=scores.get)
+    data["dominant_profile"] = dominant_profile
 
-    # 3. Apply K-Means Clustering on the fly
-    # Fetch historical score data to build the mathematical space
-    cursor = assist_question_collection.find(
-        {},
-        {"deep_score": 1, "strategic_score": 1, "surface_score": 1}
-    )
-    historical_docs = await cursor.to_list(length=None)
+    # 3. Update the Student's learnerProfile in the 'userdb' database
+    user_id = data.get("user_id")
+    if user_id:
+        try:
+            query_filter = {"_id": ObjectId(user_id)}
+        except Exception:
+            query_filter = {"_id": user_id}
 
-    cluster_group = -1  # Default value if there is not enough historical data
+        await student_collection.update_one(
+            query_filter,
+            {"$set": {"learnerProfile": dominant_profile}}
+        )
 
-    # We need at least 3 total data points to confidently form 3 clusters
-    if len(historical_docs) >= 2:
-        data_points = []
-        for doc in historical_docs:
-            if "deep_score" in doc:
-                data_points.append([
-                    doc["deep_score"],
-                    doc["strategic_score"],
-                    doc["surface_score"]
-                ])
-
-        # Append the new user's scores to the dataset
-        data_points.append([deep_score, strategic_score, surface_score])
-        X = np.array(data_points)
-
-        # Form up to 3 clusters
-        num_clusters = min(3, len(X))
-
-        kmeans = KMeans(n_clusters=num_clusters, random_state=42, n_init=10)
-        kmeans.fit(X)
-
-        # The algorithm tags every data point; we only need the label of the newest one (the last item)
-        cluster_group = int(kmeans.labels_[-1])
-
-    data["cluster_group"] = cluster_group
+    # 4. Save Response to Database
     data["created_at"] = datetime.utcnow()
-
-    # 4. Save to Database
     result = await assist_question_collection.insert_one(data)
 
     # Fetch and format the newly created document for the API response
@@ -87,6 +70,7 @@ async def create_assist_question(data: dict):
         del new_doc["_id"]
 
     return new_doc
+
 
 async def get_all_assist_questions():
     responses = []
