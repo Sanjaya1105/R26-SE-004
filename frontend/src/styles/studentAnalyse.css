@@ -318,6 +318,212 @@
   background: #f8fafc;
 }
 
+/* Student-facing previous lesson summary navigation */
+.previous-lesson-summary-page .student-analyse-toolbar {
+  position: relative;
+  z-index: 2;
+}
+
+.student-summary-tabs {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.student-summary-tabs-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.student-summary-tabs-heading strong {
+  color: #1e3a8a;
+  font-size: 0.9rem;
+  text-align: right;
+}
+
+.student-summary-tab-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.student-summary-tab-list button {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  min-height: 70px;
+  padding: 0.8rem;
+  border: 1px solid #dbe4ef;
+  border-radius: 12px;
+  color: #475569;
+  background: #ffffff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.student-summary-tab-list button:hover,
+.student-summary-tab-list button:focus-visible {
+  border-color: #93c5fd;
+  background: #f8fbff;
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.student-summary-tab-list button.is-active {
+  border-color: #2563eb;
+  color: #1e3a8a;
+  background: #eff6ff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.student-summary-tab-number {
+  display: grid;
+  place-items: center;
+  flex: 0 0 34px;
+  height: 34px;
+  border-radius: 10px;
+  color: #1d4ed8;
+  background: #dbeafe;
+  font-weight: 800;
+}
+
+.student-summary-tab-list button.is-active .student-summary-tab-number {
+  color: #ffffff;
+  background: #2563eb;
+}
+
+.student-summary-tab-list button > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 0.15rem;
+}
+
+.student-summary-tab-list button strong,
+.student-summary-tab-list button small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.student-summary-tab-list button strong {
+  font-size: 0.86rem;
+  white-space: nowrap;
+}
+
+.student-summary-tab-list button small {
+  color: #64748b;
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.student-summary-content {
+  min-height: 360px;
+}
+
+.student-summary-section {
+  display: grid;
+  gap: 1rem;
+}
+
+.student-summary-section-heading h2 {
+  margin: 0.2rem 0 0;
+  color: #172554;
+}
+
+.student-summary-section-heading p:last-child {
+  margin: 0;
+  color: #475569;
+  line-height: 1.65;
+}
+
+.student-summary-section-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 42px;
+  padding: 0.65rem 1rem;
+  border: 1px solid #2563eb;
+  border-radius: 9px;
+  color: #ffffff;
+  background: #2563eb;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.student-summary-section-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.student-summary-section-actions:has(> button:only-child) {
+  justify-content: flex-end;
+}
+
+.student-summary-section-actions.is-back-only {
+  justify-content: flex-start;
+}
+
+.student-summary-section-actions button.is-secondary {
+  border-color: #bfdbfe;
+  color: #1e40af;
+  background: #eff6ff;
+}
+
+.student-summary-section-actions button:not(.is-secondary):hover,
+.student-summary-section-actions button:not(.is-secondary):focus-visible {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  outline: none;
+}
+
+.student-summary-section-actions button.is-secondary:hover,
+.student-summary-section-actions button.is-secondary:focus-visible {
+  border-color: #93c5fd;
+  background: #dbeafe;
+  outline: none;
+}
+
+@media (max-width: 720px) {
+  .student-summary-tab-list {
+    grid-template-columns: 1fr;
+  }
+
+  .student-summary-tab-list button {
+    min-height: 58px;
+  }
+
+  .student-summary-tabs-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .student-summary-tabs-heading strong {
+    text-align: left;
+  }
+
+  .student-summary-section-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .student-summary-section-actions button {
+    width: 100%;
+  }
+}
+
 .dashboard-back-button {
   position: relative;
   display: inline-flex;
@@ -561,38 +767,60 @@
 }
 
 .selection-select-wrap::after {
-  content: '⌄';
+  content: '';
   position: absolute;
   top: 50%;
-  right: 0.9rem;
-  color: #64748b;
-  font-size: 1.05rem;
+  right: 1rem;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid #2563eb;
+  border-bottom: 2px solid #2563eb;
   pointer-events: none;
-  transform: translateY(-55%);
+  transform: translateY(-70%) rotate(45deg);
 }
+
+.selection-select-wrap:has(select:disabled)::after { border-color: #94a3b8; }
 
 .student-analyse-toolbar select {
   width: 100%;
-  min-height: 46px;
-  padding: 0.72rem 2.5rem 0.72rem 0.85rem;
-  border-radius: 11px;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: var(--text);
+  min-height: 52px;
+  padding: 0.8rem 3rem 0.8rem 1rem;
+  border-radius: 12px;
+  border: 1px solid #b9cdea;
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+  color: #172554;
   font: inherit;
   font-weight: 600;
+  line-height: 1.35;
   appearance: none;
   cursor: pointer;
-  transition: border-color 150ms ease, box-shadow 150ms ease;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+}
+
+.student-analyse-toolbar select.is-placeholder { color: #64748b; font-weight: 500; }
+
+.student-analyse-toolbar select option {
+  padding: 0.75rem 1rem;
+  color: #1e3a5f;
+  background: #ffffff;
+  font-weight: 500;
+}
+
+.student-analyse-toolbar select option:checked {
+  color: #1d4ed8;
+  background: #dbeafe;
+  font-weight: 700;
 }
 
 .student-analyse-toolbar select:hover:not(:disabled) {
-  border-color: #60a5fa;
+  border-color: #3b82f6;
+  background: #ffffff;
 }
 
 .student-analyse-toolbar select:focus {
   border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.13);
   outline: none;
 }
 
@@ -3364,6 +3592,127 @@
   .guidance-step-navigation button {
     width: 100%;
   }
+}
+
+/* Rounded custom lesson/student dropdowns. Native Windows select menus do not
+   support reliable border-radius styling, so these controls render their own menu. */
+.student-analysis-dashboard-main .selection-workflow { overflow: visible; }
+.selection-dropdown { position: relative; width: 100%; }
+.selection-dropdown.is-open { z-index: 50; }
+
+.student-analyse-toolbar .selection-dropdown-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  min-height: 52px;
+  padding: 0.8rem 1rem;
+  border: 1px solid #b9cdea;
+  border-radius: 13px;
+  color: #172554;
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+  box-shadow: none;
+  font-weight: 650;
+  text-align: left;
+}
+
+.student-analyse-toolbar .selection-dropdown-trigger.is-placeholder {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.student-analyse-toolbar .selection-dropdown-trigger:hover:not(:disabled),
+.selection-dropdown.is-open .selection-dropdown-trigger {
+  border-color: #3b82f6;
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.11);
+  transform: none;
+}
+
+.student-analyse-toolbar .selection-dropdown-trigger:focus-visible {
+  border-color: #2563eb;
+  outline: 0;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.14);
+}
+
+.student-analyse-toolbar .selection-dropdown-trigger:disabled {
+  border-color: #dbe4ef;
+  color: #94a3b8;
+  background: #eef2f7;
+  cursor: not-allowed;
+}
+
+.selection-dropdown-arrow {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  margin: -4px 3px 0 0;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 160ms ease, margin 160ms ease;
+}
+
+.selection-dropdown.is-open .selection-dropdown-arrow {
+  margin: 4px 3px 0 0;
+  transform: rotate(225deg);
+}
+
+.selection-dropdown-menu {
+  position: absolute;
+  z-index: 100;
+  top: calc(100% + 8px);
+  right: 0;
+  left: 0;
+  display: grid;
+  gap: 3px;
+  max-height: 280px;
+  padding: 7px;
+  overflow-y: auto;
+  border: 1px solid #bfdbfe;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 20px 45px -18px rgba(15, 39, 92, 0.45);
+  animation: selection-dropdown-open 140ms ease-out;
+}
+
+.student-analyse-toolbar .selection-dropdown-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 42px;
+  padding: 0.65rem 0.8rem;
+  border: 0;
+  border-radius: 9px;
+  color: #1e3a5f;
+  background: transparent;
+  box-shadow: none;
+  font-weight: 550;
+  text-align: left;
+}
+
+.student-analyse-toolbar .selection-dropdown-option:hover,
+.student-analyse-toolbar .selection-dropdown-option:focus-visible {
+  color: #1d4ed8;
+  background: #eff6ff;
+  box-shadow: none;
+  outline: none;
+  transform: none;
+}
+
+.student-analyse-toolbar .selection-dropdown-option.is-selected {
+  color: #ffffff;
+  background: #2563eb;
+}
+
+.selection-dropdown-check { font-weight: 900; }
+
+@keyframes selection-dropdown-open {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* Compact page introduction and blue selection workflow. */

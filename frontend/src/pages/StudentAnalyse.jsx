@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import {
@@ -77,6 +77,76 @@ function formatCognitiveStyleLabel(style) {
     .includes(normalized)
     ? 'Intermediate'
     : style;
+}
+
+function SelectionDropdown({ value, options, placeholder, disabled = false, onChange }) {
+  const [open, setOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  const triggerRef = useRef(null);
+  const selectedOption = options.find((option) => String(option.value) === String(value));
+
+  useEffect(() => {
+    function closeOnOutsideClick(event) {
+      if (!dropdownRef.current?.contains(event.target)) setOpen(false);
+    }
+
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    return () => document.removeEventListener('pointerdown', closeOnOutsideClick);
+  }, []);
+
+  function handleKeyDown(event) {
+    if (event.key === 'Escape') {
+      setOpen(false);
+      triggerRef.current?.focus();
+      return;
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      setOpen(true);
+    }
+  }
+
+  return (
+    <div ref={dropdownRef} className={`selection-dropdown ${open ? 'is-open' : ''}`} onKeyDown={handleKeyDown}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className={`selection-dropdown-trigger ${selectedOption ? '' : 'is-placeholder'}`}
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span>{selectedOption?.label || placeholder}</span>
+        <span className="selection-dropdown-arrow" aria-hidden="true" />
+      </button>
+
+      {open && !disabled && (
+        <div className="selection-dropdown-menu" role="listbox" aria-label={placeholder}>
+          {options.map((option) => {
+            const selected = String(option.value) === String(value);
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                className={`selection-dropdown-option ${selected ? 'is-selected' : ''}`}
+                onClick={() => {
+                  onChange(String(option.value));
+                  setOpen(false);
+                  triggerRef.current?.focus();
+                }}
+              >
+                <span>{option.label}</span>
+                {selected && <span className="selection-dropdown-check" aria-hidden="true">✓</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function StudentAnalyse() {
@@ -569,43 +639,40 @@ export default function StudentAnalyse() {
 
       <section className="student-analyse-toolbar selection-workflow glass-panel">
         <div className="selection-fields selection-fields-simple">
-          <label className={`selection-field ${selectedLessonId ? 'completed' : 'active'}`}>
+          <div className={`selection-field ${selectedLessonId ? 'completed' : 'active'}`}>
             <span className="selection-field-heading">
               <strong>Select lesson</strong>
             </span>
             <span className="selection-select-wrap">
-              <select value={selectedLessonId} onChange={(event) => setSelectedLessonId(event.target.value)}>
-                <option value="">Choose a lesson...</option>
-                {lessons.map((lesson) => (
-                  <option key={lesson.lesson_id} value={lesson.lesson_id}>
-                    {lesson.lesson_name || `Lesson ${lesson.lesson_id}`}
-                  </option>
-                ))}
-              </select>
+              <SelectionDropdown
+                value={selectedLessonId}
+                placeholder="Choose a lesson..."
+                options={lessons.map((lesson) => ({
+                  value: lesson.lesson_id,
+                  label: lesson.lesson_name || `Lesson ${lesson.lesson_id}`,
+                }))}
+                onChange={setSelectedLessonId}
+              />
             </span>
-          </label>
+          </div>
 
-          <label className={`selection-field ${selectedStudentId ? 'completed' : selectedLessonId ? 'active' : 'locked'}`}>
+          <div className={`selection-field ${selectedStudentId ? 'completed' : selectedLessonId ? 'active' : 'locked'}`}>
             <span className="selection-field-heading">
               <strong>Select student</strong>
             </span>
             <span className="selection-select-wrap">
-              <select
+              <SelectionDropdown
                 value={selectedStudentId}
-                onChange={(event) => setSelectedStudentId(event.target.value)}
+                placeholder={!selectedLessonId ? 'Select a lesson first' : 'Choose a student...'}
+                options={students.map((student) => ({
+                  value: student.student_id,
+                  label: student.student_name || `Student ${student.student_id}`,
+                }))}
                 disabled={!selectedLessonId || !students.length}
-              >
-                <option value="">
-                  {!selectedLessonId ? 'Select a lesson first' : 'Choose a student...'}
-                </option>
-                {students.map((student) => (
-                  <option key={student.student_id} value={student.student_id}>
-                    {student.student_name || `Student ${student.student_id}`}
-                  </option>
-                ))}
-              </select>
+                onChange={setSelectedStudentId}
+              />
             </span>
-          </label>
+          </div>
         </div>
 
         <div className="selection-actions selection-actions-simple">
