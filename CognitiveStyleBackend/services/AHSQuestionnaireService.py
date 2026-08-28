@@ -1,6 +1,7 @@
 # Assuming your db collection is initialized like this:from
+from bson import ObjectId
 
-from database.connection import (ahs_question_collection)
+from database.connection import (ahs_question_collection,student_collection)
 from models.AhsQuestionnaireModel import (
     AHSAnswerDB,AHSIncomingPayload,AHSDataDB )
 
@@ -42,7 +43,21 @@ async def process_ahs_questionnaire_service(payload: AHSIncomingPayload):
     # >= 4.0 leans Wholistic (Holistic), < 4.0 leans Analytic
     cognitive_style = "Wholistic" if overall_average >= 4.0 else "Analytic"
 
-    # 5. Map the data into the DB Model
+    # 5. --- NEW: Update the Student in the 'userdb' database ---
+    if payload.userId:
+        try:
+            query_filter = {"_id": ObjectId(payload.userId)}
+        except Exception:
+            query_filter = {"_id": payload.userId}
+
+        # Assuming student_collection is available in scope (imported from your DB file)
+        await student_collection.update_one(
+            query_filter,
+            {"$set": {"analyticWholisticCognitiveStyle": cognitive_style}}
+        )
+    # -----------------------------------------------------------
+
+    # 6. Map the data into the DB Model
     db_payload = AHSDataDB(
         userId=payload.userId,
         answers=processed_answers,
@@ -51,10 +66,10 @@ async def process_ahs_questionnaire_service(payload: AHSIncomingPayload):
         visualTaskData=payload.visualTaskData
     )
 
-    # 6. Insert into MongoDB
+    # 7. Insert into MongoDB
     result = await ahs_question_collection.insert_one(db_payload.model_dump())
 
-    # 7. Fetch and format the response
+    # 8. Fetch and format the response
     new_record = await ahs_question_collection.find_one({"_id": result.inserted_id})
 
     if new_record:
