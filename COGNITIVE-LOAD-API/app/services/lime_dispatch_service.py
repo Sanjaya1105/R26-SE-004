@@ -173,6 +173,70 @@ def _process_window(
     return payload
 
 
+def dispatch_saved_feature_window_to_lime(feature_window_id, feature_window_data: dict) -> dict:
+    session_id = feature_window_data.get("session_id")
+    window_start = feature_window_data.get("window_start")
+    window_end = feature_window_data.get("window_end")
+
+    if not session_id or window_start is None or window_end is None:
+        return {
+            "enabled": False,
+            "status": "skipped",
+            "message": "session_id, window_start, and window_end are required for LIME dispatch.",
+        }
+
+    if has_successful_feature_window_dispatch(
+        student_id=feature_window_data["student_id"],
+        lesson_id=feature_window_data["lesson_id"],
+        session_id=session_id,
+        window_start=window_start,
+        window_end=window_end,
+        target_service=LIME_TARGET_SERVICE,
+    ):
+        return {
+            "enabled": True,
+            "status": "skipped",
+            "message": "Window already sent to LIME AI.",
+        }
+
+    try:
+        lime_response = _post_feature_window_to_lime(feature_window_data)
+        status = "success"
+        message = str(lime_response.get("message") or "Sent to LIME AI.")
+    except Exception as exc:
+        lime_response = None
+        status = "failed"
+        message = str(exc)
+
+    save_feature_window_dispatch(
+        {
+            "feature_window_id": feature_window_id,
+            "student_id": feature_window_data["student_id"],
+            "lesson_id": feature_window_data["lesson_id"],
+            "session_id": session_id,
+            "minute_index": feature_window_data["minute_index"],
+            "window_start": window_start,
+            "window_end": window_end,
+            "target_service": LIME_TARGET_SERVICE,
+            "status": status,
+            "response_message": message[:1000],
+        }
+    )
+
+    payload = {
+        "enabled": True,
+        "minute_index": feature_window_data["minute_index"],
+        "window_start": _serialize_value(window_start),
+        "window_end": _serialize_value(window_end),
+        "status": status,
+        "message": message,
+    }
+    if lime_response is not None:
+        payload["lime_response"] = lime_response
+
+    return payload
+
+
 def _ensure_feature_window_saved(feature_window_data: dict):
     existing_window = get_feature_window_by_bounds(
         student_id=feature_window_data["student_id"],

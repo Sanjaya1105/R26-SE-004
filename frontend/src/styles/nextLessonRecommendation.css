@@ -1,24 +1,10 @@
 .next-recommendation-page {
-  min-height: 100vh;
-  background: linear-gradient(180deg, #eff6ff 0%, #f8fafc 38%, #eef2ff 100%);
+  min-height: calc(100vh - 82px);
+  background: linear-gradient(180deg, #eaf3ff 0%, #f7faff 38%, #f4f7fc 100%);
 }
 
-.next-recommendation-nav {
-  border: 0;
-  border-bottom: 1px solid #dbeafe;
-  border-radius: 0;
-  background: rgba(255, 255, 255, 0.95);
-}
+.next-recommendation-dashboard-main { min-width: 0; background: #f4f7fc; }
 
-.brand-button {
-  border: 0;
-  background: none;
-  font-size: 1.5rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.next-recommendation-nav-actions,
 .selector-row {
   display: flex;
   align-items: center;
@@ -40,6 +26,7 @@
 .next-recommendation-content {
   display: grid;
   gap: 1.5rem;
+  max-width: 1180px;
 }
 
 .next-recommendation-hero,
@@ -51,18 +38,24 @@
 }
 
 .next-recommendation-hero {
-  padding: 1.25rem 1.5rem;
-  background: linear-gradient(135deg, #ffffff 0%, #eff6ff 100%);
-  border-color: #bfdbfe;
+  position: relative;
+  padding: clamp(1.6rem, 3vw, 2.4rem);
+  overflow: hidden;
+  color: #ffffff;
+  background: radial-gradient(circle at 86% 15%, rgba(147, 197, 253, .32), transparent 25%), linear-gradient(135deg, #102b6a, #2563eb);
+  border-color: rgba(255, 255, 255, .16);
+  box-shadow: 0 24px 50px -32px rgba(30, 64, 175, .85);
 }
 
 .next-recommendation-hero h1 {
   margin: 0.2rem 0 0.35rem;
+  color: #ffffff;
   font-size: clamp(1.55rem, 3vw, 2.15rem);
 }
 
 .next-recommendation-hero .eyebrow {
   margin: 0;
+  color: #bfdbfe;
 }
 
 .next-recommendation-hero > p:last-child,
@@ -74,6 +67,7 @@
 
 .next-recommendation-hero > p:last-child {
   margin: 0;
+  color: #dbeafe;
   line-height: 1.5;
 }
 
@@ -576,8 +570,6 @@
 }
 
 @media (max-width: 800px) {
-  .next-recommendation-nav,
-  .next-recommendation-nav-actions,
   .selector-row,
   .chart-heading {
     align-items: stretch;

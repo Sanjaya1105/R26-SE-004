@@ -13,6 +13,7 @@ from app.services.prediction_service import (
     predict_cognitive_load,
     predict_cognitive_load_from_raw,
 )
+from app.services.trend_analysis_service import analyze_cognitive_load_trend
 
 
 router = APIRouter()
@@ -83,4 +84,20 @@ def get_xai_data(
         student_id=student_id,
         lesson_id=lesson_id,
         minute_index=minute_index,
+    )
+
+
+@router.get("/students/{student_id}/lessons/{lesson_id}/load-trend")
+def get_load_trend(
+    student_id: str,
+    lesson_id: str,
+    session_id: str | None = None,
+    limit: int = 12,
+):
+    # Temporal analytics layer on top of saved cognitive-load predictions.
+    return analyze_cognitive_load_trend(
+        student_id=student_id,
+        lesson_id=lesson_id,
+        session_id=session_id,
+        limit=limit,
     )

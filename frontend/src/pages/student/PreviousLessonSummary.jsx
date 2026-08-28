@@ -31,6 +31,7 @@ export default function PreviousLessonSummary() {
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [feedbackError, setFeedbackError] = useState('');
   const [submittingTechnique, setSubmittingTechnique] = useState('');
+  const [activeSection, setActiveSection] = useState('recommendations');
 
   useEffect(() => {
     let cancelled = false;
@@ -65,6 +66,17 @@ export default function PreviousLessonSummary() {
     [selectedLessonId, summaries],
   );
   const strategies = recommendationItems(selectedSummary?.lecture_support?.strategies);
+  const summarySections = [
+    { id: 'recommendations', label: 'Recommendations', description: 'What to do next' },
+    { id: 'techniques', label: 'Study Techniques', description: 'Practical study methods' },
+  ];
+
+  function selectLesson(lessonId) {
+    setSelectedLessonId(lessonId);
+    setActiveSection('recommendations');
+    setFeedbackMessage('');
+    setFeedbackError('');
+  }
 
   async function handleTechniqueFeedback(feedback) {
     try {
@@ -94,7 +106,7 @@ export default function PreviousLessonSummary() {
   }
 
   return (
-    <div className="student-analyse-shell">
+    <div className="student-analyse-shell previous-lesson-summary-page">
       <header className="student-analyse-header">
         <button type="button" className="back-button" onClick={() => navigate('/course')}>
           Back to courses
@@ -113,7 +125,7 @@ export default function PreviousLessonSummary() {
         <section className="student-analyse-toolbar glass-panel">
           <label>
             Subject / lesson
-            <select value={selectedLessonId} onChange={(event) => setSelectedLessonId(event.target.value)}>
+            <select value={selectedLessonId} onChange={(event) => selectLesson(event.target.value)}>
               <option value="">Select a lesson</option>
               {summaries.map((summary) => (
                 <option key={summary.lesson_id} value={summary.lesson_id}>
@@ -132,32 +144,97 @@ export default function PreviousLessonSummary() {
       ) : null}
 
       {selectedSummary ? (
-        <section className="student-analyse-results glass-panel">
-          <h2>{lessonNames.get(String(selectedSummary.lesson_id)) || `Lesson ${selectedSummary.lesson_id}`}</h2>
-          <p><strong>Cognitive load:</strong> {selectedSummary.predicted_cognitive_load}</p>
-
-          <div className="student-support-card lecture-support-card">
-            <p className="support-card-title">Teacher-shared Recommendations</p>
-            <div className="recommendation-list">
-              {strategies.map((strategy, index) => (
-                <div className="recommendation-item" key={`${index}-${strategy}`}>
-                  <span className="recommendation-item-number">{index + 1}</span>
-                  <p className="recommendation-item-text">{strategy}</p>
-                </div>
+        <>
+          <nav className="student-summary-tabs glass-panel" aria-label="Previous lesson guidance">
+            <div className="student-summary-tabs-heading">
+              <span>Selected subject</span>
+              <strong>
+                {lessonNames.get(String(selectedSummary.lesson_id)) || `Lesson ${selectedSummary.lesson_id}`}
+              </strong>
+            </div>
+            <div className="student-summary-tab-list" role="tablist">
+              {summarySections.map((section, index) => (
+                <button
+                  key={section.id}
+                  type="button"
+                  id={`student-summary-tab-${section.id}`}
+                  role="tab"
+                  aria-selected={activeSection === section.id}
+                  aria-controls={`student-summary-panel-${section.id}`}
+                  className={activeSection === section.id ? 'is-active' : ''}
+                  onClick={() => setActiveSection(section.id)}
+                >
+                  <span className="student-summary-tab-number">{index + 1}</span>
+                  <span>
+                    <strong>{section.label}</strong>
+                    <small>{section.description}</small>
+                  </span>
+                </button>
               ))}
             </div>
-          </div>
+          </nav>
 
-          <StudyTechniqueCards
-            studyTechnique={selectedSummary.study_technique}
-            showSource={false}
-            onFeedbackSubmit={handleTechniqueFeedback}
-            feedbackKey={selectedSummary.lesson_id}
-            submittingTechnique={submittingTechnique}
-          />
-          {feedbackMessage ? <div className="alert success">{feedbackMessage}</div> : null}
-          {feedbackError ? <div className="alert error">{feedbackError}</div> : null}
-        </section>
+          <section
+            className="student-analyse-results student-summary-content glass-panel"
+            id={`student-summary-panel-${activeSection}`}
+            role="tabpanel"
+            aria-labelledby={`student-summary-tab-${activeSection}`}
+          >
+            {activeSection === 'recommendations' ? (
+              <div className="student-summary-section">
+                <div className="student-summary-section-heading">
+                  <p className="eyebrow">Teacher guidance</p>
+                  <h2>Recommendations</h2>
+                  <p>Use these suggestions when you review this subject.</p>
+                </div>
+                <div className="student-support-card lecture-support-card">
+                  <p className="support-card-title">Teacher-shared Recommendations</p>
+                  {strategies.length ? (
+                    <div className="recommendation-list">
+                      {strategies.map((strategy, index) => (
+                        <div className="recommendation-item" key={`${index}-${strategy}`}>
+                          <span className="recommendation-item-number">{index + 1}</span>
+                          <p className="recommendation-item-text">{strategy}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="empty-state">No recommendations are available for this lesson.</p>
+                  )}
+                </div>
+                <div className="student-summary-section-actions">
+                  <button type="button" onClick={() => setActiveSection('techniques')}>
+                    Study techniques <span aria-hidden="true">&rarr;</span>
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {activeSection === 'techniques' ? (
+              <div className="student-summary-section">
+                <div className="student-summary-section-heading">
+                  <p className="eyebrow">Personal study support</p>
+                  <h2>Study Techniques</h2>
+                  <p>Try the methods below and share feedback after using them.</p>
+                </div>
+                <StudyTechniqueCards
+                  studyTechnique={selectedSummary.study_technique}
+                  showSource={false}
+                  onFeedbackSubmit={handleTechniqueFeedback}
+                  feedbackKey={selectedSummary.lesson_id}
+                  submittingTechnique={submittingTechnique}
+                />
+                {feedbackMessage ? <div className="alert success">{feedbackMessage}</div> : null}
+                {feedbackError ? <div className="alert error">{feedbackError}</div> : null}
+                <div className="student-summary-section-actions is-back-only">
+                  <button type="button" className="is-secondary" onClick={() => setActiveSection('recommendations')}>
+                    <span aria-hidden="true">&larr;</span> Recommendations
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </section>
+        </>
       ) : null}
     </div>
   );

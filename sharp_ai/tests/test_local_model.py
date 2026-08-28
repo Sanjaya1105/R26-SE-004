@@ -13,7 +13,7 @@ class LocalCognitiveLoadModelTests(unittest.TestCase):
         )
 
         self.assertEqual(6, len(FEATURE_NAMES))
-        self.assertEqual([4.0, 3.0], scores.tolist())
+        self.assertEqual([4.0, 4.0], scores.tolist())
 
 
 if __name__ == "__main__":

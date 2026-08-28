@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import {
@@ -19,6 +19,7 @@ import {
   shareLessonGuidance,
 } from '../lessonSummary/apiClient';
 import StudyTechniqueCards from '../components/StudyTechniqueCards';
+import '../styles/dashboard.css';
 import '../styles/studentAnalyse.css';
 
 function formatRecommendationItems(text) {
@@ -78,6 +79,76 @@ function formatCognitiveStyleLabel(style) {
     : style;
 }
 
+function SelectionDropdown({ value, options, placeholder, disabled = false, onChange }) {
+  const [open, setOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  const triggerRef = useRef(null);
+  const selectedOption = options.find((option) => String(option.value) === String(value));
+
+  useEffect(() => {
+    function closeOnOutsideClick(event) {
+      if (!dropdownRef.current?.contains(event.target)) setOpen(false);
+    }
+
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    return () => document.removeEventListener('pointerdown', closeOnOutsideClick);
+  }, []);
+
+  function handleKeyDown(event) {
+    if (event.key === 'Escape') {
+      setOpen(false);
+      triggerRef.current?.focus();
+      return;
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      setOpen(true);
+    }
+  }
+
+  return (
+    <div ref={dropdownRef} className={`selection-dropdown ${open ? 'is-open' : ''}`} onKeyDown={handleKeyDown}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className={`selection-dropdown-trigger ${selectedOption ? '' : 'is-placeholder'}`}
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span>{selectedOption?.label || placeholder}</span>
+        <span className="selection-dropdown-arrow" aria-hidden="true" />
+      </button>
+
+      {open && !disabled && (
+        <div className="selection-dropdown-menu" role="listbox" aria-label={placeholder}>
+          {options.map((option) => {
+            const selected = String(option.value) === String(value);
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                className={`selection-dropdown-option ${selected ? 'is-selected' : ''}`}
+                onClick={() => {
+                  onChange(String(option.value));
+                  setOpen(false);
+                  triggerRef.current?.focus();
+                }}
+              >
+                <span>{option.label}</span>
+                {selected && <span className="selection-dropdown-check" aria-hidden="true">✓</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function StudentAnalyse() {
   const [lessons, setLessons] = useState([]);
   const [students, setStudents] = useState([]);
@@ -93,7 +164,7 @@ export default function StudentAnalyse() {
   const [aggregateError, setAggregateError] = useState('');
   const [shapError, setShapError] = useState('');
   const [error, setError] = useState('');
-  const [statusMessage, setStatusMessage] = useState('');
+  const [, setStatusMessage] = useState('');
   const [styleAnalysis, setStyleAnalysis] = useState(null);
   const [styleLoading, setStyleLoading] = useState(false);
   const [styleError, setStyleError] = useState('');
@@ -102,11 +173,28 @@ export default function StudentAnalyse() {
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
   const [showTechniqueEvidence, setShowTechniqueEvidence] = useState(false);
   const [showStyleTopFeatures, setShowStyleTopFeatures] = useState(false);
+  const [guidanceStep, setGuidanceStep] = useState(1);
 
   const recommendationItems = formatRecommendationItems(
     aggregateExplanation?.human_explanation || limeExplanation?.human_explanation || '',
   );
   const navigate = useNavigate();
+  const dashboardUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const teacherInitial = (dashboardUser.name || 'T').trim().charAt(0).toUpperCase();
+  const analysisNavigation = [
+    { label: 'Upload Lesson', path: '/upload-lesson', icon: '+' },
+    { label: 'Student Analyse', path: '/student-analyse', icon: 'S', active: true },
+    { label: 'Chat Assistant', path: '/gpt', icon: 'C' },
+    { label: 'DeepSeek Chat', path: '/deepseek', icon: 'D' },
+    { label: 'Next Lesson Recommendation', path: '/next-lesson-recommendation', icon: 'N' },
+    { label: 'Upload Lecture PDF for Exam', path: '/exam-materials', icon: 'E' },
+  ];
+
+  function handleLogout() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    navigate('/login');
+  }
 
   useEffect(() => {
     loadLessons();
@@ -129,6 +217,7 @@ export default function StudentAnalyse() {
     setShapError('');
     setShowTechnicalDetails(false);
     setShowTechniqueEvidence(false);
+    setGuidanceStep(1);
     setSelectedAnalysisRowId(null);
     setStatusMessage('Select a student and click "Show High Cognitive Load".');
   }, [selectedLessonId]);
@@ -204,6 +293,7 @@ export default function StudentAnalyse() {
       setAggregateError('');
       setShapError('');
       setSelectedAnalysisRowId(null);
+      setGuidanceStep(1);
 
       if (!summary) {
         setStatusMessage('Failed to create student-lesson summary.');
@@ -232,6 +322,7 @@ export default function StudentAnalyse() {
       setShapError('');
       setShowTechnicalDetails(false);
       setShowTechniqueEvidence(false);
+      setGuidanceStep(1);
 
       // Fixed sample sizes for all cognitive load levels
       const limeSamples = 50;   // LIME: 50 samples
@@ -340,6 +431,18 @@ export default function StudentAnalyse() {
     }
   }
 
+  function showGuidanceStep(step) {
+    setShowTechnicalDetails(false);
+    setShowTechniqueEvidence(false);
+    setGuidanceStep(step);
+    requestAnimationFrame(() => {
+      document.getElementById('guidance-review-workspace')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+  }
+
   async function handleShareGuidance() {
     if (!aggregateExplanation || !selectedLessonId || !selectedStudentId) return;
     try {
@@ -410,7 +513,58 @@ export default function StudentAnalyse() {
   }
 
   return (
-    <div className="student-analyse-shell">
+    <div className="teacher-dashboard-shell student-analysis-dashboard-layout">
+      <aside className="teacher-dashboard-sidebar">
+        <div className="teacher-dashboard-brand">
+          <span className="teacher-dashboard-brand-mark" aria-hidden="true">E</span>
+          <span className="teacher-dashboard-brand-copy">
+            <strong>EduPortal</strong>
+            <small>Teacher workspace</small>
+          </span>
+        </div>
+
+        <nav className="teacher-dashboard-nav" aria-label="Teacher analysis navigation">
+          <button type="button" className="teacher-dashboard-nav-button" onClick={() => navigate('/dashboard')}>
+            <span className="teacher-dashboard-nav-icon" aria-hidden="true">⌂</span>
+            <span>Dashboard</span>
+          </button>
+          {analysisNavigation.map((action) => (
+            <button
+              key={action.path}
+              type="button"
+              className={`teacher-dashboard-nav-button ${action.active ? 'is-active' : ''}`}
+              onClick={() => navigate(action.path)}
+              aria-current={action.active ? 'page' : undefined}
+            >
+              <span className="teacher-dashboard-nav-icon" aria-hidden="true">{action.icon}</span>
+              <span>{action.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="teacher-dashboard-profile">
+          <span className="teacher-dashboard-avatar" aria-hidden="true">{teacherInitial}</span>
+          <span className="teacher-dashboard-profile-copy">
+            <strong>{dashboardUser.name || 'Teacher'}</strong>
+            <small>Teacher account</small>
+          </span>
+          <button type="button" className="teacher-dashboard-logout" onClick={handleLogout}>Logout</button>
+        </div>
+      </aside>
+
+      <div className="teacher-dashboard-main student-analysis-dashboard-main">
+        <header className="teacher-dashboard-topbar">
+          <div>
+            <span className="teacher-dashboard-topbar-label">Teacher portal</span>
+            <strong>Student Analyse</strong>
+          </div>
+          <div className="teacher-dashboard-user-chip">
+            <span className="teacher-dashboard-avatar" aria-hidden="true">{teacherInitial}</span>
+            <span>Hello, {dashboardUser.name || 'Teacher'}</span>
+          </div>
+        </header>
+
+        <div className="student-analyse-shell">
       {analysisLoadingId ? (
         <div className="analysis-loading-overlay" role="dialog" aria-modal="true" aria-labelledby="analysis-loading-title">
           <div className="analysis-loading-modal">
@@ -474,19 +628,6 @@ export default function StudentAnalyse() {
       ) : null}
 
       <header className="student-analyse-header">
-        <button
-          type="button"
-          className="back-button dashboard-back-button"
-          onClick={() => navigate('/dashboard')}
-          aria-label="Back to teacher dashboard"
-        >
-          <span className="dashboard-back-icon" aria-hidden="true">←</span>
-          <span className="dashboard-back-copy">
-            <small>Teacher workspace</small>
-            <strong>Back to dashboard</strong>
-          </span>
-          <span className="dashboard-back-decoration" aria-hidden="true" />
-        </button>
         <div>
           <p className="eyebrow">Student Learning Analysis</p>
           <h1>Understand Your Student's Learning Experience</h1>
@@ -497,95 +638,44 @@ export default function StudentAnalyse() {
       </header>
 
       <section className="student-analyse-toolbar selection-workflow glass-panel">
-        <div className="selection-workflow-heading">
-          <div>
-            <span className="selection-start-badge">Start here</span>
-            <h2>Choose a lesson and student</h2>
-            <p>Complete the two steps below before generating the student analysis.</p>
-          </div>
-          <span className={`selection-progress-badge ${selectedLessonId && selectedStudentId ? 'ready' : ''}`}>
-            {selectedLessonId && selectedStudentId
-              ? 'Ready to analyse'
-              : `${Number(Boolean(selectedLessonId)) + Number(Boolean(selectedStudentId))} of 2 selected`}
-          </span>
-        </div>
-
-        <div className="selection-fields">
-          <label className={`selection-field ${selectedLessonId ? 'completed' : 'active'}`}>
+        <div className="selection-fields selection-fields-simple">
+          <div className={`selection-field ${selectedLessonId ? 'completed' : 'active'}`}>
             <span className="selection-field-heading">
-              <span className="selection-step-number">{selectedLessonId ? '✓' : '1'}</span>
-              <span>
-                <strong>Select lesson</strong>
-                <small>Choose the lesson you want to review.</small>
-              </span>
+              <strong>Select lesson</strong>
             </span>
             <span className="selection-select-wrap">
-              <select value={selectedLessonId} onChange={(event) => setSelectedLessonId(event.target.value)}>
-                <option value="">Choose a lesson...</option>
-                {lessons.map((lesson) => (
-                  <option key={lesson.lesson_id} value={lesson.lesson_id}>
-                    {lesson.lesson_name || `Lesson ${lesson.lesson_id}`}
-                  </option>
-                ))}
-              </select>
+              <SelectionDropdown
+                value={selectedLessonId}
+                placeholder="Choose a lesson..."
+                options={lessons.map((lesson) => ({
+                  value: lesson.lesson_id,
+                  label: lesson.lesson_name || `Lesson ${lesson.lesson_id}`,
+                }))}
+                onChange={setSelectedLessonId}
+              />
             </span>
-            <span className="selection-field-status">
-              {selectedLessonId
-                ? 'Lesson selected. You can now choose a student.'
-                : `${lessons.length} lesson${lessons.length === 1 ? '' : 's'} available`}
-            </span>
-          </label>
-
-          <div className={`selection-connector ${selectedLessonId ? 'active' : ''}`} aria-hidden="true">
-            <span>→</span>
           </div>
 
-          <label className={`selection-field ${selectedStudentId ? 'completed' : selectedLessonId ? 'active' : 'locked'}`}>
+          <div className={`selection-field ${selectedStudentId ? 'completed' : selectedLessonId ? 'active' : 'locked'}`}>
             <span className="selection-field-heading">
-              <span className="selection-step-number">{selectedStudentId ? '✓' : '2'}</span>
-              <span>
-                <strong>Select student</strong>
-                <small>Students are loaded from the selected lesson.</small>
-              </span>
+              <strong>Select student</strong>
             </span>
             <span className="selection-select-wrap">
-              <select
+              <SelectionDropdown
                 value={selectedStudentId}
-                onChange={(event) => setSelectedStudentId(event.target.value)}
+                placeholder={!selectedLessonId ? 'Select a lesson first' : 'Choose a student...'}
+                options={students.map((student) => ({
+                  value: student.student_id,
+                  label: student.student_name || `Student ${student.student_id}`,
+                }))}
                 disabled={!selectedLessonId || !students.length}
-              >
-                <option value="">
-                  {!selectedLessonId ? 'Select a lesson first' : 'Choose a student...'}
-                </option>
-                {students.map((student) => (
-                  <option key={student.student_id} value={student.student_id}>
-                    {student.student_name || `Student ${student.student_id}`}
-                  </option>
-                ))}
-              </select>
-            </span>
-            <span className="selection-field-status">
-              {!selectedLessonId
-                ? 'Complete step 1 to unlock this selection.'
-                : selectedStudentId
-                  ? 'Student selected. The analysis actions are ready.'
-                  : `${students.length} student${students.length === 1 ? '' : 's'} available`}
-            </span>
-          </label>
-        </div>
-
-        <div className={`selection-actions ${selectedLessonId && selectedStudentId ? 'ready' : ''}`}>
-          <div className="selection-ready-message">
-            <span className="selection-ready-dot" aria-hidden="true" />
-            <span>
-              <strong>{selectedLessonId && selectedStudentId ? 'Selections complete' : 'Waiting for selections'}</strong>
-              <small>
-                {selectedLessonId && selectedStudentId
-                  ? 'Generate the cognitive-load summary or analyse the student’s learning style.'
-                  : 'Select both a lesson and a student to enable analysis.'}
-              </small>
+                onChange={setSelectedStudentId}
+              />
             </span>
           </div>
+        </div>
+
+        <div className="selection-actions selection-actions-simple">
           <div className="selection-action-buttons">
             <button
               type="button"
@@ -609,7 +699,6 @@ export default function StudentAnalyse() {
 
       {error ? <div className="alert error">{error}</div> : null}
       {styleError ? <div className="alert error">{styleError}</div> : null}
-      {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
 
       {styleLoading || styleAnalysis ? (
         <section className="student-analyse-results glass-panel cognitive-style-panel">
@@ -785,11 +874,6 @@ export default function StudentAnalyse() {
                               ? 'Checking cognitive load...'
                               : `Check Why Cognitive Load Is ${loadLevel}`}
                           </strong>
-                          <small>
-                            {selectedAnalysisRowId === row.id
-                              ? 'Explanation opened below'
-                              : 'View teacher-friendly explanation'}
-                          </small>
                         </span>
                         <span className="load-reason-arrow" aria-hidden="true">&#8594;</span>
                       </button>
@@ -803,7 +887,10 @@ export default function StudentAnalyse() {
       ) : null}
 
       {limeExplanation ? (
-        <section className="student-analyse-results glass-panel lime-panel guidance-review-panel">
+        <section
+          id="guidance-review-workspace"
+          className="student-analyse-results glass-panel lime-panel guidance-review-panel guidance-step-workspace"
+        >
           <div className="guidance-page-heading">
             <div>
               <p className="eyebrow">Teacher decision workspace</p>
@@ -816,13 +903,30 @@ export default function StudentAnalyse() {
               </span>
             ) : null}
           </div>
+          <div className="guidance-stepper" role="tablist" aria-label="Guidance review steps">
+            {[
+              ['1', 'Explanation'],
+              ['2', 'Recommendations'],
+              ['3', 'Techniques & approval'],
+            ].map(([step, label]) => (
+              <button
+                key={step}
+                type="button"
+                className={guidanceStep === Number(step) ? 'is-current' : ''}
+                onClick={() => showGuidanceStep(Number(step))}
+                aria-current={guidanceStep === Number(step) ? 'step' : undefined}
+              >
+                <span>{step}</span>
+                <strong>{label}</strong>
+              </button>
+            ))}
+          </div>
           <div className="lime-content guidance-review-flow">
-            <section className="guidance-review-section explanation-review-section">
+            <section className={`guidance-review-section explanation-review-section guidance-step-page ${guidanceStep === 1 ? 'is-current' : ''}`}>
               <div className="guidance-section-heading">
                 <span className="guidance-section-number">1</span>
                 <div>
                   <h3>Teacher-Friendly Explanation</h3>
-                  <p>Plain-language explanation of why this cognitive-load level was identified.</p>
                 </div>
               </div>
 
@@ -950,9 +1054,16 @@ export default function StudentAnalyse() {
                   ) : null}
                 </div>
               ) : null}
+
+              <div className="guidance-step-navigation is-next-only">
+                <span>Next, review what should be recommended to the student.</span>
+                <button type="button" onClick={() => showGuidanceStep(2)}>
+                  Next: Recommendations <span aria-hidden="true">→</span>
+                </button>
+              </div>
             </section>
 
-            <section className="guidance-review-section recommendation-review-section">
+            <section className={`guidance-review-section recommendation-review-section guidance-step-page ${guidanceStep === 2 ? 'is-current' : ''}`}>
               <div className="guidance-section-heading">
                 <span className="guidance-section-number">2</span>
                 <div>
@@ -983,9 +1094,17 @@ export default function StudentAnalyse() {
                   <p className="human-explanation-text">No specific student recommendations are available.</p>
                 )}
               </div>
+              <div className="guidance-step-navigation">
+                <button type="button" className="guidance-previous-button" onClick={() => showGuidanceStep(1)}>
+                  <span aria-hidden="true">←</span> Previous
+                </button>
+                <button type="button" onClick={() => showGuidanceStep(3)}>
+                  Next: Study Techniques <span aria-hidden="true">→</span>
+                </button>
+              </div>
             </section>
 
-            <section className="guidance-review-section technique-review-section">
+            <section className={`guidance-review-section technique-review-section guidance-step-page ${guidanceStep === 3 ? 'is-current' : ''}`}>
               <div className="guidance-section-heading">
                 <span className="guidance-section-number">3</span>
                 <div>
@@ -1072,10 +1191,17 @@ export default function StudentAnalyse() {
                   ) : null}
                 </div>
               ) : null}
+
+              <div className="guidance-step-navigation guidance-technique-navigation">
+                <button type="button" className="guidance-previous-button" onClick={() => showGuidanceStep(2)}>
+                  <span aria-hidden="true">←</span> Previous: Recommendations
+                </button>
+                <span>Review the techniques, then make the final decision below.</span>
+              </div>
             </section>
 
             {aggregateExplanation ? (
-              <section className="teacher-guidance-review final-guidance-decision">
+              <section className={`teacher-guidance-review final-guidance-decision guidance-step-page ${guidanceStep === 3 ? 'is-current' : ''}`}>
                 <div className="teacher-guidance-review-heading">
                   <div>
                     <span className="decision-step-label">Final step</span>
@@ -1133,6 +1259,8 @@ export default function StudentAnalyse() {
         </section>
       ) : null}
 
+        </div>
+      </div>
     </div>
   );
 }

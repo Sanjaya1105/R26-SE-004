@@ -26,7 +26,7 @@ const SHAP_AI_SERVICE_URL =
 const NEXT_LESSON_RECOMMENDATION_URL =
   process.env.NEXT_LESSON_RECOMMENDATION_URL || "http://localhost:5003";
 const COGNITIVE_LOAD_SERVICE_URL =
-  process.env.COGNITIVE_LOAD_SERVICE_URL || "http://localhost:8000";
+  process.env.COGNITIVE_LOAD_SERVICE_URL || "http://localhost:8021";
 const COGNITIVE_STYLE_SERVICE_URL = 
   process.env.COGNITIVE_STYLE_SERVICE_URL || "http://localhost:8003";
 const COGNITIVE_STYLE_AI_URL =
