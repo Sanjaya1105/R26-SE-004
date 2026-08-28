@@ -6,10 +6,19 @@ import {
   fetchMyCourses,
   uploadExamMaterial,
 } from '../exam/apiClient';
+import '../styles/dashboard.css';
 import './ExamMaterialUpload.css';
 
 const allowedExtensions = ['pdf', 'ppt', 'pptx'];
 const formatSize = (bytes) => `${(Number(bytes) / 1024 / 1024).toFixed(2)} MB`;
+const teacherNavigation = [
+  { label: 'Upload Lesson', path: '/upload-lesson', icon: '+' },
+  { label: 'Student Analyse', path: '/student-analyse', icon: 'S' },
+  { label: 'Chat Assistant', path: '/gpt', icon: 'C' },
+  { label: 'DeepSeek Chat', path: '/deepseek', icon: 'D' },
+  { label: 'Next Lesson Recommendation', path: '/next-lesson-recommendation', icon: 'N' },
+  { label: 'Upload Lecture PDF for Exam', path: '/exam-materials', icon: 'E' },
+];
 
 export default function ExamMaterialUpload() {
   const [courses, setCourses] = useState([]);
@@ -24,6 +33,14 @@ export default function ExamMaterialUpload() {
   const [error, setError] = useState('');
   const inputRef = useRef(null);
   const navigate = useNavigate();
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const teacherInitial = (user.name || 'T').trim().charAt(0).toUpperCase();
+
+  function handleLogout() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    navigate('/login');
+  }
 
   async function loadPageData() {
     try {
@@ -96,12 +113,65 @@ export default function ExamMaterialUpload() {
   }
 
   return (
-    <div className="exam-page">
-      <header className="exam-header">
-        <div><p>Exam preparation</p><h1>Lecture materials for exams</h1></div>
-        <button type="button" className="exam-button secondary" onClick={() => navigate('/dashboard')}>Back to dashboard</button>
-      </header>
-      <main className="exam-main">
+    <div className="teacher-dashboard-shell exam-dashboard-layout">
+      <aside className="teacher-dashboard-sidebar">
+        <div className="teacher-dashboard-brand">
+          <span className="teacher-dashboard-brand-mark" aria-hidden="true">E</span>
+          <span className="teacher-dashboard-brand-copy">
+            <strong>EduPortal</strong>
+            <small>Teacher workspace</small>
+          </span>
+        </div>
+
+        <nav className="teacher-dashboard-nav" aria-label="Teacher exam material navigation">
+          <button type="button" className="teacher-dashboard-nav-button" onClick={() => navigate('/dashboard')}>
+            <span className="teacher-dashboard-nav-icon" aria-hidden="true">⌂</span>
+            <span>Dashboard</span>
+          </button>
+          {teacherNavigation.map((action) => {
+            const isActive = action.path === '/exam-materials';
+            return (
+              <button
+                key={action.path}
+                type="button"
+                className={`teacher-dashboard-nav-button ${isActive ? 'is-active' : ''}`}
+                onClick={() => navigate(action.path)}
+                aria-current={isActive ? 'page' : undefined}
+              >
+                <span className="teacher-dashboard-nav-icon" aria-hidden="true">{action.icon}</span>
+                <span>{action.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="teacher-dashboard-profile">
+          <span className="teacher-dashboard-avatar" aria-hidden="true">{teacherInitial}</span>
+          <span className="teacher-dashboard-profile-copy">
+            <strong>{user.name || 'Teacher'}</strong>
+            <small>Teacher account</small>
+          </span>
+          <button type="button" onClick={handleLogout} className="teacher-dashboard-logout">Logout</button>
+        </div>
+      </aside>
+
+      <div className="teacher-dashboard-main exam-dashboard-main">
+        <header className="teacher-dashboard-topbar">
+          <div>
+            <span className="teacher-dashboard-topbar-label">Teacher portal</span>
+            <strong>Exam materials</strong>
+          </div>
+          <div className="teacher-dashboard-user-chip">
+            <span className="teacher-dashboard-avatar" aria-hidden="true">{teacherInitial}</span>
+            <span>Hello, {user.name || 'Teacher'}</span>
+          </div>
+        </header>
+
+        <div className="exam-page">
+          <header className="exam-header">
+            <div><p>Exam preparation</p><h1>Lecture materials for exams</h1></div>
+          </header>
+          <main className="exam-main">
         <section className="exam-section">
           <div className="exam-heading"><h2>Upload material</h2><span>PDF and PowerPoint, up to 25 MB</span></div>
           <form className="exam-form" onSubmit={submit}>
@@ -122,7 +192,9 @@ export default function ExamMaterialUpload() {
             </tbody></table></div>
           )}
         </section>
-      </main>
+          </main>
+        </div>
+      </div>
     </div>
   );
 }
