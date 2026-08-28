@@ -341,6 +341,24 @@ const ABOUT_PREVIEW_WORDS = 20;
 const COGNITIVE_LOAD_WINDOW_MS = 120000;
 const SEEK_JUMP_THRESHOLD_SECONDS = 2;
 const SEEK_EVENT_DEBOUNCE_MS = 900;
+const TRACKED_VIDEO_OWNER_TTL_MS = 6000;
+
+function getTrackedVideoOwnerKey(courseId, subsectionId) {
+  if (!courseId || !subsectionId) return '';
+  return `cognitive-load:tracked-video-owner:${courseId}:${subsectionId}`;
+}
+
+function isTrackedVideoOwnerFresh(courseId, subsectionId) {
+  const key = getTrackedVideoOwnerKey(courseId, subsectionId);
+  if (!key) return false;
+
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || '{}');
+    return Date.now() - Number(parsed.updatedAt || 0) < TRACKED_VIDEO_OWNER_TTL_MS;
+  } catch {
+    return false;
+  }
+}
 
 function getActiveStudentId() {
   try {
@@ -469,41 +487,41 @@ function getCognitiveLoadTheme(load) {
 
   if (value.includes('very high')) {
     return {
-      bg: '#fef2f2',
-      border: '#fecaca',
-      accent: '#dc2626',
-      soft: '#fee2e2',
-      text: '#7f1d1d',
+      bg: '#17181f',
+      border: 'rgba(248, 113, 113, 0.32)',
+      accent: '#f87171',
+      soft: 'rgba(127, 29, 29, 0.24)',
+      text: '#fecaca',
     };
   }
 
   if (value.includes('high')) {
     return {
-      bg: '#fff7ed',
-      border: '#fed7aa',
-      accent: '#ea580c',
-      soft: '#ffedd5',
-      text: '#7c2d12',
+      bg: '#17181f',
+      border: 'rgba(251, 146, 60, 0.32)',
+      accent: '#fb923c',
+      soft: 'rgba(124, 45, 18, 0.24)',
+      text: '#fed7aa',
     };
   }
 
   if (value.includes('medium')) {
     return {
-      bg: '#eff6ff',
-      border: '#bfdbfe',
-      accent: '#2563eb',
-      soft: '#dbeafe',
-      text: '#1e3a8a',
+      bg: '#17181f',
+      border: 'rgba(96, 165, 250, 0.32)',
+      accent: '#60a5fa',
+      soft: 'rgba(30, 64, 175, 0.22)',
+      text: '#bfdbfe',
     };
   }
 
   if (value.includes('low')) {
     return {
-      bg: '#ecfdf5',
-      border: '#a7f3d0',
-      accent: '#059669',
-      soft: '#d1fae5',
-      text: '#064e3b',
+      bg: '#17181f',
+      border: 'rgba(52, 211, 153, 0.3)',
+      accent: '#34d399',
+      soft: 'rgba(6, 78, 59, 0.24)',
+      text: '#bbf7d0',
     };
   }
 
@@ -660,6 +678,7 @@ const CourseDetail = () => {
   const [cognitiveLoadError, setCognitiveLoadError] = useState('');
   const [cognitiveLoadLoading, setCognitiveLoadLoading] = useState(false);
   const [videoSessionId, setVideoSessionId] = useState('');
+  const [courseTrackingDisabled, setCourseTrackingDisabled] = useState(false);
   const [rawEventStats, setRawEventStats] = useState(createEmptyRawEventStats);
   const [watchLessons, setWatchLessons] = useState({});
   const videoRef = useRef(null);
@@ -787,7 +806,42 @@ const CourseDetail = () => {
     playbackPromptRef.current = null;
     midpointPromptShownRef.current = false;
     endPromptShownRef.current = false;
+    setCourseTrackingDisabled(false);
   }, [mainVideo?.url]);
+
+  useEffect(() => {
+    const activeCourseId = String(courseId || '');
+    const activeSubsectionId = String(mainVideo?.subsectionId || '');
+    if (!activeCourseId || !activeSubsectionId) {
+      setCourseTrackingDisabled(false);
+      return undefined;
+    }
+
+    const refreshTrackingOwner = () => {
+      const isOwnedByTrackedTab = isTrackedVideoOwnerFresh(
+        activeCourseId,
+        activeSubsectionId
+      );
+      setCourseTrackingDisabled(isOwnedByTrackedTab);
+    };
+
+    refreshTrackingOwner();
+    const intervalId = window.setInterval(refreshTrackingOwner, 2000);
+    const onStorage = (event) => {
+      if (
+        event.key ===
+        getTrackedVideoOwnerKey(activeCourseId, activeSubsectionId)
+      ) {
+        refreshTrackingOwner();
+      }
+    };
+    window.addEventListener('storage', onStorage);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, [courseId, mainVideo?.subsectionId, mainVideo?.url]);
 
   useEffect(() => {
     if (!mainVideo?.url) {
@@ -864,7 +918,12 @@ const CourseDetail = () => {
   }, [courseId, mainVideo?.lessonId, mainVideo?.subsectionId, mainVideo?.url]);
 
   const runCognitiveLoadPredictionForCompletedWindow = async () => {
-    if (!mainVideo?.url || !videoSessionId || !sessionStartRef.current) {
+    if (
+      courseTrackingDisabled ||
+      !mainVideo?.url ||
+      !videoSessionId ||
+      !sessionStartRef.current
+    ) {
       return;
     }
 
@@ -937,7 +996,7 @@ const CourseDetail = () => {
 
   const enqueueRawEvent = ({ payload, sessionIdOverride, eventTime }) => {
     const activeSessionId = sessionIdOverride ?? videoSessionId;
-    if (!mainVideo?.url || !activeSessionId) {
+    if (courseTrackingDisabled || !mainVideo?.url || !activeSessionId) {
       return Promise.resolve();
     }
 
@@ -963,7 +1022,7 @@ const CourseDetail = () => {
   };
 
   const sendCognitiveLoadEvent = async (payload) => {
-    if (!mainVideo?.url || !videoSessionId) return;
+    if (courseTrackingDisabled || !mainVideo?.url || !videoSessionId) return;
 
     const eventTime = new Date().toISOString();
     const currentWindowKey = getActiveWindowKey(
@@ -1349,7 +1408,7 @@ const CourseDetail = () => {
   };
 
   useEffect(() => {
-    if (!mainVideo?.url || !videoSessionId) {
+    if (!mainVideo?.url || !videoSessionId || courseTrackingDisabled) {
       return undefined;
     }
 
@@ -1395,10 +1454,15 @@ const CourseDetail = () => {
       });
       window.clearInterval(idleCheckIntervalId);
     };
-  }, [mainVideo?.url, videoSessionId]);
+  }, [mainVideo?.url, videoSessionId, courseTrackingDisabled]);
 
   useEffect(() => {
-    if (!mainVideo?.url || !videoSessionId || !sessionStartRef.current) {
+    if (
+      !mainVideo?.url ||
+      !videoSessionId ||
+      !sessionStartRef.current ||
+      courseTrackingDisabled
+    ) {
       return undefined;
     }
 
@@ -1432,7 +1496,14 @@ const CourseDetail = () => {
         predictTimeoutRef.current = null;
       }
     };
-  }, [courseId, mainVideo?.url, mainVideo?.lessonId, mainVideo?.subsectionId, videoSessionId]);
+  }, [
+    courseId,
+    mainVideo?.url,
+    mainVideo?.lessonId,
+    mainVideo?.subsectionId,
+    videoSessionId,
+    courseTrackingDisabled,
+  ]);
 
   useEffect(() => {
     if (!mainVideo?.url) {
@@ -2463,7 +2534,26 @@ const CourseDetail = () => {
               <div className="course-learn__below">
               <p style={{ marginTop: 0, marginBottom: 0 }}>
                 <a
-                  href={mainVideo.url}
+                  href={
+                    mainVideo.subsectionId
+                      ? `/course/${encodeURIComponent(courseId)}/watch/${encodeURIComponent(
+                          mainVideo.subsectionId
+                        )}`
+                      : mainVideo.url
+                  }
+                  onClick={() => {
+                    if (!mainVideo.subsectionId) return;
+                    const ownerKey = getTrackedVideoOwnerKey(
+                      String(courseId || ''),
+                      String(mainVideo.subsectionId)
+                    );
+                    if (!ownerKey) return;
+                    localStorage.setItem(
+                      ownerKey,
+                      JSON.stringify({ owner: 'tracked-tab', updatedAt: Date.now() })
+                    );
+                    setCourseTrackingDisabled(true);
+                  }}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{

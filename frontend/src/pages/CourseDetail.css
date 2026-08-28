@@ -415,6 +415,91 @@
   color: #f4f4f5;
 }
 
+.tracked-video-page {
+  width: 100vw;
+  min-width: 100vw;
+  max-width: none;
+  height: 100vh;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.tracked-video-page__stage {
+  width: 100vw;
+  min-width: 100vw;
+  max-width: none;
+  height: 100vh;
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto minmax(0, calc(100vh - 245px)) auto;
+}
+
+.tracked-video-page__stage.is-panel-expanded {
+  grid-template-rows: auto minmax(0, calc(100vh - 340px)) auto;
+}
+
+.tracked-video-page__stage.is-prediction-expanded {
+  grid-template-rows: auto minmax(0, calc(100vh - 395px)) auto;
+}
+
+.tracked-video-page .course-learn__bar,
+.tracked-video-page__theater,
+.tracked-video-page__player,
+.tracked-video-page__below {
+  width: 100vw;
+  min-width: 100vw;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+.tracked-video-page__theater {
+  min-height: 0;
+  height: calc(100vh - 245px);
+  overflow: hidden;
+}
+
+.tracked-video-page.is-panel-expanded .tracked-video-page__theater {
+  height: calc(100vh - 340px);
+}
+
+.tracked-video-page.is-prediction-expanded .tracked-video-page__theater {
+  height: calc(100vh - 395px);
+}
+
+.tracked-video-page__player {
+  height: 100%;
+  min-height: 0;
+}
+
+.tracked-video-page__below {
+  padding: 0.65rem 0.75rem 0.75rem;
+  max-height: 245px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.tracked-video-page.is-panel-expanded .tracked-video-page__below {
+  max-height: 340px;
+}
+
+.tracked-video-page.is-prediction-expanded .tracked-video-page__below {
+  max-height: 395px;
+}
+
+.tracked-video-page__panel {
+  margin-top: 0;
+  padding: 0.7rem 0.9rem;
+  box-sizing: border-box;
+}
+
+.tracked-video-page__panel p {
+  margin: 0.5rem 0 0.65rem !important;
+}
+
+.tracked-video-page__panel [style*="0.65rem 0.75rem"] {
+  padding: 0.48rem 0.65rem !important;
+}
+
 @media (max-width: 1100px) {
   .course-learn__grid:not(.is-stack) {
     grid-template-columns: minmax(0, 1fr) 320px;

@@ -20,6 +20,7 @@ import UploadNewLesson from './pages/UploadNewLesson';
 import TeacherAnalysis from './pages/TeacherAnalysis';
 import Course from './pages/Course';
 import CourseDetail from './pages/CourseDetail';
+import TrackedVideoPlayer from './pages/TrackedVideoPlayer';
 import EditCourse from './pages/EditCourse';
 import Gpt from './pages/Gpt';
 import DeepseekChat from './pages/DeepseekChat';
@@ -81,6 +82,11 @@ function App() {
           <AdminRoute>
             <AdminDashboard />
           </AdminRoute>
+        } />
+        <Route path="/course/:courseId/watch/:subsectionId" element={
+          <StudentRoute>
+            <TrackedVideoPlayer />
+          </StudentRoute>
         } />
         <Route path="/course/:courseId" element={
           <StudentRoute>
