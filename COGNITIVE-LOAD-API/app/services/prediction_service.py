@@ -7,6 +7,7 @@ import pandas as pd
 from app.core.model_loader import model
 from app.services.feature_extraction_service import extract_feature_window_from_raw
 from app.services.db_service import save_feature_window, save_prediction_log
+from app.services.lime_dispatch_service import dispatch_saved_feature_window_to_lime
 
 
 CSV_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "cognitive_load_predictions.csv")
@@ -100,7 +101,7 @@ def _write_csv_row(file_path: str, row_data: dict):
         if not file_exists:
             writer.writeheader()
 
-        writer.writerow(row_data)
+        writer.writerow({field: row_data.get(field, "") for field in CSV_FIELDS})
 
 
 def get_prediction_logs(student_id: str | None = None, lesson_id: str | None = None, minute_index: int | None = None):
@@ -256,6 +257,10 @@ def predict_cognitive_load(data, persist: bool | None = None):
             }
         )
         save_to_csv(response_data)
+        response_data["lime_dispatch"] = dispatch_saved_feature_window_to_lime(
+            feature_window_id,
+            feature_window_data,
+        )
 
     return response_data
 

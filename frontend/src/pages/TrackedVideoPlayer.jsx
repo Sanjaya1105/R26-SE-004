@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import axios from 'axios';
+import LearningStateIndicator from '../components/LearningStateIndicator';
+import { fetchLoadTrend } from '../cognitiveLoad/apiClient';
 import { getGatewayBaseUrl } from '../config/gateway';
 import './CourseDetail.css';
 
@@ -289,6 +291,8 @@ export default function TrackedVideoPlayer() {
   const [cognitiveLoadLoading, setCognitiveLoadLoading] = useState(false);
   const [cognitiveLoadOpen, setCognitiveLoadOpen] = useState(false);
   const [predictionFeaturesOpen, setPredictionFeaturesOpen] = useState(false);
+  const [loadTrendAnalysis, setLoadTrendAnalysis] = useState(null);
+  const [loadTrendLoading, setLoadTrendLoading] = useState(false);
 
   const videoRef = useRef(null);
   const videoSessionIdRef = useRef('');
@@ -393,6 +397,7 @@ export default function TrackedVideoPlayer() {
       sessionStartRef.current = null;
       clearWindowStats();
       setCognitiveLoadResult(null);
+      setLoadTrendAnalysis(null);
       setCognitiveLoadError('');
       setCognitiveLoadLoading(false);
       lastPredictedWindowKeyRef.current = '';
@@ -406,6 +411,7 @@ export default function TrackedVideoPlayer() {
     videoSessionIdRef.current = sessionId;
     sessionStartRef.current = startedAt;
     setCognitiveLoadResult(null);
+    setLoadTrendAnalysis(null);
     setCognitiveLoadError('');
     setCognitiveLoadLoading(false);
     setCognitiveLoadOpen(false);
@@ -563,6 +569,19 @@ export default function TrackedVideoPlayer() {
         }
       );
       setCognitiveLoadResult(res.data);
+      try {
+        setLoadTrendLoading(true);
+        const trend = await fetchLoadTrend(
+          getActiveStudentId(),
+          String(courseId),
+          activeSessionId,
+        );
+        setLoadTrendAnalysis(trend);
+      } catch {
+        setLoadTrendAnalysis(null);
+      } finally {
+        setLoadTrendLoading(false);
+      }
       setCognitiveLoadOpen(false);
       setPredictionFeaturesOpen(false);
       lastPredictedWindowKeyRef.current = windowKey;
@@ -920,6 +939,10 @@ export default function TrackedVideoPlayer() {
                   onTimeUpdate={handleVideoTimeUpdate}
                   onEnded={handleVideoEnded}
                 />
+                <LearningStateIndicator
+                  analysis={loadTrendAnalysis}
+                  loading={cognitiveLoadLoading || loadTrendLoading}
+                />
               </div>
             </div>
 
@@ -1000,7 +1023,7 @@ export default function TrackedVideoPlayer() {
                         fontSize: '0.82rem',
                       }}
                     >
-                      Video interaction events are collected from this tab. A prediction appears after each
+                      Video interaction events are collected live. A prediction appears after each
                       completed 2-minute video window.
                     </p>
                     {cognitiveLoadLoading ? (
@@ -1013,6 +1036,41 @@ export default function TrackedVideoPlayer() {
                       >
                         Predicting...
                       </p>
+                    ) : null}
+                    {!predictionFeaturesOpen ? (
+                      <div
+                        style={{
+                          marginBottom: '0.65rem',
+                          paddingTop: '0.55rem',
+                          borderTop: `1px solid ${liveLoadTheme.border}`,
+                        }}
+                      >
+                        <span
+                          className="form-label"
+                          style={{
+                            display: 'block',
+                            margin: '0 0 0.48rem',
+                            fontSize: '0.76rem',
+                            letterSpacing: '0.02em',
+                          }}
+                        >
+                          Live Events
+                        </span>
+                        <div
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                            gap: '0.55rem',
+                          }}
+                        >
+                          <MiniMetric label="Pause" value={rawEventStats.pauseCount} />
+                          <MiniMetric label="Seek" value={rawEventStats.seekCount} />
+                          <MiniMetric label="Rewatch" value={rawEventStats.rewatchCount} />
+                          <MiniMetric label="Speed changes" value={rawEventStats.rateChangeCount} />
+                          <MiniMetric label="Idle time" value={`${rawEventStats.idleDuration}s`} />
+                          <MiniMetric label="Last event" value={rawEventStats.lastEvent || 'Waiting'} />
+                        </div>
+                      </div>
                     ) : null}
                     {livePredictionSummary ? (
                       <div
@@ -1176,22 +1234,6 @@ export default function TrackedVideoPlayer() {
                             </div>
                           </>
                         ) : null}
-                      </div>
-                    ) : null}
-                    {!predictionFeaturesOpen ? (
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-                          gap: '0.55rem',
-                        }}
-                      >
-                        <MiniMetric label="Pause" value={rawEventStats.pauseCount} />
-                        <MiniMetric label="Seek" value={rawEventStats.seekCount} />
-                        <MiniMetric label="Rewatch" value={rawEventStats.rewatchCount} />
-                        <MiniMetric label="Speed changes" value={rawEventStats.rateChangeCount} />
-                        <MiniMetric label="Idle time" value={`${rawEventStats.idleDuration}s`} />
-                        <MiniMetric label="Last event" value={rawEventStats.lastEvent || 'Waiting'} />
                       </div>
                     ) : null}
                   </>

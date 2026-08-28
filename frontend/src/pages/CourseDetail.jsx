@@ -3,6 +3,8 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { getGatewayBaseUrl } from '../config/gateway';
 import AssistantMarkdown from '../components/AssistantMarkdown';
+import LearningStateIndicator from '../components/LearningStateIndicator';
+import { fetchLoadTrend } from '../cognitiveLoad/apiClient';
 import { selectBestOutputLocally } from '../utils/selectBestOutputLocal';
 import { parseCanonicalEquations } from '../utils/assistantMath';
 import {
@@ -677,6 +679,8 @@ const CourseDetail = () => {
   const [cognitiveLoadResult, setCognitiveLoadResult] = useState(null);
   const [cognitiveLoadError, setCognitiveLoadError] = useState('');
   const [cognitiveLoadLoading, setCognitiveLoadLoading] = useState(false);
+  const [loadTrendAnalysis, setLoadTrendAnalysis] = useState(null);
+  const [loadTrendLoading, setLoadTrendLoading] = useState(false);
   const [videoSessionId, setVideoSessionId] = useState('');
   const [courseTrackingDisabled, setCourseTrackingDisabled] = useState(false);
   const [rawEventStats, setRawEventStats] = useState(createEmptyRawEventStats);
@@ -783,6 +787,8 @@ const CourseDetail = () => {
     setCognitiveLoadResult(null);
     setCognitiveLoadError('');
     setCognitiveLoadLoading(false);
+    setLoadTrendAnalysis(null);
+    setLoadTrendLoading(false);
     setVideoSessionId('');
     clearWindowStats();
     lastPredictedWindowKeyRef.current = '';
@@ -978,6 +984,19 @@ const CourseDetail = () => {
         }
       );
       setCognitiveLoadResult(res.data);
+      try {
+        setLoadTrendLoading(true);
+        const trend = await fetchLoadTrend(
+          getActiveStudentId(),
+          String(courseId),
+          videoSessionId,
+        );
+        setLoadTrendAnalysis(trend);
+      } catch {
+        setLoadTrendAnalysis(null);
+      } finally {
+        setLoadTrendLoading(false);
+      }
       lastPredictedWindowKeyRef.current = windowKey;
     } catch (error) {
       setCognitiveLoadError(
@@ -2528,6 +2547,11 @@ const CourseDetail = () => {
                     onTimeUpdate={handleVideoTimeUpdate}
                     onLoadedMetadata={handleVideoLoadedMetadata}
                     onEnded={handleVideoEnded}
+                  />
+                  <LearningStateIndicator
+                    analysis={loadTrendAnalysis}
+                    loading={cognitiveLoadLoading || loadTrendLoading}
+                    className="learning-state-wrap--course-detail"
                   />
                 </div>
               </div>

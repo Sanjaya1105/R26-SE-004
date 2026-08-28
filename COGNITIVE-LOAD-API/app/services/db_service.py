@@ -296,6 +296,61 @@ def get_latest_successful_dispatch_end(
     return rows[0]["window_end"] if rows else None
 
 
+def get_student_lesson_prediction_windows(
+    student_id: str,
+    lesson_id: str,
+    session_id: str | None = None,
+    limit: int = 12,
+):
+    session_filter = ""
+    values: tuple
+
+    if session_id:
+        session_filter = "AND fw.session_id = %s"
+        values = (student_id, lesson_id, session_id, limit)
+    else:
+        values = (student_id, lesson_id, limit)
+
+    query = f"""
+        SELECT
+            fw.id AS feature_window_id,
+            fw.student_id,
+            fw.lesson_id,
+            fw.session_id,
+            fw.minute_index,
+            fw.window_start,
+            fw.window_end,
+            fw.pause_frequency,
+            fw.navigation_count_video,
+            fw.rewatch_segments,
+            fw.playback_rate_change,
+            fw.idle_duration_video,
+            fw.time_on_content,
+            fw.navigation_count_adaptation,
+            fw.revisit_frequency,
+            fw.idle_duration_adaptation,
+            fw.quiz_response_time,
+            fw.error_rate,
+            pl.predicted_cognitive_load,
+            pl.predicted_score,
+            pl.confidence,
+            COALESCE(pl.created_at, fw.created_at) AS created_at
+        FROM feature_windows fw
+        LEFT JOIN prediction_logs pl
+            ON pl.feature_window_id = fw.id
+        WHERE fw.student_id = %s
+          AND fw.lesson_id = %s
+          {session_filter}
+        ORDER BY
+            COALESCE(fw.window_start, fw.created_at) DESC,
+            fw.minute_index DESC,
+            fw.id DESC
+        LIMIT %s
+    """
+    rows = _execute_select(query, values)
+    return list(reversed(rows))
+
+
 def _execute_insert(query: str, values: tuple):
     connection = get_db_connection()
 
