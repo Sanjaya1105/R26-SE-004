@@ -508,11 +508,11 @@ function getCognitiveLoadTheme(load) {
   }
 
   return {
-    bg: '#f8fafc',
-    border: '#cbd5e1',
-    accent: '#475569',
-    soft: '#e2e8f0',
-    text: '#334155',
+    bg: '#17181f',
+    border: 'rgba(148, 163, 184, 0.28)',
+    accent: '#93c5fd',
+    soft: '#20232d',
+    text: '#dbeafe',
   };
 }
 
@@ -522,15 +522,15 @@ function MiniMetric({ label, value }) {
       style={{
         padding: '0.65rem 0.75rem',
         borderRadius: '10px',
-        border: '1px solid rgba(148, 163, 184, 0.24)',
-        background: 'rgba(255, 255, 255, 0.72)',
+        border: '1px solid rgba(148, 163, 184, 0.22)',
+        background: 'rgba(15, 23, 42, 0.58)',
         minWidth: 0,
       }}
     >
       <div
         style={{
           fontSize: '0.7rem',
-          color: '#64748b',
+          color: '#cbd5e1',
           marginBottom: '0.22rem',
         }}
       >
@@ -540,7 +540,7 @@ function MiniMetric({ label, value }) {
         style={{
           fontSize: '0.95rem',
           fontWeight: 700,
-          color: '#1f2937',
+          color: '#f8fafc',
           overflowWrap: 'anywhere',
         }}
       >
@@ -904,9 +904,7 @@ const CourseDetail = () => {
         `${getGatewayBaseUrl()}/api/cognitive-load/predict`,
         {
           student_id: getActiveStudentId(),
-          lesson_id: String(
-            mainVideo.lessonId || mainVideo.subsectionId || courseId
-          ),
+          lesson_id: String(courseId),
           session_id: videoSessionId,
           minute_index: minuteIndex,
           window_start: windowStart.toISOString(),
@@ -948,7 +946,7 @@ const CourseDetail = () => {
       .then(async () => {
         await axios.post(`${getGatewayBaseUrl()}/api/cognitive-load/events/raw`, {
           student_id: getActiveStudentId(),
-          lesson_id: String(mainVideo.lessonId || mainVideo.subsectionId || courseId),
+          lesson_id: String(courseId),
           session_id: activeSessionId,
           event_time: eventTime,
           video_time: payload.video_time ?? null,
@@ -2818,10 +2816,10 @@ const CourseDetail = () => {
                           margin: '0.85rem 0 0 0',
                           padding: '0.75rem 0.85rem',
                           borderRadius: '10px',
-                          border: '1px solid rgba(148, 163, 184, 0.24)',
-                          background: 'rgba(255,255,255,0.62)',
+                          border: '1px solid rgba(148, 163, 184, 0.22)',
+                          background: 'rgba(15, 23, 42, 0.5)',
                           fontSize: '0.82rem',
-                          color: 'var(--text-muted)',
+                          color: '#cbd5e1',
                           lineHeight: 1.5,
                         }}
                       >
