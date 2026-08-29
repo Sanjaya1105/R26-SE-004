@@ -5,6 +5,7 @@ import { getGatewayBaseUrl } from '../config/gateway';
 import { assertClientVideoDuration } from '../utils/videoDuration';
 import ContainsMathCheckbox from '../components/ContainsMathCheckbox';
 import LessonQueueProgress from '../components/LessonQueueProgress';
+import TeacherWorkspaceLayout from '../components/TeacherWorkspaceLayout';
 import {
   enableTeacherPushNotifications,
   trackProcessingSubsection,
@@ -415,356 +416,263 @@ const UploadNewLesson = () => {
     : undefined;
 
   return (
-    <div style={{ width: '100%', minHeight: '100vh', padding: '2rem' }}>
-      <nav
-        className="navbar glass-panel"
-        style={{
-          borderRadius: '12px',
-          marginBottom: '2rem',
-          maxWidth: '1120px',
-          marginLeft: 'auto',
-          marginRight: 'auto',
-        }}
-      >
-        <div>
-          <h1
-            className="gradient-text"
-            style={{ fontSize: '1.25rem', fontWeight: 700 }}
-          >
-            Courses
-          </h1>
-        </div>
+    <TeacherWorkspaceLayout
+      activePath="/upload-lesson"
+      eyebrow="Lesson management"
+      title="Upload new lessons"
+      description="Save the course details first, then add sections and subsections below. Subsection videos must be 15 minutes or less."
+      badge="NEW"
+    >
+      <div className="upload-lesson-toolbar">
         <button
           type="button"
-          className="btn"
+          className="teacher-workspace-secondary-button"
           onClick={() => navigate('/upload-lesson')}
         >
-          Back
+          Back to lesson uploads
         </button>
-      </nav>
+      </div>
 
-      <main
-        className="container"
-        style={{ maxWidth: '1120px', margin: '0 auto', padding: '0 1rem' }}
-      >
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-            gap: '1.5rem',
-            alignItems: 'start',
-          }}
-        >
-          <div className="glass-panel" style={{ padding: '2rem' }}>
-            <h2
-              style={{
-                fontSize: '1.75rem',
-                marginBottom: '1.5rem',
-                fontWeight: 700,
-              }}
-            >
-              New Course
-            </h2>
-            {savedCourseId ? <LessonQueueProgress courseId={savedCourseId} /> : null}
+      <div className="upload-lesson-steps" aria-hidden="true">
+        <div className={`upload-lesson-step ${coursePartComplete ? 'is-done' : 'is-active'}`}>
+          <span className="upload-lesson-step-index">1</span>
+          <span>
+            <strong>Course details</strong>
+            <small>
+              {coursePartComplete ? 'Saved and locked for this session.' : 'Name, thumbnail, keywords, and description.'}
+            </small>
+          </span>
+        </div>
+        <div className={`upload-lesson-step ${coursePartComplete ? 'is-active' : ''}`}>
+          <span className="upload-lesson-step-index">2</span>
+          <span>
+            <strong>Sections & materials</strong>
+            <small>
+              {coursePartComplete ? 'Add a section, then upload each subsection.' : 'Unlocks after the course is saved.'}
+            </small>
+          </span>
+        </div>
+      </div>
 
-            <div key={formKey}>
-              {courseFieldsLocked && (
-                <p
-                  style={{
-                    color: 'var(--success, #10b981)',
-                    marginBottom: '1rem',
-                    fontSize: '0.9rem',
-                    fontWeight: 600,
-                  }}
-                >
-                  Course saved — fields below show what was stored.
-                </p>
-              )}
+      <div className="upload-lesson-grid">
+        <section className="teacher-workspace-card">
+          <div className="teacher-workspace-card-heading">
+            <h2>New course</h2>
+            <p>Create the course record before you attach lesson files.</p>
+          </div>
+          {savedCourseId ? (
+            <div className="upload-lesson-queue">
+              <LessonQueueProgress courseId={savedCourseId} />
+            </div>
+          ) : null}
 
-              <div className="form-group">
-                <label className="form-label" htmlFor="courseName">
-                  Course name
-                </label>
-                <input
-                  id="courseName"
-                  name="courseName"
-                  type="text"
-                  className="form-input"
-                  value={courseName}
-                  onChange={(e) => setCourseName(e.target.value)}
-                  placeholder="Enter course name"
-                  autoComplete="off"
-                  readOnly={courseFieldsLocked}
-                  style={readonlyFieldStyle}
-                />
-              </div>
+          <div key={formKey} className="teacher-workspace-form">
+            {courseFieldsLocked ? (
+              <p className="upload-lesson-status">
+                Course saved — fields below show what was stored.
+              </p>
+            ) : null}
 
-              <div className="form-group">
-                <label className="form-label" htmlFor="thumbnail">
-                  Upload thumbnail
-                </label>
-                {!courseFieldsLocked ? (
-                  <>
-                    <input
-                      id="thumbnail"
-                      name="thumbnail"
-                      type="file"
-                      accept="image/*"
-                      className="form-input"
-                      style={{ padding: '0.5rem' }}
-                      onChange={(e) =>
-                        setThumbnailFile(e.target.files?.[0] || null)
-                      }
-                    />
-                    <p
-                      style={{
-                        marginTop: '0.5rem',
-                        fontSize: '0.8rem',
-                        color: 'var(--text-muted)',
-                      }}
-                    >
-                      Image only, max 2MB.
-                    </p>
-                  </>
-                ) : (
-                  <div>
-                    {savedThumbnailUrl ? (
-                      <img
-                        src={savedThumbnailUrl}
-                        alt="Course thumbnail"
-                        style={{
-                          width: '100%',
-                          maxWidth: '320px',
-                          borderRadius: '8px',
-                          border: '1px solid var(--surface-light)',
-                          display: 'block',
-                        }}
-                      />
-                    ) : (
-                      <p
-                        style={{
-                          fontSize: '0.875rem',
-                          color: 'var(--text-muted)',
-                        }}
-                      >
-                        Thumbnail URL saved (preview unavailable).
-                      </p>
-                    )}
-                    <p
-                      style={{
-                        marginTop: '0.5rem',
-                        fontSize: '0.8rem',
-                        color: 'var(--text-muted)',
-                      }}
-                    >
-                      Thumbnail is stored on Cloudinary; the link above is what
-                      was saved for this course.
-                    </p>
-                  </div>
-                )}
-              </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="courseName">
+                Course name
+              </label>
+              <input
+                id="courseName"
+                name="courseName"
+                type="text"
+                className="form-input"
+                value={courseName}
+                onChange={(e) => setCourseName(e.target.value)}
+                placeholder="Enter course name"
+                autoComplete="off"
+                readOnly={courseFieldsLocked}
+                style={readonlyFieldStyle}
+              />
+            </div>
 
-              <div className="form-group">
-                <label className="form-label" htmlFor="keywords">
-                  Keywords for search
-                </label>
-                <input
-                  id="keywords"
-                  name="keywords"
-                  type="text"
-                  className="form-input"
-                  value={keywords}
-                  onChange={(e) => setKeywords(e.target.value)}
-                  placeholder="e.g. algebra, grade 9, semester 1"
-                  readOnly={courseFieldsLocked}
-                  style={readonlyFieldStyle}
-                />
-                <p
-                  style={{
-                    marginTop: '0.5rem',
-                    fontSize: '0.8rem',
-                    color: 'var(--text-muted)',
-                  }}
-                >
-                  Comma-separated keywords.
-                </p>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label" htmlFor="description">
-                  Description
-                </label>
-                <textarea
-                  id="description"
-                  name="description"
-                  className="form-input"
-                  rows={5}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Course description"
-                  style={{
-                    resize: 'vertical',
-                    minHeight: '120px',
-                    ...readonlyFieldStyle,
-                  }}
-                  readOnly={courseFieldsLocked}
-                />
-              </div>
-
+            <div className="form-group">
+              <label className="form-label" htmlFor="thumbnail">
+                Upload thumbnail
+              </label>
               {!courseFieldsLocked ? (
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={handleSaveCourse}
-                  disabled={isSavingCourse}
-                  style={{ width: '100%', marginTop: '0.5rem' }}
-                >
-                  {isSavingCourse ? 'Saving course…' : 'Save course'}
-                </button>
+                <div className="upload-lesson-file">
+                  <input
+                    id="thumbnail"
+                    name="thumbnail"
+                    type="file"
+                    accept="image/*"
+                    className="form-input"
+                    onChange={(e) =>
+                      setThumbnailFile(e.target.files?.[0] || null)
+                    }
+                  />
+                  <p className="upload-lesson-hint">Image only, max 2MB.</p>
+                </div>
               ) : (
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={startNewCourse}
-                  style={{
-                    width: '100%',
-                    marginTop: '0.5rem',
-                    border: '1px solid rgba(255,255,255,0.15)',
-                  }}
-                >
-                  Start another course
-                </button>
+                <div>
+                  {savedThumbnailUrl ? (
+                    <img
+                      src={savedThumbnailUrl}
+                      alt="Course thumbnail"
+                      className="upload-lesson-thumb"
+                    />
+                  ) : (
+                    <p className="upload-lesson-hint">
+                      Thumbnail URL saved (preview unavailable).
+                    </p>
+                  )}
+                  <p className="upload-lesson-hint">
+                    Thumbnail is stored on Cloudinary; the link above is what
+                    was saved for this course.
+                  </p>
+                </div>
               )}
             </div>
-          </div>
 
-          <div
-            className="glass-panel"
-            style={{
-              padding: '2rem',
-              opacity: coursePartComplete ? 1 : 0.55,
-              pointerEvents: coursePartComplete ? 'auto' : 'none',
-            }}
-          >
-            <h2
-              style={{
-                fontSize: '1.25rem',
-                marginBottom: '1rem',
-                fontWeight: 700,
-              }}
-            >
-              Sections
-            </h2>
-            <p
-              style={{
-                color: 'var(--text-muted)',
-                fontSize: '0.9rem',
-                marginBottom: '1.25rem',
-              }}
-            >
+            <div className="form-group">
+              <label className="form-label" htmlFor="keywords">
+                Keywords for search
+              </label>
+              <input
+                id="keywords"
+                name="keywords"
+                type="text"
+                className="form-input"
+                value={keywords}
+                onChange={(e) => setKeywords(e.target.value)}
+                placeholder="e.g. algebra, grade 9, semester 1"
+                readOnly={courseFieldsLocked}
+                style={readonlyFieldStyle}
+              />
+              <p className="upload-lesson-hint">Comma-separated keywords.</p>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="description">
+                Description
+              </label>
+              <textarea
+                id="description"
+                name="description"
+                className="form-input"
+                rows={5}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Course description"
+                style={{
+                  resize: 'vertical',
+                  minHeight: '120px',
+                  ...readonlyFieldStyle,
+                }}
+                readOnly={courseFieldsLocked}
+              />
+            </div>
+
+            {!courseFieldsLocked ? (
+              <button
+                type="button"
+                className="teacher-workspace-primary-button"
+                onClick={handleSaveCourse}
+                disabled={isSavingCourse}
+              >
+                {isSavingCourse ? 'Saving course…' : 'Save course'}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="teacher-workspace-secondary-button"
+                onClick={startNewCourse}
+              >
+                Start another course
+              </button>
+            )}
+          </div>
+        </section>
+
+        <section
+          className={`teacher-workspace-card upload-lesson-sections ${
+            coursePartComplete ? 'is-ready' : 'is-waiting'
+          }`}
+          style={{
+            pointerEvents: coursePartComplete ? 'auto' : 'none',
+          }}
+        >
+          <div className="teacher-workspace-card-heading">
+            <h2>Sections</h2>
+            <p>
               {coursePartComplete
                 ? 'Open Add section, enter a section name, then use Add sub section to upload materials. Submit each subsection before adding another. Subsection videos must be 15 minutes or less.'
                 : 'Save the course on the left first.'}
             </p>
+          </div>
 
+          <div className="upload-lesson-actions">
             <button
               type="button"
-              className="btn"
+              className="teacher-workspace-primary-button"
               onClick={toggleSectionsPanel}
               disabled={!coursePartComplete}
-              style={{
-                width: '100%',
-                marginBottom: '1rem',
-                backgroundColor: 'rgba(59, 130, 246, 0.15)',
-                color: '#93c5fd',
-                border: '1px solid rgba(59, 130, 246, 0.35)',
-              }}
             >
               {sectionsPanelOpen ? 'Hide add section' : 'Add section'}
             </button>
+          </div>
 
-            {sectionsPanelOpen && coursePartComplete && (
-              <div
-                style={{
-                  borderTop: '1px solid rgba(255,255,255,0.08)',
-                  paddingTop: '1rem',
-                }}
+          {sectionsPanelOpen && coursePartComplete && (
+            <div className="upload-lesson-stack" style={{ marginTop: '1rem' }}>
+              <div className="form-group teacher-workspace-form">
+                <label className="form-label" htmlFor="sectionName">
+                  Section name
+                </label>
+                <input
+                  id="sectionName"
+                  type="text"
+                  className="form-input"
+                  value={sectionName}
+                  onChange={(e) => setSectionName(e.target.value)}
+                  placeholder="e.g. Module 1"
+                  readOnly={sectionNameLocked}
+                  style={
+                    sectionNameLocked
+                      ? { opacity: 0.92, cursor: 'default' }
+                      : undefined
+                  }
+                  autoComplete="off"
+                />
+              </div>
+
+              <button
+                type="button"
+                className="teacher-workspace-secondary-button"
+                onClick={handleAddSubSection}
+                disabled={isCreatingSection || !sectionName.trim()}
               >
-                <div className="form-group">
-                  <label className="form-label" htmlFor="sectionName">
-                    Section name
-                  </label>
-                  <input
-                    id="sectionName"
-                    type="text"
-                    className="form-input"
-                    value={sectionName}
-                    onChange={(e) => setSectionName(e.target.value)}
-                    placeholder="e.g. Module 1"
-                    readOnly={sectionNameLocked}
-                    style={
-                      sectionNameLocked
-                        ? { opacity: 0.92, cursor: 'default' }
-                        : undefined
-                    }
-                    autoComplete="off"
-                  />
-                </div>
+                {isCreatingSection
+                  ? 'Creating section…'
+                  : activeSectionId
+                    ? subToggleOpen
+                      ? 'Hide sub section'
+                      : 'Show sub section'
+                    : 'Add sub section'}
+              </button>
 
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={handleAddSubSection}
-                  disabled={isCreatingSection || !sectionName.trim()}
-                  style={{
-                    width: '100%',
-                    marginBottom: '1rem',
-                    backgroundColor: 'rgba(168, 85, 247, 0.12)',
-                    color: '#d8b4fe',
-                    border: '1px solid rgba(168, 85, 247, 0.35)',
-                  }}
-                >
-                  {isCreatingSection
-                    ? 'Creating section…'
-                    : activeSectionId
-                      ? subToggleOpen
-                        ? 'Hide sub section'
-                        : 'Show sub section'
-                      : 'Add sub section'}
-                </button>
+              {activeSectionId && subToggleOpen && (
+                <div key={subsectionFormKey} className="upload-lesson-subsection">
+                  <p className="upload-lesson-hint" style={{ marginTop: 0, marginBottom: '1rem' }}>
+                    Upload subsection video (required). We only accept videos of
+                    15 minutes or less. PPT, PDF, and multiple images are optional.
+                  </p>
 
-                {activeSectionId && subToggleOpen && (
-                  <div
-                    key={subsectionFormKey}
-                    style={{
-                      marginTop: '0.5rem',
-                      padding: '1rem',
-                      borderRadius: '12px',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      background: 'rgba(15, 23, 42, 0.35)',
-                    }}
-                  >
-                    <p
-                      style={{
-                        fontSize: '0.85rem',
-                        color: 'var(--text-muted)',
-                        marginBottom: '1rem',
-                      }}
-                    >
-                      Upload subsection video (required). We only accept videos of
-                      15 minutes or less. PPT, PDF, and multiple images are optional.
-                    </p>
-
-                    <div className="form-group">
-                      <label className="form-label" htmlFor="sub-video">
-                        Video (15 minutes or less)
-                      </label>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="sub-video">
+                      Video (15 minutes or less)
+                    </label>
+                    <div className="upload-lesson-file">
                       <input
                         id="sub-video"
                         type="file"
                         accept="video/*"
                         className="form-input"
-                        style={{ padding: '0.5rem' }}
                         onChange={async (e) => {
                           const file = e.target.files?.[0] || null;
                           if (!file) {
@@ -782,78 +690,59 @@ const UploadNewLesson = () => {
                           }
                         }}
                       />
-                      <p
-                        style={{
-                          marginTop: '0.35rem',
-                          fontSize: '0.75rem',
-                          color: 'var(--text-muted)',
-                        }}
-                      >
+                      <p className="upload-lesson-hint">
                         Note: only videos of 15 minutes or less are accepted (max 100MB). Longer videos will be rejected.
                       </p>
                     </div>
+                  </div>
 
-                    <div className="form-group">
-                      <label className="form-label" htmlFor="sub-ppt">
-                        PowerPoint (PPT / PPTX)
-                      </label>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="sub-ppt">
+                      PowerPoint (PPT / PPTX)
+                    </label>
+                    <div className="upload-lesson-file">
                       <input
                         id="sub-ppt"
                         type="file"
                         accept=".ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
                         className="form-input"
-                        style={{ padding: '0.5rem' }}
                         onChange={(e) =>
                           setSubPpt(e.target.files?.[0] || null)
                         }
                       />
-                      <p
-                        style={{
-                          marginTop: '0.35rem',
-                          fontSize: '0.75rem',
-                          color: 'var(--text-muted)',
-                        }}
-                      >
-                        Max 15MB.
-                      </p>
+                      <p className="upload-lesson-hint">Max 15MB.</p>
                     </div>
+                  </div>
 
-                    <div className="form-group">
-                      <label className="form-label" htmlFor="sub-pdf">
-                        PDF
-                      </label>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="sub-pdf">
+                      PDF
+                    </label>
+                    <div className="upload-lesson-file">
                       <input
                         id="sub-pdf"
                         type="file"
                         accept=".pdf,application/pdf"
                         className="form-input"
-                        style={{ padding: '0.5rem' }}
                         onChange={(e) =>
                           setSubPdf(e.target.files?.[0] || null)
                         }
                       />
-                      <p
-                        style={{
-                          marginTop: '0.35rem',
-                          fontSize: '0.75rem',
-                          color: 'var(--text-muted)',
-                        }}
-                      >
-                        Max 15MB.
-                      </p>
+                      <p className="upload-lesson-hint">Max 15MB.</p>
                     </div>
+                  </div>
 
-                    <div className="form-group">
-                      <label className="form-label" htmlFor="sub-images">
-                        Images (multiple)
-                      </label>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="sub-images">
+                      Images (multiple)
+                    </label>
+                    <div className="upload-lesson-file">
                       <input
                         id="sub-images"
                         type="file"
                         accept="image/*"
                         multiple
                         className="form-input"
-                        style={{ padding: '0.5rem' }}
                         onChange={(e) =>
                           setSubImages(
                             e.target.files
@@ -862,29 +751,24 @@ const UploadNewLesson = () => {
                           )
                         }
                       />
-                      <p
-                        style={{
-                          marginTop: '0.35rem',
-                          fontSize: '0.75rem',
-                          color: 'var(--text-muted)',
-                        }}
-                      >
+                      <p className="upload-lesson-hint">
                         Up to 15 files, 100MB each.
                       </p>
                     </div>
+                  </div>
 
-                    <ContainsMathCheckbox
-                      id="sub-contains-math"
-                      checked={containsMath}
-                      onChange={setContainsMath}
-                    />
+                  <ContainsMathCheckbox
+                    id="sub-contains-math"
+                    checked={containsMath}
+                    onChange={setContainsMath}
+                  />
 
+                  <div className="upload-lesson-actions">
                     <button
                       type="button"
-                      className="btn btn-primary"
+                      className="teacher-workspace-primary-button"
                       onClick={handleSubmitSubsection}
                       disabled={isSubmittingSub}
-                      style={{ width: '100%', marginBottom: '0.75rem' }}
                     >
                       {isSubmittingSub
                         ? 'Uploading files…'
@@ -893,123 +777,59 @@ const UploadNewLesson = () => {
 
                     <button
                       type="button"
-                      className="btn"
+                      className={`teacher-workspace-secondary-button upload-lesson-add-another${
+                        lastSubsectionSubmitted ? ' is-ready' : ''
+                      }`}
                       onClick={handleAddAnotherSubsection}
                       disabled={!lastSubsectionSubmitted}
-                      style={{
-                        width: '100%',
-                        backgroundColor: lastSubsectionSubmitted
-                          ? 'rgba(34, 197, 94, 0.12)'
-                          : 'rgba(100, 116, 139, 0.15)',
-                        color: lastSubsectionSubmitted
-                          ? '#86efac'
-                          : 'var(--text-muted)',
-                        border: `1px solid ${
-                          lastSubsectionSubmitted
-                            ? 'rgba(34, 197, 94, 0.35)'
-                            : 'rgba(100,116,139,0.25)'
-                        }`,
-                        cursor: lastSubsectionSubmitted
-                          ? 'pointer'
-                          : 'not-allowed',
-                      }}
                     >
                       + Add another subsection
                     </button>
                   </div>
-                )}
+                </div>
+              )}
 
-                {submittedSubsections.length > 0 && (
-                  <div style={{ marginTop: '1.25rem' }}>
-                    <p
-                      className="form-label"
-                      style={{ marginBottom: '0.35rem' }}
-                    >
-                      Hierarchy (this course section)
-                    </p>
-                    <div
-                      style={{
-                        border: '1px solid rgba(255,255,255,0.08)',
-                        borderRadius: '10px',
-                        padding: '0.75rem 1rem',
-                        background: 'rgba(15, 23, 42, 0.35)',
-                      }}
-                    >
-                      <p
-                        style={{
-                          fontWeight: 600,
-                          fontSize: '0.95rem',
-                          marginBottom: '0.5rem',
-                          color: 'var(--text)',
-                        }}
-                      >
-                        Section:{' '}
-                        {sectionName.trim() ||
-                          submittedSubsections[0]?.sectionName ||
-                          '(unnamed)'}
-                      </p>
-                      <p
-                        style={{
-                          fontSize: '0.8rem',
-                          color: 'var(--text-muted)',
-                          marginBottom: '0.5rem',
-                        }}
-                      >
-                        Subsections saved under this section (
-                        {submittedSubsections.length})
-                      </p>
-                      <ul
-                        style={{
-                          color: 'var(--text-muted)',
-                          fontSize: '0.875rem',
-                          paddingLeft: '1.25rem',
-                          margin: 0,
-                          listStyleType: 'disc',
-                        }}
-                      >
-                        {submittedSubsections.map((s, i) => (
-                          <li key={s.id} style={{ marginBottom: '0.25rem' }}>
-                            Subsection {i + 1} (order {s.order})
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                )}
+              {submittedSubsections.length > 0 && (
+                <div className="upload-lesson-hierarchy">
+                  <p className="form-label" style={{ marginBottom: '0.5rem' }}>
+                    Hierarchy (this course section)
+                  </p>
+                  <h3>
+                    Section:{' '}
+                    {sectionName.trim() ||
+                      submittedSubsections[0]?.sectionName ||
+                      '(unnamed)'}
+                  </h3>
+                  <p>
+                    Subsections saved under this section (
+                    {submittedSubsections.length})
+                  </p>
+                  <ul>
+                    {submittedSubsections.map((s, i) => (
+                      <li key={s.id}>
+                        Subsection {i + 1} (order {s.order})
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
-                {activeSectionId && (
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={startNewCourseSection}
-                    style={{
-                      width: '100%',
-                      marginTop: '1.25rem',
-                      border: '1px solid rgba(255,255,255,0.12)',
-                    }}
-                  >
-                    New course section
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
+              {activeSectionId && (
+                <button
+                  type="button"
+                  className="teacher-workspace-secondary-button"
+                  onClick={startNewCourseSection}
+                >
+                  New course section
+                </button>
+              )}
+            </div>
+          )}
+        </section>
+      </div>
 
-        {message && (
-          <p
-            style={{
-              marginTop: '1.25rem',
-              color: 'var(--text-muted)',
-              fontSize: '0.95rem',
-              textAlign: 'center',
-            }}
-          >
-            {message}
-          </p>
-        )}
-      </main>
-    </div>
+      {message ? <p className="upload-lesson-message">{message}</p> : null}
+    </TeacherWorkspaceLayout>
   );
 };
 

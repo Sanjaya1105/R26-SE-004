@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { getGatewayBaseUrl } from '../config/gateway';
-import AssistantMarkdown from '../components/AssistantMarkdown';
+import PaginatedAssistantContent from '../components/PaginatedAssistantContent';
 import LearningStateIndicator from '../components/LearningStateIndicator';
 import { fetchLoadTrend } from '../cognitiveLoad/apiClient';
 import { selectBestOutputLocally } from '../utils/selectBestOutputLocal';
@@ -3119,18 +3119,6 @@ const CourseDetail = () => {
                 </div>
               </div>
               <div className="course-learn__below">
-              <div className="course-learn__personalize">
-                <button
-                  type="button"
-                  className="btn btn-primary course-learn__personalize-btn"
-                  onClick={() => {
-                    void startManualPersonalizedContent();
-                  }}
-                  disabled={gptLoading}
-                >
-                  {gptLoading ? 'Getting personalized content…' : 'Get personalized content'}
-                </button>
-              </div>
               <p style={{ marginTop: 0, marginBottom: 0 }}>
                 <a
                   href={
@@ -3528,15 +3516,53 @@ const CourseDetail = () => {
                   </>
                 ) : null}
               </div>
-              <div
-                style={{
-                  marginTop: '0.75rem',
-                  padding: '1rem',
-                  borderRadius: '12px',
-                  border: '1px solid rgba(34, 197, 94, 0.22)',
-                  background: 'rgba(22, 101, 52, 0.12)',
-                }}
+              <section
+                id="lesson-personalization"
+                ref={askPanelRef}
+                className="course-learn__personalization"
+                aria-labelledby="lesson-personalization-title"
               >
+                <header className="course-learn__personalization-hero">
+                  <div>
+                    <p className="course-learn__personalization-kicker">
+                      For this lesson
+                    </p>
+                    <h2 id="lesson-personalization-title">
+                      Personalized content
+                    </h2>
+                    <p className="course-learn__personalization-lead">
+                      Adapted to your cognitive style and the latest load for
+                      this video. Long answers open page by page so they stay
+                      easy to read.
+                    </p>
+                  </div>
+                  <div className="course-learn__personalization-chips" aria-label="Learner settings in use">
+                    <span>{visualVerbalStyle}</span>
+                    <span>{analyticHolisticStyle}</span>
+                    <span>Load {loadLevel}</span>
+                    {studentYear ? <span>{studentYear}</span> : null}
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary course-learn__personalize-btn"
+                    onClick={() => {
+                      void startManualPersonalizedContent();
+                    }}
+                    disabled={gptLoading}
+                  >
+                    {gptLoading
+                      ? 'Getting personalized content…'
+                      : 'Get personalized content'}
+                  </button>
+                </header>
+                {!selectedAnswer && !gptLoading ? (
+                  <p className="course-learn__personalization-empty">
+                    Generate a version of this lesson matched to your cognitive
+                    style. Longer replies are split into pages so they stay easy
+                    to read.
+                  </p>
+                ) : null}
+              <div className="course-learn__personalization-card">
                 <button
                   type="button"
                   onClick={() => setProfileOpen((open) => !open)}
@@ -3777,16 +3803,7 @@ const CourseDetail = () => {
                 ) : null}
               </div>
 
-              <div
-                ref={askPanelRef}
-                style={{
-                  marginTop: '0.75rem',
-                  padding: '1rem',
-                  borderRadius: '12px',
-                  border: '1px solid rgba(129, 140, 248, 0.25)',
-                  background: 'rgba(79, 70, 229, 0.08)',
-                }}
-              >
+              <div className="course-learn__personalization-ask">
                 <p
                   className="form-label"
                   style={{
@@ -3897,15 +3914,7 @@ const CourseDetail = () => {
                 ) : null}
 
                 {selectedAnswer ? (
-                  <div
-                    style={{
-                      marginTop: '0.85rem',
-                      padding: '0.85rem',
-                      borderRadius: '10px',
-                      border: '1px solid rgba(34, 197, 94, 0.35)',
-                      background: 'rgba(22, 163, 74, 0.12)',
-                    }}
-                  >
+                  <div className="course-learn__personalization-output">
                     <p
                       className="form-label"
                       style={{ marginBottom: '0.35rem', fontSize: '0.75rem' }}
@@ -3976,12 +3985,10 @@ const CourseDetail = () => {
                         })}
                       </div>
                     ) : null}
-                    <AssistantMarkdown
+                    <PaginatedAssistantContent
+                      text={selectedAnswer}
                       canonicalEquations={canonicalEquations}
-                      style={{ maxHeight: '320px', overflowY: 'auto' }}
-                    >
-                      {selectedAnswer}
-                    </AssistantMarkdown>
+                    />
                     <LessonImageGallery
                       afterGptOutput
                       images={collectSubsectionImages(mainVideo)}
@@ -4046,12 +4053,10 @@ const CourseDetail = () => {
                         </p>
                       ) : null}
                       {!gptError && gptAnswer ? (
-                        <AssistantMarkdown
+                        <PaginatedAssistantContent
+                          text={gptAnswer}
                           canonicalEquations={canonicalEquations}
-                          style={{ maxHeight: '280px', overflowY: 'auto' }}
-                        >
-                          {gptAnswer}
-                        </AssistantMarkdown>
+                        />
                       ) : null}
                       {!gptError && !gptAnswer ? (
                         <p
@@ -4094,12 +4099,10 @@ const CourseDetail = () => {
                         </p>
                       ) : null}
                       {!deepseekError && deepseekAnswer ? (
-                        <AssistantMarkdown
+                        <PaginatedAssistantContent
+                          text={deepseekAnswer}
                           canonicalEquations={canonicalEquations}
-                          style={{ maxHeight: '280px', overflowY: 'auto' }}
-                        >
-                          {deepseekAnswer}
-                        </AssistantMarkdown>
+                        />
                       ) : null}
                       {!deepseekError && !deepseekAnswer ? (
                         <p
@@ -4122,6 +4125,7 @@ const CourseDetail = () => {
                   />
                 ) : null}
               </div>
+              </section>
               </div>
             </>
           ) : (
