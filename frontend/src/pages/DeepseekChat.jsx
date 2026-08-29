@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { getGatewayBaseUrl } from '../config/gateway';
 import AssistantMarkdown from '../components/AssistantMarkdown';
+import TeacherWorkspaceLayout from '../components/TeacherWorkspaceLayout';
 
 const DeepseekChat = () => {
   const navigate = useNavigate();
@@ -78,74 +79,17 @@ const DeepseekChat = () => {
   };
 
   return (
-    <div style={{ width: '100%', minHeight: '100vh', padding: '2rem' }}>
-      <div className="container" style={{ maxWidth: '900px' }}>
-        <div
-          className="glass-panel"
-          style={{
-            padding: '1.5rem',
-            display: 'flex',
-            flexDirection: 'column',
-            minHeight: '75vh',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: '1rem',
-              marginBottom: '1rem',
-              flexWrap: 'wrap',
-            }}
-          >
-            <div>
-              <h1 className="gradient-text" style={{ margin: 0 }}>
-                DeepSeek Chat
-              </h1>
-              <p
-                style={{
-                  marginTop: '0.35rem',
-                  color: 'var(--text-muted)',
-                  fontSize: '0.9rem',
-                }}
-              >
-                Content conversion and learning help powered by DeepSeek.
-              </p>
-            </div>
-            <button
-              type="button"
-              className="btn"
-              onClick={() => navigate('/dashboard')}
-            >
-              Back
-            </button>
-          </div>
-
-          <div
-            ref={listRef}
-            style={{
-              flex: 1,
-              overflowY: 'auto',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.85rem',
-              padding: '0.75rem',
-              marginBottom: '1rem',
-              borderRadius: '12px',
-              border: '1px solid rgba(255,255,255,0.08)',
-              background: 'rgba(15, 23, 42, 0.03)',
-              minHeight: '360px',
-            }}
-          >
+    <TeacherWorkspaceLayout
+      activePath="/deepseek"
+      eyebrow="AI content support"
+      title="DeepSeek Chat"
+      description="Convert content, explore lesson ideas, and create clearer learning material with DeepSeek."
+      badge="DS"
+    >
+      <section className="teacher-workspace-card" style={{ display: 'flex', flexDirection: 'column', minHeight: '68vh' }}>
+          <div ref={listRef} className="teacher-chat-list">
             {messages.length === 0 && !loading && (
-              <p
-                style={{
-                  color: 'var(--text-muted)',
-                  textAlign: 'center',
-                  margin: 'auto',
-                }}
-              >
+              <p className="teacher-chat-empty">
                 Ask anything, or paste content to convert into clearer learning
                 material.
               </p>
@@ -156,33 +100,9 @@ const DeepseekChat = () => {
               return (
                 <div
                   key={`${item.role}-${index}`}
-                  style={{
-                    alignSelf: isUser ? 'flex-end' : 'flex-start',
-                    maxWidth: '85%',
-                    padding: '0.85rem 1rem',
-                    borderRadius: isUser
-                      ? '14px 14px 4px 14px'
-                      : '14px 14px 14px 4px',
-                    background: isUser
-                      ? 'linear-gradient(135deg, #2563eb, #1d4ed8)'
-                      : 'rgba(255,255,255,0.75)',
-                    color: isUser ? '#fff' : 'var(--text)',
-                    border: isUser
-                      ? 'none'
-                      : '1px solid rgba(37, 99, 235, 0.12)',
-                    boxShadow: '0 8px 20px rgba(15, 23, 42, 0.06)',
-                  }}
+                  className={`teacher-chat-message ${isUser ? 'is-user' : 'is-assistant'}`}
                 >
-                  <div
-                    style={{
-                      fontSize: '0.72rem',
-                      opacity: 0.8,
-                      marginBottom: '0.35rem',
-                      fontWeight: 650,
-                      letterSpacing: '0.03em',
-                      textTransform: 'uppercase',
-                    }}
-                  >
+                  <div className="teacher-chat-role">
                     {isUser ? 'You' : 'DeepSeek'}
                   </div>
                   {isUser ? (
@@ -197,31 +117,13 @@ const DeepseekChat = () => {
             })}
 
             {loading && (
-              <div
-                style={{
-                  alignSelf: 'flex-start',
-                  color: 'var(--text-muted)',
-                  fontSize: '0.9rem',
-                }}
-              >
-                DeepSeek is thinking…
-              </div>
+              <div className="teacher-chat-loading">DeepSeek is thinking…</div>
             )}
           </div>
 
-          {error && (
-            <p
-              style={{
-                color: 'var(--danger)',
-                marginBottom: '0.75rem',
-                whiteSpace: 'pre-wrap',
-              }}
-            >
-              {error}
-            </p>
-          )}
+          {error && <p className="teacher-workspace-error">{error}</p>}
 
-          <div style={{ display: 'grid', gap: '0.75rem' }}>
+          <div className="teacher-chat-composer teacher-workspace-form">
             <textarea
               className="form-input"
               value={input}
@@ -232,17 +134,10 @@ const DeepseekChat = () => {
               style={{ resize: 'vertical' }}
               disabled={loading}
             />
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                gap: '0.75rem',
-                flexWrap: 'wrap',
-              }}
-            >
+            <div className="teacher-chat-actions">
               <button
                 type="button"
-                className="btn"
+                className="teacher-workspace-secondary-button"
                 onClick={() => {
                   setMessages([]);
                   setError('');
@@ -253,7 +148,7 @@ const DeepseekChat = () => {
               </button>
               <button
                 type="button"
-                className="btn btn-primary"
+                className="teacher-workspace-primary-button"
                 onClick={send}
                 disabled={loading || !input.trim()}
               >
@@ -261,9 +156,8 @@ const DeepseekChat = () => {
               </button>
             </div>
           </div>
-        </div>
-      </div>
-    </div>
+      </section>
+    </TeacherWorkspaceLayout>
   );
 };
 
