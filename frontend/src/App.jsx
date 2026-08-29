@@ -31,6 +31,7 @@ import GetExam from './pages/GetExam';
 import NextLessonRecommendation from './pages/NextLessonRecommendation';
 import TeacherPushBridge from './components/TeacherPushBridge';
 import StudentAppShell from './components/StudentAppShell';
+import StudentHomeRedirect from './components/StudentHomeRedirect';
 import './index.css';
 
 const getStoredUser = () => {
@@ -68,7 +69,7 @@ function App() {
     <Router>
       <TeacherPushBridge />
       <Routes>
-        <Route path="/" element={<Navigate to="/course" replace />} />
+        <Route path="/" element={<StudentHomeRedirect />} />
         <Route path="/student/login" element={
           <StudentAppShell>
             <StudentLogin />

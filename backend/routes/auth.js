@@ -308,6 +308,9 @@ router.post('/student/login', async (req, res) => {
         email: student.email,
         mobileNumber: student.mobileNumber,
         role: student.role,
+        learnerProfile: student.learnerProfile || '',
+        visualVerbalCognitiveStyle: student.visualVerbalCognitiveStyle || '',
+        analyticWholisticCognitiveStyle: student.analyticWholisticCognitiveStyle || '',
       },
     });
   } catch (err) {

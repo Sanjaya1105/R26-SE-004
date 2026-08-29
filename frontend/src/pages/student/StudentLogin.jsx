@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { getGatewayBaseUrl } from '../../config/gateway';
+import { getStudentHomePath } from '../../utils/studentHome';
 
 const StudentLogin = () => {
   const [formData, setFormData] = useState({ email: '', password: '' });
@@ -29,7 +30,7 @@ const StudentLogin = () => {
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
 
-      navigate('/learner-profile');
+      navigate(getStudentHomePath(response.data.user));
     } catch (err) {
       setError(
         err.response?.data?.message || 'Login failed. Please check credentials.'
