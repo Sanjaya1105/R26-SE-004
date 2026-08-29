@@ -178,7 +178,7 @@ const createSubSection = async (req, res) => {
     }
 
     await Promise.all(uploads);
-    uploaded.knowledgeStatus = "processing";
+    uploaded.knowledgeStatus = "queued";
     uploaded.knowledgeStatusReason = "";
 
     const order = await CourseSubSection.countDocuments({
@@ -192,6 +192,7 @@ const createSubSection = async (req, res) => {
       ...uploaded,
     });
     scheduleProcessSubsection(doc._id, {
+      courseId: String(section.courseId),
       transcribe: true,
       extractImages: true,
       assets: {
@@ -212,7 +213,7 @@ const createSubSection = async (req, res) => {
     return res.status(202).json({
       success: true,
       message:
-        "Files saved. Transcript, MiniLM, and knowledge chunk are processing in the background. You will get a Chrome notification when it is ready.",
+        "Files saved and added to the processing queue. Subsections are processed one at a time. You will get a Chrome notification when each one is ready. Students can enroll after the course queue is complete.",
       data: {
         section: {
           id: section._id,
@@ -456,7 +457,7 @@ const updateSubSection = async (req, res) => {
     }
 
     if (knowledgeInputsChanged) {
-      doc.knowledgeStatus = "processing";
+      doc.knowledgeStatus = "queued";
       doc.knowledgeStatusReason = "";
     }
 
@@ -464,6 +465,7 @@ const updateSubSection = async (req, res) => {
 
     if (knowledgeInputsChanged) {
       scheduleProcessSubsection(doc._id, {
+        courseId: String(doc.courseId),
         transcribe: videoChanged || !doc.transcriptText,
         extractImages: pptChanged || pdfChanged,
         assets: {
@@ -485,7 +487,7 @@ const updateSubSection = async (req, res) => {
     return res.status(knowledgeInputsChanged ? 202 : 200).json({
       success: true,
       message: knowledgeInputsChanged
-        ? "Files saved. Knowledge is processing in the background. You will get a Chrome notification when it is ready."
+        ? "Files saved and queued. This subsection will process after earlier items in the course queue. You will get a Chrome notification when it is ready."
         : "Subsection updated.",
       data: {
         subsection: {

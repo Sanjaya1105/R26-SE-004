@@ -331,8 +331,17 @@ const Course = () => {
 
     const courseId = String(course.id);
     if (enrolledIds.has(courseId) || enrollingId === courseId) return;
-    if (Number(course.readyLessonCount || 0) === 0 && Number(course.preparingLessonCount || 0) > 0) {
-      setActionMessage('This course is still being prepared. You can enroll when the lessons are ready.');
+    const enrollmentOpen =
+      typeof course.enrollmentOpen === 'boolean'
+        ? course.enrollmentOpen
+        : Number(course.preparingLessonCount || 0) === 0 &&
+          Number(course.readyLessonCount || 0) > 0;
+    if (!enrollmentOpen) {
+      setActionMessage(
+        Number(course.preparingLessonCount || 0) > 0
+          ? 'This course is still processing uploaded subsections. You can enroll when the queue is complete.'
+          : 'This course has no lessons ready for enrollment yet.'
+      );
       return;
     }
 
@@ -438,10 +447,11 @@ const Course = () => {
     const isEnrolled = enrolledIds.has(courseId);
     const isFavorite = favoriteIds.has(courseId);
     const isEnrolling = enrollingId === courseId;
-    const lessonsPreparing =
-      Number(c.preparingLessonCount || 0) > 0 &&
-      Number(c.readyLessonCount || 0) === 0;
-    const canEnroll = !lessonsPreparing;
+    const lessonsPreparing = Number(c.preparingLessonCount || 0) > 0;
+    const canEnroll =
+      typeof c.enrollmentOpen === 'boolean'
+        ? c.enrollmentOpen
+        : !lessonsPreparing && Number(c.readyLessonCount || 0) > 0;
     const progress = watchByCourse[courseId];
     const percent = Number(progress?.percent) || 0;
 
@@ -481,7 +491,7 @@ const Course = () => {
             </p>
             {lessonsPreparing ? (
               <p className="course-card__warn">
-                Lessons are being prepared. Enrollment opens when they are ready.
+                Lessons are still in the processing queue. Enrollment opens when every subsection is ready.
               </p>
             ) : null}
             {isEnrolled ? (
@@ -510,7 +520,9 @@ const Course = () => {
                   ? 'Enrolling…'
                   : lessonsPreparing
                     ? 'Preparing lessons'
-                    : 'Enroll now'}
+                    : canEnroll
+                      ? 'Enroll now'
+                      : 'Not ready yet'}
             </button>
           </div>
         ) : null}

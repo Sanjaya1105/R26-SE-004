@@ -4,6 +4,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { getGatewayBaseUrl } from '../config/gateway';
 import { assertClientVideoDuration } from '../utils/videoDuration';
 import ContainsMathCheckbox from '../components/ContainsMathCheckbox';
+import LessonQueueProgress from '../components/LessonQueueProgress';
+import { isLessonPreparing } from '../utils/lessonStatus';
 import {
   enableTeacherPushNotifications,
   trackProcessingSubsection,
@@ -69,8 +71,12 @@ function SubsectionMaterialsUpdater({
     if (subsection.pptUrl) parts.push('PPT');
     if (subsection.pdfUrl) parts.push('PDF');
     if (subsection.containsMath) parts.push('Equations preserved');
-    if (subsection.knowledgeStatus === 'processing' || subsection.knowledgeStatus === 'rebuilding') {
-      parts.push('Processing in background');
+    if (isLessonPreparing(subsection.knowledgeStatus)) {
+      parts.push(
+        subsection.knowledgeStatus === 'queued'
+          ? 'Waiting in processing queue'
+          : 'Processing in background'
+      );
     }
     if (subsection.knowledgeStatus === 'failed') parts.push('Processing failed');
     const imgCount = Array.isArray(subsection.images) ? subsection.images.length : 0;
@@ -143,7 +149,7 @@ function SubsectionMaterialsUpdater({
           label: `Subsection ${orderLabel || ''}`.trim(),
         });
         setLocalMsg(
-          'Files saved. Processing is running in the background. You will get a Chrome notification when it is ready.'
+          'Files saved and queued. This subsection will process after earlier items, one at a time. You will get a Chrome notification when it is ready.'
         );
       } else {
         setLocalMsg('Subsection updated.');
@@ -440,7 +446,7 @@ function NewSubsectionForm({
       }
       clearFiles();
       setLocalMsg(
-        'Files saved. Processing is running in the background. You will get a Chrome notification when it is ready.'
+        'Files saved and queued. Subsections process one at a time. You will get a Chrome notification when it is ready.'
       );
       onAdded();
     } catch (error) {
@@ -780,6 +786,7 @@ const EditCourse = () => {
           </div>
         ) : (
           <>
+            {courseId ? <LessonQueueProgress courseId={courseId.trim()} /> : null}
             <div className="glass-panel" style={{ padding: '2rem', marginBottom: '1.25rem' }}>
               <h2 style={{ fontSize: '1.35rem', marginBottom: '0.5rem' }}>Course details</h2>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>

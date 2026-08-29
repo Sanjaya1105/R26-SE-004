@@ -1,8 +1,14 @@
 const express = require('express');
+const axios = require('axios');
 const Enrollment = require('../models/Enrollment');
 const verifyToken = require('../middleware/verifyToken');
 
 const router = express.Router();
+
+const resourceBaseUrl = (
+  process.env.RESOURCE_UPLOAD_URL || 'http://localhost:5000'
+).replace(/\/$/, '');
+const gatewaySecret = process.env.GATEWAY_SHARED_SECRET;
 
 const requireStudent = (req, res, next) => {
   if (req.user?.role !== 'Student') {
@@ -15,6 +21,57 @@ const handleServerError = (res, err) => {
   console.error(err);
   res.status(500).json({ message: 'Internal server error' });
 };
+
+async function assertCourseEnrollmentOpen(courseId) {
+  if (!gatewaySecret) {
+    const err = new Error('Server misconfiguration: missing GATEWAY_SHARED_SECRET');
+    err.status = 500;
+    throw err;
+  }
+  try {
+    const res = await axios.get(
+      `${resourceBaseUrl}/public/courses/${encodeURIComponent(courseId)}`,
+      {
+        headers: { 'x-gateway-secret': gatewaySecret },
+        timeout: 8000,
+      }
+    );
+    const data = res.data?.data;
+    const preparing = Number(data?.preparingLessonCount || 0);
+    const ready = Number(data?.readyLessonCount || 0);
+    const open =
+      typeof data?.enrollmentOpen === 'boolean'
+        ? data.enrollmentOpen
+        : ready > 0 && preparing === 0;
+    if (!open) {
+      const err = new Error(
+        preparing > 0
+          ? 'This course is still processing uploaded subsections. Enrollment opens when the queue is complete.'
+          : 'This course has no lessons ready for enrollment yet.'
+      );
+      err.status = 409;
+      throw err;
+    }
+  } catch (error) {
+    if (error.status) throw error;
+    if (error.response?.status === 404) {
+      const err = new Error('Course not found.');
+      err.status = 404;
+      throw err;
+    }
+    if (error.response?.status >= 400) {
+      const err = new Error(
+        error.response.data?.message ||
+          'Could not verify whether this course is ready for enrollment.'
+      );
+      err.status = error.response.status;
+      throw err;
+    }
+    const err = new Error('Course service unavailable. Try enrolling again shortly.');
+    err.status = 502;
+    throw err;
+  }
+}
 
 // POST /api/enrollments — enroll current student in a course
 router.post('/', verifyToken, requireStudent, async (req, res) => {
@@ -40,6 +97,8 @@ router.post('/', verifyToken, requireStudent, async (req, res) => {
       });
     }
 
+    await assertCourseEnrollmentOpen(courseId);
+
     const enrollment = await Enrollment.create({
       studentId: req.user.id,
       courseId,
@@ -53,6 +112,9 @@ router.post('/', verifyToken, requireStudent, async (req, res) => {
       alreadyEnrolled: false,
     });
   } catch (err) {
+    if (err?.status) {
+      return res.status(err.status).json({ message: err.message });
+    }
     if (err?.code === 11000) {
       const enrollment = await Enrollment.findOne({
         studentId: req.user.id,

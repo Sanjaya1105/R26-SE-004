@@ -22,7 +22,122 @@ const { filterWhisperNoise } = require("./whisperNoise.service");
 const { notifyLessonProcessed } = require("./pushNotification.service");
 const { readVideoDurationSec } = require("../utils/videoDuration");
 
-const running = new Set();
+/** One global FIFO: never process two subsections at once, never mix their files. */
+const fifo = [];
+const pendingRequeue = new Map();
+const courseBatches = new Map();
+let activeJob = null;
+let draining = false;
+
+function asciiBar(done, total, width = 24) {
+  const t = Math.max(0, Number(total) || 0);
+  const d = Math.max(0, Math.min(t, Number(done) || 0));
+  if (t <= 0) {
+    return `[${"░".repeat(width)}] idle`;
+  }
+  const filled = Math.round((d / t) * width);
+  const pct = Math.round((d / t) * 100);
+  return `[${"█".repeat(filled)}${"░".repeat(Math.max(0, width - filled))}] ${d}/${t} ${pct}%`;
+}
+
+function pendingCountForCourse(courseId) {
+  const cid = String(courseId || "");
+  let count = fifo.filter((job) => job.courseId === cid).length;
+  if (activeJob && activeJob.courseId === cid) count += 1;
+  return count;
+}
+
+function markCourseEnqueued(courseId) {
+  const cid = String(courseId || "");
+  const pendingBefore = pendingCountForCourse(cid);
+  const batch = courseBatches.get(cid) || { total: 0, completed: 0 };
+  if (pendingBefore === 0) {
+    courseBatches.set(cid, { total: 1, completed: 0 });
+    return;
+  }
+  courseBatches.set(cid, {
+    total: batch.total + 1,
+    completed: batch.completed,
+  });
+}
+
+function markCourseCompleted(courseId) {
+  const cid = String(courseId || "");
+  const batch = courseBatches.get(cid);
+  if (!batch) return;
+  courseBatches.set(cid, {
+    total: batch.total,
+    completed: Math.min(batch.total, batch.completed + 1),
+  });
+}
+
+function logQueueProgress(event) {
+  const waiting = fifo.length;
+  const activeId = activeJob?.subsectionId || "idle";
+  const courseId = activeJob?.courseId || "";
+  const batch = courseId ? courseBatches.get(courseId) : null;
+  const bar = batch
+    ? asciiBar(batch.completed, batch.total)
+    : asciiBar(0, waiting + (activeJob ? 1 : 0) || 0);
+  console.log(
+    `[lesson-queue] ${bar} ${event || "tick"} active=${activeId} waiting=${waiting}${
+      courseId ? ` course=${courseId}` : ""
+    }`
+  );
+  for (const [cid, stats] of courseBatches.entries()) {
+    const pending = pendingCountForCourse(cid);
+    if (pending === 0 && stats.completed >= stats.total && stats.total > 0) {
+      console.log(
+        `[lesson-queue] ${asciiBar(stats.completed, stats.total)} course=${cid} complete — enrollment can open`
+      );
+    } else if (pending > 0) {
+      console.log(
+        `[lesson-queue] ${asciiBar(stats.completed, stats.total)} course=${cid} pending=${pending}`
+      );
+    }
+  }
+}
+
+function getCourseQueueSnapshot(courseId) {
+  const cid = String(courseId || "");
+  const batch = courseBatches.get(cid) || { total: 0, completed: 0 };
+  const queued = fifo
+    .filter((job) => job.courseId === cid)
+    .map((job, index) => ({
+      subsectionId: job.subsectionId,
+      status: "queued",
+      position: index + 1,
+    }));
+  const active =
+    activeJob && activeJob.courseId === cid
+      ? {
+          subsectionId: activeJob.subsectionId,
+          status: "processing",
+          position: 0,
+        }
+      : null;
+  const pendingCount = queued.length + (active ? 1 : 0);
+  const completedCount = Number(batch.completed) || 0;
+  const totalCount = Math.max(
+    Number(batch.total) || 0,
+    completedCount + pendingCount
+  );
+  const percent =
+    totalCount <= 0
+      ? 100
+      : Math.round((Math.min(completedCount, totalCount) / totalCount) * 100);
+  return {
+    courseId: cid,
+    activeSubsectionId: active?.subsectionId || null,
+    queuedCount: queued.length,
+    pendingCount,
+    completedCount,
+    totalCount,
+    percent: pendingCount === 0 && totalCount > 0 ? 100 : percent,
+    items: [...(active ? [active] : []), ...queued],
+    idle: pendingCount === 0,
+  };
+}
 
 function hasUsableKnowledge(dedupeResult, transcriptText) {
   const uniqueLen = [dedupeResult?.ppt, dedupeResult?.pdf, dedupeResult?.transcript]
@@ -225,27 +340,116 @@ async function processSubsection(subsectionId, options = {}) {
   }
 }
 
-function scheduleProcessSubsection(subsectionId, options = {}) {
-  const id = String(subsectionId || "");
-  if (!id || running.has(id)) return;
-  running.add(id);
-  const jobOptions = {
+function buildJob(subsectionId, options = {}, attachAssets) {
+  return {
+    subsectionId: String(subsectionId),
+    courseId: String(options.courseId || ""),
     transcribe: options.transcribe,
     extractImages: options.extractImages,
-    assets: options.assets || null,
+    assets: attachAssets ? options.assets || null : null,
   };
-  setImmediate(() => {
-    processSubsection(id, jobOptions)
-      .catch((error) => {
-        console.error("[lesson-process]", id, error.message);
-      })
-      .finally(() => {
-        running.delete(id);
-      });
-  });
+}
+
+function enqueueJob(subsectionId, options = {}) {
+  const id = String(subsectionId || "");
+  if (!id) return;
+
+  const courseId = String(options.courseId || "");
+  const withoutBuffers = { ...options, assets: null };
+
+  if (activeJob && activeJob.subsectionId === id) {
+    pendingRequeue.set(id, withoutBuffers);
+    logQueueProgress("requeue-after-active");
+    return;
+  }
+
+  const waitingIdx = fifo.findIndex((job) => job.subsectionId === id);
+  if (waitingIdx >= 0) {
+    fifo[waitingIdx] = {
+      ...fifo[waitingIdx],
+      transcribe: options.transcribe,
+      extractImages: options.extractImages,
+      assets: null,
+    };
+    logQueueProgress("replace-queued");
+    return;
+  }
+
+  const attachAssets = !activeJob && fifo.length === 0;
+  markCourseEnqueued(courseId);
+  fifo.push(buildJob(id, options, attachAssets));
+  logQueueProgress("enqueue");
+  pump();
+}
+
+async function pump() {
+  if (draining) return;
+  draining = true;
+  try {
+    while (fifo.length) {
+      const job = fifo.shift();
+      activeJob = job;
+      logQueueProgress("start");
+      try {
+        await processSubsection(job.subsectionId, {
+          transcribe: job.transcribe,
+          extractImages: job.extractImages,
+          assets: job.assets || null,
+        });
+      } catch (error) {
+        console.error("[lesson-queue]", job.subsectionId, error.message);
+      } finally {
+        job.assets = null;
+        markCourseCompleted(job.courseId);
+        activeJob = null;
+        const again = pendingRequeue.get(job.subsectionId);
+        if (again) {
+          pendingRequeue.delete(job.subsectionId);
+          enqueueJob(job.subsectionId, again);
+        }
+        logQueueProgress("done");
+      }
+    }
+  } finally {
+    draining = false;
+    if (fifo.length) {
+      setImmediate(pump);
+    } else {
+      logQueueProgress("idle");
+    }
+  }
+}
+
+function scheduleProcessSubsection(subsectionId, options = {}) {
+  enqueueJob(subsectionId, options);
+}
+
+async function recoverInterruptedLessonJobs() {
+  const stuck = await CourseSubSection.find({
+    knowledgeStatus: { $in: ["queued", "processing"] },
+  })
+    .select("_id courseId")
+    .lean();
+  if (!stuck.length) return;
+  console.log(
+    `[lesson-queue] recovering ${stuck.length} interrupted subsection job(s)`
+  );
+  for (const doc of stuck) {
+    await CourseSubSection.updateOne(
+      { _id: doc._id },
+      { $set: { knowledgeStatus: "queued", knowledgeStatusReason: "" } }
+    );
+    scheduleProcessSubsection(doc._id, {
+      courseId: String(doc.courseId || ""),
+      transcribe: true,
+      extractImages: true,
+    });
+  }
 }
 
 module.exports = {
   scheduleProcessSubsection,
   processSubsection,
+  getCourseQueueSnapshot,
+  recoverInterruptedLessonJobs,
 };

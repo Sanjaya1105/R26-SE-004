@@ -72,7 +72,7 @@ const courseSubSectionSchema = new mongoose.Schema(
     dedupeStats: { type: Object, default: null },
     knowledgeStatus: {
       type: String,
-      enum: ["processing", "ready", "needs_rebuild", "rebuilding", "failed"],
+      enum: ["queued", "processing", "ready", "needs_rebuild", "rebuilding", "failed"],
       default: "ready",
     },
     knowledgeStatusReason: { type: String, default: "" },

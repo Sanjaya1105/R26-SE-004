@@ -11,6 +11,8 @@ const FILLER = new Set([
   "oh",
   "okay",
   "ok",
+  "alright",
+  "allright",
   "bye",
   "goodbye",
   "thanks",
@@ -44,6 +46,12 @@ const NOISE_EXACT = new Set([
   "bye",
   "bye bye",
   "goodbye",
+  "alright",
+  "all right",
+  "okay",
+  "ok",
+  "okay so",
+  "alright so",
   "music",
   "applause",
   "silence",
@@ -62,6 +70,157 @@ const NOISE_PHRASE_RE = [
   /see you (in the )?next/i,
   /^\[?(music|applause|silence|inaudible|foreign)\]?$/i,
 ];
+
+const CLASSROOM_TALK_RE = [
+  /\bwraps up\b/,
+  /\bwrap(?:ping)? up\b/,
+  /\bthats (it|all|enough) for (today|now|this|the)\b/,
+  /\b(this )?(lesson|lecture|video|class|series) (is )?(over|done|finished)\b/,
+  /\bnice work\b/,
+  /\b(good|great|nice) (job|work|going)\b/,
+  /\bgetting through( all of)? it\b/,
+  /\blets (just )?(move|go|continue|wrap)( on)?\b/,
+  /\bmoving on\b/,
+  /\bnext (slide|one|topic|section|part|video|lesson)\b/,
+  /\bhope (that )?that (was |is )?helpful\b/,
+  /\bhope you (enjoyed|learned)\b/,
+  /\bcatch you (later|next)\b/,
+  /\bsee you (later|next|tomorrow)\b/,
+  /\bdoes that make sense\b/,
+  /\bany questions\b/,
+];
+
+const CLASSROOM_STOP = new Set([
+  ...FILLER,
+  "alright",
+  "allright",
+  "all",
+  "right",
+  "so",
+  "well",
+  "now",
+  "yes",
+  "yep",
+  "hey",
+  "hi",
+  "hello",
+  "nice",
+  "good",
+  "great",
+  "awesome",
+  "job",
+  "work",
+  "going",
+  "go",
+  "getting",
+  "through",
+  "of",
+  "it",
+  "this",
+  "that",
+  "these",
+  "those",
+  "the",
+  "a",
+  "an",
+  "wraps",
+  "wrap",
+  "wrapping",
+  "up",
+  "lesson",
+  "lessons",
+  "series",
+  "video",
+  "videos",
+  "lecture",
+  "lectures",
+  "class",
+  "today",
+  "tonight",
+  "here",
+  "there",
+  "we",
+  "i",
+  "im",
+  "lets",
+  "let",
+  "us",
+  "move",
+  "moving",
+  "on",
+  "next",
+  "slide",
+  "slides",
+  "one",
+  "part",
+  "topic",
+  "section",
+  "chapter",
+  "bit",
+  "thing",
+  "things",
+  "everyone",
+  "folks",
+  "guys",
+  "people",
+  "students",
+  "anyway",
+  "actually",
+  "basically",
+  "really",
+  "just",
+  "continue",
+  "start",
+  "begin",
+  "done",
+  "over",
+  "end",
+  "finish",
+  "finished",
+  "enough",
+  "last",
+  "listening",
+  "joining",
+  "see",
+  "look",
+  "remember",
+  "and",
+  "or",
+  "but",
+  "to",
+  "for",
+  "with",
+  "at",
+  "in",
+  "into",
+  "from",
+  "by",
+  "is",
+  "are",
+  "was",
+  "were",
+  "be",
+  "been",
+  "my",
+  "our",
+  "your",
+  "makes",
+  "make",
+  "sense",
+  "hope",
+  "enjoyed",
+  "enjoy",
+  "helpful",
+  "questions",
+  "question",
+  "any",
+  "catch",
+  "later",
+  "tomorrow",
+  "pause",
+  "wait",
+  "ready",
+]);
 
 function normalize(text) {
   return String(text || "")
@@ -100,6 +259,26 @@ function stripRepeatedFillerRuns(text) {
     .trim();
 }
 
+function hasLessonContent(text, tokens) {
+  const sample = String(text || "");
+  if (/\d/.test(sample)) return true;
+  if (/\$|\\[a-z]+|[=^_]{1,2}/i.test(sample)) return true;
+  return tokens.some(
+    (token) => token.length >= 6 && !CLASSROOM_STOP.has(token)
+  );
+}
+
+function isEmptyClassroomTalk(text, tokens) {
+  const normalized = normalize(text);
+  if (!normalized || !tokens.length) return true;
+  if (hasLessonContent(text, tokens)) return false;
+  if (CLASSROOM_TALK_RE.some((re) => re.test(normalized))) return true;
+  const talkCount = tokens.filter(
+    (token) => CLASSROOM_STOP.has(token) || FILLER.has(token)
+  ).length;
+  return tokens.length <= 14 && talkCount / tokens.length >= 0.75;
+}
+
 function isWhisperNoiseChunk(text) {
   const sample = stripRepeatedFillerRuns(text);
   if (!sample) return true;
@@ -113,6 +292,7 @@ function isWhisperNoiseChunk(text) {
   const tokens = tokensOf(sample);
   if (!tokens.length) return true;
   if (isRepeatedSameWord(tokens)) return true;
+  if (isEmptyClassroomTalk(sample, tokens)) return true;
 
   const unique = new Set(tokens);
   const maxCount = Math.max(

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { getGatewayBaseUrl } from '../config/gateway';
 import { assertClientVideoDuration } from '../utils/videoDuration';
 import ContainsMathCheckbox from '../components/ContainsMathCheckbox';
+import LessonQueueProgress from '../components/LessonQueueProgress';
 import {
   enableTeacherPushNotifications,
   trackProcessingSubsection,
@@ -370,8 +371,8 @@ const UploadNewLesson = () => {
       clearSubFiles();
       setMessage(
         sec?.sectionName
-          ? `Files saved under "${sec.sectionName}". Whisper and MiniLM are running in the background. Allow Chrome notifications to be told when it is ready.`
-          : 'Files saved. Processing is running in the background. Allow Chrome notifications to be told when it is ready.'
+          ? `Files saved under "${sec.sectionName}" and added to the processing queue. Subsections run one at a time. Allow Chrome notifications to be told when each one is ready.`
+          : 'Files saved and queued. Subsections process one at a time in the background. Allow Chrome notifications to be told when each one is ready.'
       );
     } catch (error) {
       if (error.response?.status === 401 || error.response?.status === 403) {
@@ -464,6 +465,7 @@ const UploadNewLesson = () => {
             >
               New Course
             </h2>
+            {savedCourseId ? <LessonQueueProgress courseId={savedCourseId} /> : null}
 
             <div key={formKey}>
               {courseFieldsLocked && (

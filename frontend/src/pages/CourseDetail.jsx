@@ -19,6 +19,7 @@ import {
   summarizeCourseWatch,
 } from '../utils/videoWatchProgress';
 import { CourseWatchRing, MiniWatchRing } from '../components/CourseWatchRing';
+import { isLessonPreparing } from '../utils/lessonStatus';
 import './CourseDetail.css';
 
 function buildGptAskUrls() {
@@ -2295,8 +2296,8 @@ const CourseDetail = () => {
                   }}
                 >
                   {visibleLessonCount
-                    ? 'A new lesson is still processing. It will appear here when it is ready.'
-                    : 'Lessons are still processing. They will appear here when they are ready.'}
+                    ? 'A new lesson is still in the processing queue. It will appear here when it is ready.'
+                    : 'Lessons are still in the processing queue. They will appear here when they are ready.'}
                 </p>
               ) : null}
               {sections.length === 0 ? (
@@ -3454,8 +3455,7 @@ const CourseDetail = () => {
                 >
                   Ask the assistant
                 </p>
-                {mainVideo.knowledgeStatus === 'processing' ||
-                mainVideo.knowledgeStatus === 'rebuilding' ? (
+                {isLessonPreparing(mainVideo.knowledgeStatus) ? (
                   <p
                     style={{
                       margin: '0 0 0.65rem 0',
@@ -3516,8 +3516,7 @@ const CourseDetail = () => {
                       disabled={
                         gptLoading ||
                         !pedagogicalPrompt.trim() ||
-                        mainVideo.knowledgeStatus === 'processing' ||
-                        mainVideo.knowledgeStatus === 'rebuilding'
+                        isLessonPreparing(mainVideo.knowledgeStatus)
                       }
                   style={{ marginTop: '0.5rem', width: '100%', fontSize: '0.85rem' }}
                 >

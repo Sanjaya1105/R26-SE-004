@@ -16,7 +16,11 @@ const { buildUniqueKnowledgeChunk } = require("../services/knowledgeMerge.servic
 const {
   isLessonReadyForStudents,
   isLessonPreparing,
+  PREPARING_STATUSES,
+  STUDENT_HIDDEN_STATUSES,
+  computeEnrollmentOpen,
 } = require("../utils/lessonVisibility");
+const { getCourseQueueSnapshot } = require("../services/processLesson.service");
 
 function parseKeywords(raw) {
   if (!raw || typeof raw !== "string") return [];
@@ -124,7 +128,7 @@ const listPublicCourses = async (req, res) => {
                     {
                       $in: [
                         { $ifNull: ["$knowledgeStatus", "ready"] },
-                        ["processing", "rebuilding", "failed"],
+                        STUDENT_HIDDEN_STATUSES,
                       ],
                     },
                     0,
@@ -138,7 +142,7 @@ const listPublicCourses = async (req, res) => {
                     {
                       $in: [
                         { $ifNull: ["$knowledgeStatus", "ready"] },
-                        ["processing", "rebuilding"],
+                        PREPARING_STATUSES,
                       ],
                     },
                     1,
@@ -166,6 +170,10 @@ const listPublicCourses = async (req, res) => {
         readyLessonCount,
         preparingLessonCount,
         lessonsAvailable: readyLessonCount > 0,
+        enrollmentOpen: computeEnrollmentOpen(
+          readyLessonCount,
+          preparingLessonCount
+        ),
       };
     });
 
@@ -264,6 +272,10 @@ const getPublicCourseDetail = async (req, res) => {
         },
         preparingLessonCount,
         readyLessonCount,
+        enrollmentOpen: computeEnrollmentOpen(
+          readyLessonCount,
+          preparingLessonCount
+        ),
         sections: sections.map((s) => ({
           id: s._id,
           sectionName: s.sectionName,
@@ -554,6 +566,82 @@ const deleteCourse = async (req, res) => {
   }
 };
 
+const getProcessingQueue = async (req, res) => {
+  const { courseId } = req.params;
+  const educatorId = req.user?.id ? String(req.user.id).trim() : "";
+
+  if (!educatorId || !mongoose.Types.ObjectId.isValid(educatorId)) {
+    return res.status(400).json({ message: "Invalid educator session." });
+  }
+  if (!courseId || !mongoose.Types.ObjectId.isValid(courseId)) {
+    return res.status(400).json({ message: "Invalid course id." });
+  }
+
+  try {
+    const course = await Course.findById(courseId)
+      .select("educatorId courseName")
+      .lean();
+    if (!course) {
+      return res.status(404).json({ message: "Course not found." });
+    }
+    if (String(course.educatorId) !== educatorId) {
+      return res.status(403).json({
+        message: "You can only view the processing queue for your own courses.",
+      });
+    }
+
+    const cid = course._id;
+    const [preparingLessonCount, readyLessonCount] = await Promise.all([
+      CourseSubSection.countDocuments({
+        courseId: cid,
+        knowledgeStatus: { $in: PREPARING_STATUSES },
+      }),
+      CourseSubSection.countDocuments({
+        courseId: cid,
+        knowledgeStatus: { $nin: STUDENT_HIDDEN_STATUSES },
+      }),
+    ]);
+    const snapshot = getCourseQueueSnapshot(String(cid));
+    const pendingCount = Math.max(
+      Number(snapshot.pendingCount) || 0,
+      Number(preparingLessonCount) || 0
+    );
+    const completedCount = Number(snapshot.completedCount) || 0;
+    const totalCount = Math.max(
+      Number(snapshot.totalCount) || 0,
+      completedCount + pendingCount
+    );
+    const percent =
+      pendingCount === 0 && (totalCount > 0 || preparingLessonCount === 0)
+        ? 100
+        : totalCount <= 0
+          ? 0
+          : Math.round((Math.min(completedCount, totalCount) / totalCount) * 100);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        courseId: cid,
+        courseName: course.courseName || "",
+        ...snapshot,
+        pendingCount,
+        completedCount,
+        totalCount,
+        percent,
+        preparingLessonCount,
+        readyLessonCount,
+        enrollmentOpen: computeEnrollmentOpen(
+          readyLessonCount,
+          preparingLessonCount
+        ),
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Failed to load processing queue." });
+  }
+};
+
 module.exports = {
   createCourse,
   listPublicCourses,
@@ -561,6 +649,7 @@ module.exports = {
   downloadPublicSubsectionFile,
   listMyCourses,
   getCourseForEdit,
+  getProcessingQueue,
   updateCourse,
   deleteCourse,
 };

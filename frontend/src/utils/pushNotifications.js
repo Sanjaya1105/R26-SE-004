@@ -126,7 +126,7 @@ export function startProcessingStatusPoller() {
             { headers: { Authorization: `Bearer ${token}` } }
           );
           const status = res.data?.data?.knowledgeStatus || 'processing';
-          if (status === 'processing' || status === 'rebuilding') {
+          if (status === 'queued' || status === 'processing' || status === 'rebuilding') {
             remaining.push(item);
             return;
           }

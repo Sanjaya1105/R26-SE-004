@@ -9,6 +9,7 @@ const {
   downloadPublicSubsectionFile,
   listMyCourses,
   getCourseForEdit,
+  getProcessingQueue,
   updateCourse,
   deleteCourse,
 } = require("../controllers/course.controller");
@@ -82,6 +83,13 @@ router.get(
   ensureGatewayAccess,
   verifyTeacherJwt,
   getCourseForEdit
+);
+
+router.get(
+  "/courses/:courseId/processing-queue",
+  ensureGatewayAccess,
+  verifyTeacherJwt,
+  getProcessingQueue
 );
 
 router.patch(
