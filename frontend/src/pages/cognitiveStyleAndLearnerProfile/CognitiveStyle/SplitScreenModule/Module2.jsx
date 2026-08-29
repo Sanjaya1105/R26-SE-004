@@ -16,6 +16,39 @@ function Module2() {
   const gazeTrackerRef = useRef(null);
   const cursorTrackerRef = useRef(null);
 
+  const userPayload = useMemo(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return null;
+
+    try {
+      return JSON.parse(atob(token.split(".")[1]));
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const sendBackgroundData = (userId) => {
+    // 1. Safety check: Don't make the call if we don't have an ID
+    if (!userId) {
+      console.warn("No user ID found, skipping background API call.");
+      return;
+    }
+
+    // Notice there is no 'await' here. This ensures it runs in the background.
+    fetch(`http://localhost:4000/cognitive-style/predict/save/${userId}`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      }
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error("Network response was not ok");
+        return response.json();
+      })
+      .then((data) => console.log("Background API Success:", data))
+      .catch((error) => console.error("Background API Error:", error));
+  };
+
   const handleFinishModule = async () => {
     // Manually trigger gaze data submission before leaving
     if (gazeTrackerRef.current) {
@@ -24,7 +57,8 @@ function Module2() {
     if (cursorTrackerRef.current) {
       await cursorTrackerRef.current.submitCursorData();
     }
-    navigate("/visualverbalquestionnaire");
+    sendBackgroundData(userPayload?.id);
+    navigate("/ahs-questionnaire");
   };
 
   const cardStyle = {
