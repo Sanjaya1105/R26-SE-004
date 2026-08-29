@@ -57,6 +57,18 @@ function matchesSearch(course, query) {
   return name.includes(q) || educator.includes(q);
 }
 
+function courseAllowsEnrollment(course) {
+  const preparing = Number(course?.preparingLessonCount || 0);
+  if (preparing > 0) return false;
+  if (typeof course?.enrollmentOpen === 'boolean') {
+    return course.enrollmentOpen;
+  }
+  if (course?.readyLessonCount != null && course?.readyLessonCount !== '') {
+    return Number(course.readyLessonCount) > 0;
+  }
+  return true;
+}
+
 function CourseThumb({ url, name, play = false, square = false }) {
   return (
     <div className={`course-thumb${square ? ' is-square' : ''}`}>
@@ -331,12 +343,7 @@ const Course = () => {
 
     const courseId = String(course.id);
     if (enrolledIds.has(courseId) || enrollingId === courseId) return;
-    const enrollmentOpen =
-      typeof course.enrollmentOpen === 'boolean'
-        ? course.enrollmentOpen
-        : Number(course.preparingLessonCount || 0) === 0 &&
-          Number(course.readyLessonCount || 0) > 0;
-    if (!enrollmentOpen) {
+    if (!courseAllowsEnrollment(course)) {
       setActionMessage(
         Number(course.preparingLessonCount || 0) > 0
           ? 'This course is still processing uploaded subsections. You can enroll when the queue is complete.'
@@ -448,10 +455,10 @@ const Course = () => {
     const isFavorite = favoriteIds.has(courseId);
     const isEnrolling = enrollingId === courseId;
     const lessonsPreparing = Number(c.preparingLessonCount || 0) > 0;
-    const canEnroll =
-      typeof c.enrollmentOpen === 'boolean'
-        ? c.enrollmentOpen
-        : !lessonsPreparing && Number(c.readyLessonCount || 0) > 0;
+    const canEnroll = courseAllowsEnrollment(c);
+    const enrollHint = lessonsPreparing
+      ? 'Enrollment opens when every subsection has finished processing.'
+      : 'This course has no published lessons yet.';
     const progress = watchByCourse[courseId];
     const percent = Number(progress?.percent) || 0;
 
@@ -508,6 +515,13 @@ const Course = () => {
               type="button"
               className="btn btn-primary"
               disabled={isEnrolled || isEnrolling || !canEnroll}
+              title={
+                isEnrolled
+                  ? 'You are already enrolled'
+                  : !canEnroll
+                    ? enrollHint
+                    : 'Enroll in this course'
+              }
               onClick={(event) => handleEnroll(event, c)}
               style={{
                 opacity: isEnrolled || !canEnroll ? 0.85 : 1,
@@ -524,6 +538,9 @@ const Course = () => {
                       ? 'Enroll now'
                       : 'Not ready yet'}
             </button>
+            {!isEnrolled && !canEnroll ? (
+              <p className="course-card__cta-hint">{enrollHint}</p>
+            ) : null}
           </div>
         ) : null}
       </article>
