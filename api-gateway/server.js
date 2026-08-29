@@ -16,7 +16,7 @@ const DEEPSEEK_SERVICE_URL =
 const RESOURCE_UPLOAD_URL =
   process.env.RESOURCE_UPLOAD_URL || "http://localhost:5000";
 const GATEWAY_SHARED_SECRET =
-  process.env.GATEWAY_SHARED_SECRET || "gateway_secret_change_me";
+  process.env.GATEWAY_SHARED_SECRET || "resource_gateway_secret_2026";
 const EXPLAINABLE_AI_BACKEND_URL =
   process.env.EXPLAINABLE_AI_BACKEND_URL || "http://localhost:8000";
 const LIME_AI_SERVICE_URL =
