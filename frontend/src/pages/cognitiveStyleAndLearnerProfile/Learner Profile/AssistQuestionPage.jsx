@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import GlobalProgressBar from "../../../components/GlobalProgressBar";
 
 // These are the exact 18 items from the short ASSIST scale
 const questions = [
@@ -128,13 +129,29 @@ export default function AssistQuestionPage() {
         padding: "3rem 1.5rem",
         background: "radial-gradient(1200px 480px at 80% -10%, rgba(139, 92, 246, 0.1), transparent 55%), radial-gradient(900px 420px at 0% 100%, rgba(59, 130, 246, 0.08), transparent 50%), #f8fafc",
         display: "flex",
-        justifyContent: "center",
-        alignItems: "flex-start",
+        flexDirection: "column",
+        justifyContent: "flex-start",
+        alignItems: "center",
         boxSizing: "border-box",
         fontFamily: "'Inter', sans-serif",
         color: "#334155",
       }}
     >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "840px",
+          padding: "2rem 2rem 0.5rem 2rem",
+          background: "#ffffff",
+          border: "1px solid rgba(0, 0, 0, 0.05)",
+          borderRadius: "16px",
+          boxShadow: "0 10px 30px -20px rgba(148, 163, 184, 0.3)",
+          marginBottom: "2rem",
+        }}
+      >
+        <GlobalProgressBar currentStep={1} />
+      </div>
+
       <div
         style={{
           width: "100%",

@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import GlobalProgressBar from "../../../../../components/GlobalProgressBar";
 
 // Complete 24-item AHS Questions
 const AHS_QUESTIONS = [
@@ -13,14 +14,14 @@ const AHS_QUESTIONS = [
   { id: 8, text: "When disagreement exists among people, they should search for ways to compromise and embrace everyone's opinions." },
   { id: 9, text: "It is more important to find a point of compromise than to debate who is right/wrong, when one's opinions conflict with other's opinions." },
   { id: 10, text: "It is desirable to be in harmony, rather than in discord, with others of different opinions than one's own." },
-  { id: 11, text: "Choosing a middle ground in an argument should be avoided." }, 
+  { id: 11, text: "Choosing a middle ground in an argument should be avoided." },
   { id: 12, text: "We should avoid going to extremes." },
-  { id: 13, text: "Every phenomenon in the world moves in predictable directions." }, 
-  { id: 14, text: "A person who is currently living a successful life will continue to stay successful." }, 
-  { id: 15, text: "An individual who is currently honest will stay honest in the future." }, 
-  { id: 16, text: "If an event is moving toward a certain direction, it will continue to move toward that direction." }, 
+  { id: 13, text: "Every phenomenon in the world moves in predictable directions." },
+  { id: 14, text: "A person who is currently living a successful life will continue to stay successful." },
+  { id: 15, text: "An individual who is currently honest will stay honest in the future." },
+  { id: 16, text: "If an event is moving toward a certain direction, it will continue to move toward that direction." },
   { id: 17, text: "Current situations can change at any time." },
-  { id: 18, text: "Future events are predictable based on present situations." }, 
+  { id: 18, text: "Future events are predictable based on present situations." },
   { id: 19, text: "The whole, rather than its parts, should be considered in order to understand a phenomenon." },
   { id: 20, text: "It is more important to pay attention to the whole than its parts." },
   { id: 21, text: "The whole is greater than the sum of its parts." },
@@ -32,7 +33,7 @@ const AHS_QUESTIONS = [
 const scaleOptions = [1, 2, 3, 4, 5, 6, 7];
 
 export default function AHSQuestionnaire() {
-  const BACKEND_URL = "http://localhost:4000/cognitive-style/anaylticwholistic/ahsquestionnaire"; 
+  const BACKEND_URL = "http://localhost:4000/cognitive-style/anaylticwholistic/ahsquestionnaire";
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -52,7 +53,7 @@ export default function AHSQuestionnaire() {
 
   // Initialize all answers as empty strings
   const initialAnswers = Object.fromEntries(AHS_QUESTIONS.map((_, index) => [index, ""]));
-  
+
   const [answers, setAnswers] = useState(initialAnswers);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -62,7 +63,7 @@ export default function AHSQuestionnaire() {
 
   const questionsPerPage = 12;
   const currentQuestions = AHS_QUESTIONS.slice(currentPage * questionsPerPage, (currentPage + 1) * questionsPerPage);
-  
+
   const isCurrentPageComplete = currentQuestions.every((q) => {
     const actualIndex = AHS_QUESTIONS.findIndex((aq) => aq.id === q.id);
     return answers[actualIndex] !== "";
@@ -74,9 +75,9 @@ export default function AHSQuestionnaire() {
   const handleChange = (questionIndex, value) => {
     setAnswers((prev) => {
       const newAnswers = { ...prev, [questionIndex]: Number(value) };
-      
+
       const nextUnanswered = AHS_QUESTIONS.findIndex((_, idx) => newAnswers[idx] === "");
-      
+
       if (nextUnanswered !== -1 && questionRefs.current[nextUnanswered]) {
         setTimeout(() => {
           questionRefs.current[nextUnanswered]?.scrollIntoView({
@@ -85,7 +86,7 @@ export default function AHSQuestionnaire() {
           });
         }, 400);
       }
-      
+
       return newAnswers;
     });
   };
@@ -107,15 +108,15 @@ export default function AHSQuestionnaire() {
     const payload = {
       userId: userPayload?.id || "fallback-id",
       answers: Object.keys(answers).map(key => ({
-          questionId: AHS_QUESTIONS[key].id,
-          rawScore: answers[key]
+        questionId: AHS_QUESTIONS[key].id,
+        rawScore: answers[key]
       })),
-      visualTaskData: visualTaskData 
+      visualTaskData: visualTaskData
     };
 
     try {
       setLoading(true);
-      
+
       if (BACKEND_URL) {
         await fetch(BACKEND_URL, {
           method: "POST",
@@ -149,13 +150,29 @@ export default function AHSQuestionnaire() {
         padding: "3rem 1.5rem",
         background: "radial-gradient(1200px 480px at 80% -10%, rgba(139, 92, 246, 0.1), transparent 55%), radial-gradient(900px 420px at 0% 100%, rgba(59, 130, 246, 0.08), transparent 50%), #f8fafc",
         display: "flex",
-        justifyContent: "center",
-        alignItems: "flex-start",
+        flexDirection: "column",
+        justifyContent: "flex-start",
+        alignItems: "center",
         boxSizing: "border-box",
         fontFamily: "'Inter', sans-serif",
         color: "#334155",
       }}
     >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "840px",
+          padding: "2rem 2rem 0.5rem 2rem",
+          background: "#ffffff",
+          border: "1px solid rgba(0, 0, 0, 0.05)",
+          borderRadius: "16px",
+          boxShadow: "0 10px 30px -20px rgba(148, 163, 184, 0.3)",
+          marginBottom: "2rem",
+        }}
+      >
+        <GlobalProgressBar currentStep={3} />
+      </div>
+
       <div
         style={{
           width: "100%",
@@ -260,7 +277,7 @@ export default function AHSQuestionnaire() {
                     gap: "0.75rem"
                   }}
                 >
-                  <span style={{ color: "#7c3aed", fontWeight: 700 }}>{actualIndex + 1}.</span> 
+                  <span style={{ color: "#7c3aed", fontWeight: 700 }}>{actualIndex + 1}.</span>
                   {q.text}
                 </p>
 
