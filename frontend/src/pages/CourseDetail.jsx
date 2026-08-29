@@ -2,11 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { getGatewayBaseUrl } from '../config/gateway';
-import AssistantMarkdown from '../components/AssistantMarkdown';
+import PaginatedAssistantContent from '../components/PaginatedAssistantContent';
 import LearningStateIndicator from '../components/LearningStateIndicator';
 import { fetchLoadTrend } from '../cognitiveLoad/apiClient';
 import { selectBestOutputLocally } from '../utils/selectBestOutputLocal';
 import { parseCanonicalEquations } from '../utils/assistantMath';
+import {
+  COGNITIVE_LOAD_PERSONALIZATION_MESSAGE,
+  enableWatchNotifications,
+  showHighLoadPersonalizationNotification,
+} from '../utils/pushNotifications';
 import {
   addPlaybackInterval,
   coveredSeconds,
@@ -63,17 +68,23 @@ function buildGptPromptUrls() {
 }
 
 const PLAYBACK_PROMPT_COPY = {
-  mid: {
-    title: 'Lesson suggestion',
-    body: 'Do you need any suggestion?',
+  highLoad: {
+    title: 'Personalization',
+    body: 'Do you need any personalization for this lesson?',
     extraInstruction:
-      'The student is halfway through the lesson video and asked for a suggestion. Adapt the knowledge chunk again for this student.',
+      'The student asked for personalization for this lesson. Use the exact knowledge chunk. Match the visual-verbal and analytic-holistic styles from the student profile. Use the predicted cognitive load and the matching frustration level. Do not invent facts.',
   },
-  end: {
-    title: 'Lesson suggestion',
-    body: 'Do you need any suggestion in another way?',
+  shortEnd: {
+    title: 'Personalization',
+    body: 'Do you need any personalization for this lesson?',
     extraInstruction:
-      'The student finished the lesson video and asked for a suggestion in another way. Explain the same knowledge chunk using a different method than a first pass, such as a worked example, analogy, or step-by-step recap.',
+      'The student asked for personalization after a short lesson video. Use the exact knowledge chunk. Cognitive load is High and frustration is High. Do not use a measured cognitive style. Do not invent facts.',
+  },
+  longEnd: {
+    title: 'Personalization',
+    body: 'Do you need any personalization for this lesson?',
+    extraInstruction:
+      'The student asked for personalization at the end of this lesson. Use the exact knowledge chunk. Match the visual-verbal and analytic-holistic styles from the student profile. Use the latest predicted cognitive load and the matching frustration level. Do not invent facts.',
   },
 };
 
@@ -144,6 +155,44 @@ function subsectionDownloadUrl(courseId, subsectionId, kind) {
   return `${getGatewayBaseUrl()}/api/public/courses/${encodeURIComponent(
     courseId
   )}/subsections/${encodeURIComponent(subsectionId)}/${kind}`;
+}
+
+async function downloadSubsectionFile(event, url, fileName) {
+  event.preventDefault();
+  const fallbackName = fileName || 'download';
+  try {
+    const response = await fetch(url, { credentials: 'include' });
+    const contentType = String(response.headers.get('content-type') || '');
+    if (!response.ok) {
+      let message = `Download failed (${response.status})`;
+      if (contentType.includes('application/json')) {
+        const body = await response.json().catch(() => null);
+        if (body?.message) message = body.message;
+      }
+      throw new Error(message);
+    }
+    if (
+      contentType.includes('application/json') ||
+      contentType.includes('text/html')
+    ) {
+      throw new Error('The server did not return the original file.');
+    }
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = fallbackName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+  } catch (error) {
+    if (error instanceof TypeError) {
+      window.location.assign(url);
+      return;
+    }
+    window.alert(error.message || 'Could not download the file.');
+  }
 }
 
 function collectSubsectionImages(sub) {
@@ -342,6 +391,31 @@ function logOutputSelectionReasoning(data, { loadLevel, sourceChars } = {}) {
 
 const ABOUT_PREVIEW_WORDS = 20;
 const COGNITIVE_LOAD_WINDOW_MS = 120000;
+const PERSONALIZATION_VIDEO_SECONDS = 120;
+
+function isShortLessonVideo(duration) {
+  return Number.isFinite(duration) && duration > 0 && duration < PERSONALIZATION_VIDEO_SECONDS;
+}
+
+function normalizeLoadLevel(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw || raw === 'Unknown' || raw === 'Waiting for activity') return '';
+  const key = raw.toLowerCase().replace(/[_-]+/g, ' ');
+  const map = {
+    'very low': 'Very Low',
+    low: 'Low',
+    medium: 'Medium',
+    moderate: 'Medium',
+    high: 'High',
+    'very high': 'Very High',
+  };
+  return map[key] || '';
+}
+
+function isHighCognitiveLoad(level) {
+  return level === 'High' || level === 'Very High';
+}
+
 const SEEK_JUMP_THRESHOLD_SECONDS = 2;
 const SEEK_EVENT_DEBOUNCE_MS = 900;
 const TRACKED_VIDEO_OWNER_TTL_MS = 6000;
@@ -804,7 +878,6 @@ const CourseDetail = () => {
   const [visualVerbalStyle, setVisualVerbalStyle] = useState('Visual');
   const [analyticHolisticStyle, setAnalyticHolisticStyle] = useState('Analytic');
   const [loadLevel, setLoadLevel] = useState('Medium');
-  const [frustration, setFrustration] = useState('Low');
   const [profileOpen, setProfileOpen] = useState(false);
   const [cognitiveLoadOpen, setCognitiveLoadOpen] = useState(false);
   const [predictionFeaturesOpen, setPredictionFeaturesOpen] = useState(false);
@@ -822,8 +895,18 @@ const CourseDetail = () => {
   const videoRef = useRef(null);
   const askPanelRef = useRef(null);
   const playbackPromptRef = useRef(null);
-  const midpointPromptShownRef = useRef(false);
   const endPromptShownRef = useRef(false);
+  const shortVideoEndNotifiedRef = useRef(false);
+  const longVideoEndNotifiedRef = useRef(false);
+  const latestPredictedLoadRef = useRef('');
+  const promptFrustrationOverrideRef = useRef('');
+  const pedagogicalPromptRef = useRef('');
+  const loadLevelRef = useRef('Medium');
+  const promptLoadingRef = useRef(false);
+  const highLoadLevelRef = useRef('High');
+  const twoMinuteNotifyDoneRef = useRef(false);
+  const personalizationAskInFlightRef = useRef(false);
+  const startHighLoadPersonalizationRef = useRef(async () => {});
   const sessionStartRef = useRef(null);
   const lastVideoTimeRef = useRef(0);
   const seekStartTimeRef = useRef(0);
@@ -934,8 +1017,13 @@ const CourseDetail = () => {
     setPromptError('');
     setPlaybackPrompt(null);
     playbackPromptRef.current = null;
-    midpointPromptShownRef.current = false;
     endPromptShownRef.current = false;
+    shortVideoEndNotifiedRef.current = false;
+    longVideoEndNotifiedRef.current = false;
+    latestPredictedLoadRef.current = '';
+    promptFrustrationOverrideRef.current = '';
+    twoMinuteNotifyDoneRef.current = false;
+    setLoadLevel('Medium');
     setCognitiveLoadResult(null);
     setCognitiveLoadError('');
     setCognitiveLoadLoading(false);
@@ -962,8 +1050,13 @@ const CourseDetail = () => {
     setPromptError('');
     setPlaybackPrompt(null);
     playbackPromptRef.current = null;
-    midpointPromptShownRef.current = false;
     endPromptShownRef.current = false;
+    shortVideoEndNotifiedRef.current = false;
+    longVideoEndNotifiedRef.current = false;
+    latestPredictedLoadRef.current = '';
+    promptFrustrationOverrideRef.current = '';
+    twoMinuteNotifyDoneRef.current = false;
+    setLoadLevel('Medium');
     setCourseTrackingDisabled(false);
   }, [mainVideo?.url]);
 
@@ -1056,6 +1149,10 @@ const CourseDetail = () => {
     lastNavigationCommitTimeRef.current = 0;
     lastPredictedWindowKeyRef.current = '';
     predictionInFlightWindowKeyRef.current = '';
+    twoMinuteNotifyDoneRef.current = false;
+    longVideoEndNotifiedRef.current = false;
+    latestPredictedLoadRef.current = '';
+    promptFrustrationOverrideRef.current = '';
     activeRawEventWindowKeyRef.current = getActiveWindowKey(startedAt, sessionId);
     resetActiveWindowStats(activeRawEventWindowKeyRef.current);
 
@@ -1074,6 +1171,34 @@ const CourseDetail = () => {
       }
     };
   }, [courseId, mainVideo?.lessonId, mainVideo?.subsectionId, mainVideo?.url]);
+
+  const offerPersonalizationAfterLoadPrediction = async (predictedLoad) => {
+    if (predictedLoad) {
+      latestPredictedLoadRef.current = predictedLoad;
+      highLoadLevelRef.current = predictedLoad;
+      promptFrustrationOverrideRef.current = '';
+    }
+    if (twoMinuteNotifyDoneRef.current) return;
+    const duration = Number(videoRef.current?.duration || 0);
+    if (isShortLessonVideo(duration)) {
+      twoMinuteNotifyDoneRef.current = true;
+      return;
+    }
+    if (!predictedLoad) return;
+
+    twoMinuteNotifyDoneRef.current = true;
+    if (!isHighCognitiveLoad(predictedLoad)) return;
+
+    playbackPromptRef.current = 'highLoad';
+    setPlaybackPrompt('highLoad');
+    void showHighLoadPersonalizationNotification({
+      courseId,
+      subsectionId: mainVideo?.subsectionId,
+      loadLevel: predictedLoad,
+      kind: 'highLoad',
+      url: window.location.href,
+    });
+  };
 
   const runCognitiveLoadPredictionForCompletedWindow = async () => {
     if (
@@ -1148,6 +1273,18 @@ const CourseDetail = () => {
       );
       setCognitiveLoadResult(res.data);
       const nextPrediction = res.data?.prediction || res.data;
+      const predictedLoad = normalizeLoadLevel(
+        nextPrediction?.prediction_status === 'not_reliable'
+          ? ''
+          : nextPrediction?.predicted_cognitive_load ??
+              nextPrediction?.predicted_label ??
+              res.data?.predicted_cognitive_load ??
+              res.data?.predicted_label
+      );
+      if (predictedLoad) {
+        setLoadLevel(predictedLoad);
+      }
+      void offerPersonalizationAfterLoadPrediction(predictedLoad);
       if (nextPrediction?.prediction_status === 'not_reliable') {
         setLoadTrendAnalysis((previous) =>
           appendSkippedTrendWindow(previous, res.data)
@@ -1456,6 +1593,7 @@ const CourseDetail = () => {
     closePauseTimerForActiveWindow();
     lastPlaybackMarkRef.current = Number(videoRef.current?.currentTime || 0);
     markInteraction();
+    enableWatchNotifications();
   };
 
   const handleVideoSeeking = () => {
@@ -1509,15 +1647,48 @@ const CourseDetail = () => {
     }, 0);
   };
 
-  const openPlaybackPersonalizationPrompt = (kind) => {
-    if (kind !== 'mid' && kind !== 'end') return;
-    if (kind === 'mid' && midpointPromptShownRef.current) return;
-    if (kind === 'end' && endPromptShownRef.current) return;
-    if (kind === 'mid' && playbackPromptRef.current) return;
-    if (kind === 'mid') midpointPromptShownRef.current = true;
-    if (kind === 'end') endPromptShownRef.current = true;
-    playbackPromptRef.current = kind;
-    setPlaybackPrompt(kind);
+  const offerShortVideoEndPersonalization = () => {
+    if (shortVideoEndNotifiedRef.current) return;
+    const duration = Number(videoRef.current?.duration || 0);
+    if (!isShortLessonVideo(duration)) return;
+
+    shortVideoEndNotifiedRef.current = true;
+    highLoadLevelRef.current = 'High';
+    playbackPromptRef.current = 'shortEnd';
+    setPlaybackPrompt('shortEnd');
+    void showHighLoadPersonalizationNotification({
+      courseId,
+      subsectionId: mainVideo?.subsectionId,
+      loadLevel: 'High',
+      kind: 'shortEnd',
+      body: 'Do you need any personalization for this lesson?',
+      url: window.location.href,
+    });
+  };
+
+  const offerLongVideoEndPersonalization = () => {
+    if (longVideoEndNotifiedRef.current) return;
+    const duration = Number(videoRef.current?.duration || 0);
+    if (!Number.isFinite(duration) || duration <= 0) return;
+    if (isShortLessonVideo(duration)) return;
+
+    const lastLoad =
+      latestPredictedLoadRef.current ||
+      normalizeLoadLevel(loadLevelRef.current) ||
+      'Medium';
+
+    longVideoEndNotifiedRef.current = true;
+    highLoadLevelRef.current = lastLoad;
+    playbackPromptRef.current = 'longEnd';
+    setPlaybackPrompt('longEnd');
+    void showHighLoadPersonalizationNotification({
+      courseId,
+      subsectionId: mainVideo?.subsectionId,
+      loadLevel: lastLoad,
+      kind: 'longEnd',
+      body: 'Do you need any personalization for this lesson?',
+      url: window.location.href,
+    });
   };
 
   const dismissPlaybackPersonalizationPrompt = () => {
@@ -1573,17 +1744,24 @@ const CourseDetail = () => {
     if (!Number.isFinite(duration) || duration <= 0) {
       return;
     }
-    if (currentTime >= duration - 0.35) {
-      openPlaybackPersonalizationPrompt('end');
+    if (isShortLessonVideo(duration)) {
+      twoMinuteNotifyDoneRef.current = true;
+      if (currentTime >= duration - 0.35) {
+        offerShortVideoEndPersonalization();
+      }
       return;
     }
-    if (duration >= 8 && currentTime >= duration * 0.5) {
-      openPlaybackPersonalizationPrompt('mid');
+    if (currentTime >= duration - 0.35) {
+      offerLongVideoEndPersonalization();
     }
   };
 
   const handleVideoLoadedMetadata = () => {
-    rememberVideoDuration(Number(videoRef.current?.duration || 0));
+    const duration = Number(videoRef.current?.duration || 0);
+    rememberVideoDuration(duration);
+    if (isShortLessonVideo(duration)) {
+      twoMinuteNotifyDoneRef.current = true;
+    }
   };
 
   const handleVideoEnded = () => {
@@ -1595,7 +1773,11 @@ const CourseDetail = () => {
       recordWatchRange(Math.max(0, currentTime - 0.5), currentTime, currentTime);
     }
     flushCurrentWatch();
-    openPlaybackPersonalizationPrompt('end');
+    if (isShortLessonVideo(duration)) {
+      offerShortVideoEndPersonalization();
+    } else {
+      offerLongVideoEndPersonalization();
+    }
     markInteraction();
   };
 
@@ -1750,7 +1932,12 @@ const CourseDetail = () => {
         },
         visualVerbalCognitiveStyle: visualVerbalStyle,
         analyticWholisticCognitiveStyle: analyticHolisticStyle,
-        cognitiveLoad: { level: loadLevel, frustration },
+        cognitiveLoad: {
+          level: loadLevel,
+          ...(promptFrustrationOverrideRef.current
+            ? { frustration: promptFrustrationOverrideRef.current }
+            : {}),
+        },
       };
 
       const urls = buildGptPromptUrls();
@@ -1801,8 +1988,46 @@ const CourseDetail = () => {
     visualVerbalStyle,
     analyticHolisticStyle,
     loadLevel,
-    frustration,
   ]);
+
+  useEffect(() => {
+    pedagogicalPromptRef.current = pedagogicalPrompt;
+  }, [pedagogicalPrompt]);
+
+  useEffect(() => {
+    loadLevelRef.current = loadLevel;
+  }, [loadLevel]);
+
+  useEffect(() => {
+    promptLoadingRef.current = promptLoading;
+  }, [promptLoading]);
+
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+      return undefined;
+    }
+    const onMessage = (event) => {
+      const data = event.data;
+      if (data?.type !== COGNITIVE_LOAD_PERSONALIZATION_MESSAGE) return;
+      if (data.action === 'no') return;
+      if (data.courseId && String(data.courseId) !== String(courseId)) return;
+      if (
+        data.subsectionId &&
+        mainVideo?.subsectionId &&
+        String(data.subsectionId) !== String(mainVideo.subsectionId)
+      ) {
+        return;
+      }
+      startHighLoadPersonalizationRef.current({
+        kind: data.kind,
+        loadLevel: data.loadLevel,
+      });
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => {
+      navigator.serviceWorker.removeEventListener('message', onMessage);
+    };
+  }, [courseId, mainVideo?.subsectionId]);
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 860px)');
@@ -2059,7 +2284,7 @@ const CourseDetail = () => {
       return;
     }
 
-    const prompt = pedagogicalPrompt.trim();
+    const prompt = (pedagogicalPromptRef.current || pedagogicalPrompt).trim();
     const studentQuestion = gptQuestion.trim();
     const extra =
       typeof extraInstruction === 'string' ? extraInstruction.trim() : '';
@@ -2074,7 +2299,7 @@ const CourseDetail = () => {
     const authHeaders = { Authorization: `Bearer ${token}` };
     const sourceContent = String(mainVideo?.knowledgeChunk || '').slice(0, 12000);
 
-    const postWithFallback = async (urls, body) => {
+    const postWithFallback = async (urls, body, retryStatuses = [404]) => {
       let lastErr;
       for (const url of urls) {
         try {
@@ -2085,8 +2310,14 @@ const CourseDetail = () => {
           return res;
         } catch (e) {
           lastErr = e;
-          if (e.response?.status === 404) continue;
-          if (!e.response && e.code === 'ERR_NETWORK') continue;
+          const status = e.response?.status;
+          if (retryStatuses.includes(status)) continue;
+          if (
+            !e.response &&
+            (e.code === 'ERR_NETWORK' || e.code === 'ECONNABORTED')
+          ) {
+            continue;
+          }
           throw e;
         }
       }
@@ -2101,7 +2332,7 @@ const CourseDetail = () => {
         postWithFallback(buildDeepseekChatUrls(), {
           message: q,
           history: [],
-        }),
+        }, [404, 502, 503, 504]),
       ]);
 
       let hfText = '';
@@ -2137,7 +2368,8 @@ const CourseDetail = () => {
       }
 
       if (deepseekResult.status === 'fulfilled') {
-        dsText = String(deepseekResult.value.data?.data?.answer || '').trim();
+        const dsPayload = deepseekResult.value.data?.data || deepseekResult.value.data || {};
+        dsText = String(dsPayload.answer || dsPayload.converted || '').trim();
         setDeepseekAnswer(dsText);
         if (!dsText) {
           setDeepseekError('DeepSeek returned an empty answer.');
@@ -2159,19 +2391,21 @@ const CourseDetail = () => {
         return;
       }
 
+      setShowBothOutputs(true);
+
       // Cross-check both outputs against original source; pick less-hallucinated / better-fit text.
       try {
         const selectRes = await postWithFallback(buildSelectBestUrls(), {
           sourceContent,
           gptOutput: hfText,
           deepseekOutput: dsText,
-          cognitiveLoadLevel: loadLevel,
+          cognitiveLoadLevel: loadLevelRef.current || loadLevel,
         });
         const data = selectRes.data?.data;
         setSelectedAnswer(String(data?.selectedText || '').trim());
         setSelectionMeta(data || null);
         logOutputSelectionReasoning(data, {
-          loadLevel,
+          loadLevel: loadLevelRef.current || loadLevel,
           sourceChars: sourceContent.length,
         });
       } catch (selectErr) {
@@ -2183,7 +2417,7 @@ const CourseDetail = () => {
           sourceContent,
           gptOutput: hfText,
           deepseekOutput: dsText,
-          cognitiveLoadLevel: loadLevel,
+          cognitiveLoadLevel: loadLevelRef.current || loadLevel,
         });
         if (!local.success) {
           setSelectionError(local.message || 'Could not select best output.');
@@ -2193,7 +2427,7 @@ const CourseDetail = () => {
         setSelectionMeta(local);
         setSelectionError('');
         logOutputSelectionReasoning(local, {
-          loadLevel,
+          loadLevel: loadLevelRef.current || loadLevel,
           sourceChars: sourceContent.length,
         });
         console.warn(
@@ -2214,6 +2448,168 @@ const CourseDetail = () => {
       );
     } finally {
       setGptLoading(false);
+    }
+  };
+
+  const startForcedHighPersonalization = async () => {
+    if (personalizationAskInFlightRef.current) return;
+    personalizationAskInFlightRef.current = true;
+    try {
+      dismissPlaybackPersonalizationPrompt();
+      setLoadLevel('High');
+      highLoadLevelRef.current = 'High';
+      setPromptBarOpen(true);
+      askPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      const body = {
+        courseName: course?.courseName || '',
+        subsectionTitle: mainVideo?.title || '',
+        knowledgeChunk: mainVideo?.knowledgeChunk || '',
+        containsMath: Boolean(mainVideo?.containsMath),
+        studentProfile: {
+          year: studentYear,
+        },
+        cognitiveLoad: { level: 'High' },
+      };
+      let promptText = '';
+      let lastErr;
+      for (const url of buildGptPromptUrls()) {
+        try {
+          const res = await axios.post(url, body);
+          promptText = String(res.data?.data?.prompt || '').trim();
+          lastErr = null;
+          break;
+        } catch (e) {
+          lastErr = e;
+          if (e.response?.status === 404) continue;
+          if (!e.response && e.code === 'ERR_NETWORK') continue;
+          throw e;
+        }
+      }
+      if (!promptText && lastErr) throw lastErr;
+      if (promptText) {
+        pedagogicalPromptRef.current = promptText;
+        setPedagogicalPrompt(promptText);
+      }
+
+      await askCourseGpt(PLAYBACK_PROMPT_COPY.shortEnd.extraInstruction);
+    } catch (err) {
+      setGptError(
+        [err.response?.data?.message, err.response?.data?.detail, err.message]
+          .filter(Boolean)
+          .join('\n\n') || 'Could not start short-lesson personalization.'
+      );
+    } finally {
+      personalizationAskInFlightRef.current = false;
+    }
+  };
+
+  const startHighLoadPersonalization = async (level) => {
+    const normalized =
+      normalizeLoadLevel(level) || highLoadLevelRef.current || 'High';
+    if (personalizationAskInFlightRef.current) return;
+    personalizationAskInFlightRef.current = true;
+    try {
+      dismissPlaybackPersonalizationPrompt();
+      promptFrustrationOverrideRef.current = '';
+      setLoadLevel(normalized);
+      highLoadLevelRef.current = normalized;
+      setPromptBarOpen(true);
+      askPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      await new Promise((resolve) => {
+        const started = Date.now();
+        const tick = () => {
+          const prompt = pedagogicalPromptRef.current || '';
+          if (
+            prompt.includes(`Level: ${normalized}`) &&
+            !promptLoadingRef.current
+          ) {
+            resolve();
+            return;
+          }
+          if (Date.now() - started > 4000) {
+            resolve();
+            return;
+          }
+          window.setTimeout(tick, 50);
+        };
+        tick();
+      });
+      await askCourseGpt(
+        `The student asked for personalization for this lesson. Use the exact knowledge chunk. Match the student's visual-verbal style (${visualVerbalStyle}) and analytic-holistic style (${analyticHolisticStyle}) from their profile. Use cognitive load ${normalized} with the matching frustration level. Do not invent facts.`
+      );
+    } finally {
+      personalizationAskInFlightRef.current = false;
+    }
+  };
+  startHighLoadPersonalizationRef.current = (payload) => {
+    if (payload?.kind === 'shortEnd') {
+      return startForcedHighPersonalization();
+    }
+    return startHighLoadPersonalization(payload?.loadLevel ?? payload);
+  };
+
+  const startManualPersonalizedContent = async () => {
+    if (personalizationAskInFlightRef.current) return;
+    const predicted = latestPredictedLoadRef.current;
+    if (predicted) {
+      await startHighLoadPersonalization(predicted);
+      return;
+    }
+
+    personalizationAskInFlightRef.current = true;
+    try {
+      dismissPlaybackPersonalizationPrompt();
+      promptFrustrationOverrideRef.current = 'Very High';
+      setLoadLevel('Very High');
+      highLoadLevelRef.current = 'Very High';
+      setPromptBarOpen(true);
+      askPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      const body = {
+        courseName: course?.courseName || '',
+        subsectionTitle: mainVideo?.title || '',
+        knowledgeChunk: mainVideo?.knowledgeChunk || '',
+        containsMath: Boolean(mainVideo?.containsMath),
+        studentProfile: {
+          year: studentYear,
+        },
+        visualVerbalCognitiveStyle: visualVerbalStyle,
+        analyticWholisticCognitiveStyle: analyticHolisticStyle,
+        cognitiveLoad: { level: 'Very High', frustration: 'Very High' },
+      };
+      let promptText = '';
+      let lastErr;
+      for (const url of buildGptPromptUrls()) {
+        try {
+          const res = await axios.post(url, body);
+          promptText = String(res.data?.data?.prompt || '').trim();
+          lastErr = null;
+          break;
+        } catch (e) {
+          lastErr = e;
+          if (e.response?.status === 404) continue;
+          if (!e.response && e.code === 'ERR_NETWORK') continue;
+          throw e;
+        }
+      }
+      if (!promptText && lastErr) throw lastErr;
+      if (promptText) {
+        pedagogicalPromptRef.current = promptText;
+        setPedagogicalPrompt(promptText);
+      }
+
+      await askCourseGpt(
+        `The student asked for personalized content. Use the exact knowledge chunk. Match the student's visual-verbal style (${visualVerbalStyle}) and analytic-holistic style (${analyticHolisticStyle}) from their profile. No predicted cognitive load was available, so use cognitive load Very High and frustration Very High. Do not invent facts.`
+      );
+    } catch (err) {
+      setGptError(
+        [err.response?.data?.message, err.response?.data?.detail, err.message]
+          .filter(Boolean)
+          .join('\n\n') || 'Could not get personalized content.'
+      );
+    } finally {
+      personalizationAskInFlightRef.current = false;
     }
   };
 
@@ -2642,6 +3038,18 @@ const CourseDetail = () => {
                                                 download={
                                                   sub.pptFileName || 'lesson.pptx'
                                                 }
+                                                onClick={(event) =>
+                                                  downloadSubsectionFile(
+                                                    event,
+                                                    subsectionDownloadUrl(
+                                                      courseId,
+                                                      sub.id,
+                                                      'ppt'
+                                                    ),
+                                                    sub.pptFileName ||
+                                                      'lesson.pptx'
+                                                  )
+                                                }
                                               >
                                                 <span className="course-learn__resource-icon">PPT</span>
                                                 <span className="course-learn__resource-copy">
@@ -2660,6 +3068,18 @@ const CourseDetail = () => {
                                                 )}
                                                 download={
                                                   sub.pdfFileName || 'lesson.pdf'
+                                                }
+                                                onClick={(event) =>
+                                                  downloadSubsectionFile(
+                                                    event,
+                                                    subsectionDownloadUrl(
+                                                      courseId,
+                                                      sub.id,
+                                                      'pdf'
+                                                    ),
+                                                    sub.pdfFileName ||
+                                                      'lesson.pdf'
+                                                  )
                                                 }
                                               >
                                                 <span className="course-learn__resource-icon">PDF</span>
@@ -3158,15 +3578,53 @@ const CourseDetail = () => {
                   </>
                 ) : null}
               </div>
-              <div
-                style={{
-                  marginTop: '0.75rem',
-                  padding: '1rem',
-                  borderRadius: '12px',
-                  border: '1px solid rgba(34, 197, 94, 0.22)',
-                  background: 'rgba(22, 101, 52, 0.12)',
-                }}
+              <section
+                id="lesson-personalization"
+                ref={askPanelRef}
+                className="course-learn__personalization"
+                aria-labelledby="lesson-personalization-title"
               >
+                <header className="course-learn__personalization-hero">
+                  <div>
+                    <p className="course-learn__personalization-kicker">
+                      For this lesson
+                    </p>
+                    <h2 id="lesson-personalization-title">
+                      Personalized content
+                    </h2>
+                    <p className="course-learn__personalization-lead">
+                      Adapted to your cognitive style and the latest load for
+                      this video. Long answers open page by page so they stay
+                      easy to read.
+                    </p>
+                  </div>
+                  <div className="course-learn__personalization-chips" aria-label="Learner settings in use">
+                    <span>{visualVerbalStyle}</span>
+                    <span>{analyticHolisticStyle}</span>
+                    <span>Load {loadLevel}</span>
+                    {studentYear ? <span>{studentYear}</span> : null}
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary course-learn__personalize-btn"
+                    onClick={() => {
+                      void startManualPersonalizedContent();
+                    }}
+                    disabled={gptLoading}
+                  >
+                    {gptLoading
+                      ? 'Getting personalized content…'
+                      : 'Get personalized content'}
+                  </button>
+                </header>
+                {!selectedAnswer && !gptLoading ? (
+                  <p className="course-learn__personalization-empty">
+                    Generate a version of this lesson matched to your cognitive
+                    style. Longer replies are split into pages so they stay easy
+                    to read.
+                  </p>
+                ) : null}
+              <div className="course-learn__personalization-card">
                 <button
                   type="button"
                   onClick={() => setProfileOpen((open) => !open)}
@@ -3241,8 +3699,9 @@ const CourseDetail = () => {
                     lineHeight: 1.45,
                   }}
                 >
-                  Adjust year and load if needed. Cognitive styles come from the
-                  student profile and are inserted into the prompt automatically.
+                  Adjust year if needed. Cognitive styles come from the student
+                  profile. Cognitive load starts at Medium and updates every two
+                  minutes from the video session.
                 </p>
                 <div
                   style={{
@@ -3270,29 +3729,9 @@ const CourseDetail = () => {
                   >
                     Visual-Verbal: {visualVerbalStyle} · Analytic-Holistic:{' '}
                     {analyticHolisticStyle}
+                    <br />
+                    Cognitive load: {loadLevel}
                   </div>
-                  <select
-                    className="form-input"
-                    value={loadLevel}
-                    onChange={(e) => setLoadLevel(e.target.value)}
-                    style={{ fontSize: '0.82rem' }}
-                  >
-                    <option value="Very Low">Load: Very Low</option>
-                    <option value="Low">Load: Low</option>
-                    <option value="Medium">Load: Medium</option>
-                    <option value="High">Load: High</option>
-                    <option value="Very High">Load: Very High</option>
-                  </select>
-                  <select
-                    className="form-input"
-                    value={frustration}
-                    onChange={(e) => setFrustration(e.target.value)}
-                    style={{ fontSize: '0.82rem' }}
-                  >
-                    <option value="Low">Frustration: Low</option>
-                    <option value="Moderate">Frustration: Moderate</option>
-                    <option value="High">Frustration: High</option>
-                  </select>
                 </div>
                   </>
                 ) : null}
@@ -3426,16 +3865,7 @@ const CourseDetail = () => {
                 ) : null}
               </div>
 
-              <div
-                ref={askPanelRef}
-                style={{
-                  marginTop: '0.75rem',
-                  padding: '1rem',
-                  borderRadius: '12px',
-                  border: '1px solid rgba(129, 140, 248, 0.25)',
-                  background: 'rgba(79, 70, 229, 0.08)',
-                }}
-              >
+              <div className="course-learn__personalization-ask">
                 <p
                   className="form-label"
                   style={{
@@ -3546,15 +3976,7 @@ const CourseDetail = () => {
                 ) : null}
 
                 {selectedAnswer ? (
-                  <div
-                    style={{
-                      marginTop: '0.85rem',
-                      padding: '0.85rem',
-                      borderRadius: '10px',
-                      border: '1px solid rgba(34, 197, 94, 0.35)',
-                      background: 'rgba(22, 163, 74, 0.12)',
-                    }}
-                  >
+                  <div className="course-learn__personalization-output">
                     <p
                       className="form-label"
                       style={{ marginBottom: '0.35rem', fontSize: '0.75rem' }}
@@ -3625,12 +4047,10 @@ const CourseDetail = () => {
                         })}
                       </div>
                     ) : null}
-                    <AssistantMarkdown
+                    <PaginatedAssistantContent
+                      text={selectedAnswer}
                       canonicalEquations={canonicalEquations}
-                      style={{ maxHeight: '320px', overflowY: 'auto' }}
-                    >
-                      {selectedAnswer}
-                    </AssistantMarkdown>
+                    />
                     <LessonImageGallery
                       afterGptOutput
                       images={collectSubsectionImages(mainVideo)}
@@ -3695,12 +4115,10 @@ const CourseDetail = () => {
                         </p>
                       ) : null}
                       {!gptError && gptAnswer ? (
-                        <AssistantMarkdown
+                        <PaginatedAssistantContent
+                          text={gptAnswer}
                           canonicalEquations={canonicalEquations}
-                          style={{ maxHeight: '280px', overflowY: 'auto' }}
-                        >
-                          {gptAnswer}
-                        </AssistantMarkdown>
+                        />
                       ) : null}
                       {!gptError && !gptAnswer ? (
                         <p
@@ -3743,12 +4161,10 @@ const CourseDetail = () => {
                         </p>
                       ) : null}
                       {!deepseekError && deepseekAnswer ? (
-                        <AssistantMarkdown
+                        <PaginatedAssistantContent
+                          text={deepseekAnswer}
                           canonicalEquations={canonicalEquations}
-                          style={{ maxHeight: '280px', overflowY: 'auto' }}
-                        >
-                          {deepseekAnswer}
-                        </AssistantMarkdown>
+                        />
                       ) : null}
                       {!deepseekError && !deepseekAnswer ? (
                         <p
@@ -3771,6 +4187,7 @@ const CourseDetail = () => {
                   />
                 ) : null}
               </div>
+              </section>
               </div>
             </>
           ) : (
@@ -3788,7 +4205,16 @@ const CourseDetail = () => {
           busy={gptLoading}
           onNo={dismissPlaybackPersonalizationPrompt}
           onYes={async () => {
-            const copy = PLAYBACK_PROMPT_COPY[playbackPrompt];
+            const kind = playbackPrompt;
+            if (kind === 'shortEnd') {
+              await startForcedHighPersonalization();
+              return;
+            }
+            if (kind === 'highLoad' || kind === 'longEnd') {
+              await startHighLoadPersonalization(highLoadLevelRef.current);
+              return;
+            }
+            const copy = PLAYBACK_PROMPT_COPY[kind];
             dismissPlaybackPersonalizationPrompt();
             await askCourseGpt(copy?.extraInstruction || '');
           }}

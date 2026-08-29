@@ -1,4 +1,11 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+SERVICE_DIR = Path(__file__).resolve().parents[1]
+BACKEND_ENV_FILE = SERVICE_DIR.parent / "CognitiveStyleBackend" / ".env"
+SERVICE_ENV_FILE = SERVICE_DIR / ".env"
 
 
 class Settings(BaseSettings):
@@ -35,7 +42,10 @@ class Settings(BaseSettings):
         )
 
     model_config = SettingsConfigDict(
-        env_file=("../CognitiveStyleBackend/.env", ".env"),
+        # Resolve both files from this module instead of the process working
+        # directory. This keeps MONGO_URL consistent whether uvicorn is started
+        # from the repository root or from cognitive_style_ai.
+        env_file=(BACKEND_ENV_FILE, SERVICE_ENV_FILE),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",

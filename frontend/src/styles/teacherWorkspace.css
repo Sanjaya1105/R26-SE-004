@@ -204,3 +204,216 @@
   .teacher-chat-message { max-width: 94%; }
 }
 
+.upload-lesson-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.upload-lesson-steps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.upload-lesson-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 72px;
+  padding: 14px 16px;
+  border: 1px solid #dce7f7;
+  border-radius: 16px;
+  background: #fff;
+  color: #64748b;
+}
+
+.upload-lesson-step strong {
+  display: block;
+  color: #172033;
+  font-size: 0.95rem;
+}
+
+.upload-lesson-step small {
+  display: block;
+  margin-top: 2px;
+  line-height: 1.45;
+}
+
+.upload-lesson-step-index {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  color: #1e3a8a;
+  background: #eff6ff;
+  font-weight: 800;
+}
+
+.upload-lesson-step.is-active {
+  border-color: #93c5fd;
+  box-shadow: 0 14px 28px -24px rgba(37, 99, 235, 0.7);
+}
+
+.upload-lesson-step.is-active .upload-lesson-step-index,
+.upload-lesson-step.is-done .upload-lesson-step-index {
+  color: #fff;
+  background: linear-gradient(135deg, #60a5fa, #2563eb);
+}
+
+.upload-lesson-step.is-done {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.upload-lesson-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.upload-lesson-sections.is-waiting {
+  opacity: 0.62;
+}
+
+.upload-lesson-hint {
+  margin: 8px 0 0;
+  color: #64748b;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.upload-lesson-status {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.upload-lesson-file {
+  padding: 14px;
+  border: 1px dashed #93b4e2;
+  border-radius: 12px;
+  background: #f8fbff;
+}
+
+.upload-lesson-file .form-input {
+  background: #fff;
+}
+
+.upload-lesson-thumb {
+  width: 100%;
+  max-width: 320px;
+  display: block;
+  border-radius: 12px;
+  border: 1px solid #d8e6f8;
+}
+
+.upload-lesson-subsection {
+  margin-top: 8px;
+  padding: 16px;
+  border: 1px solid #d8e6f8;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #f8fbff, #fff);
+}
+
+.upload-lesson-hierarchy {
+  margin-top: 18px;
+  padding: 16px 18px;
+  border: 1px solid #d8e6f8;
+  border-radius: 14px;
+  background: #f8fbff;
+}
+
+.upload-lesson-hierarchy h3 {
+  margin: 0 0 6px;
+  color: #172033;
+  font-size: 1rem;
+}
+
+.upload-lesson-hierarchy p {
+  margin: 0 0 10px;
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
+.upload-lesson-hierarchy ul {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: #334155;
+  font-size: 0.9rem;
+}
+
+.upload-lesson-hierarchy li + li {
+  margin-top: 4px;
+}
+
+.upload-lesson-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.upload-lesson-add-another.is-ready {
+  border-color: #86efac;
+  color: #166534;
+  background: #f0fdf4;
+}
+
+.upload-lesson-message {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1e3a8a;
+  text-align: center;
+}
+
+.upload-lesson-queue .glass-panel {
+  margin-bottom: 18px;
+  background: #fff;
+}
+
+.upload-lesson-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.upload-lesson-grid .teacher-workspace-primary-button,
+.upload-lesson-grid .teacher-workspace-secondary-button {
+  width: 100%;
+}
+
+.upload-lesson-sections .form-label,
+.upload-lesson-subsection .form-label {
+  color: #1e3a8a;
+  font-weight: 700;
+}
+
+.upload-lesson-sections .form-input,
+.upload-lesson-subsection .form-input {
+  width: 100%;
+  border: 1px solid #cbdcf2;
+  color: #172033;
+  background: #f8fbff;
+}
+
+.upload-lesson-sections .form-input:focus,
+.upload-lesson-subsection .form-input:focus {
+  border-color: #3b82f6;
+  outline: 3px solid rgba(59, 130, 246, 0.14);
+}
+
+@media (max-width: 980px) {
+  .upload-lesson-grid,
+  .upload-lesson-steps {
+    grid-template-columns: 1fr;
+  }
+}
+

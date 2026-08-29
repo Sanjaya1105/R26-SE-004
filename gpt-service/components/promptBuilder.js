@@ -12,7 +12,7 @@ const LOAD_LEVELS = new Set([
   "Very High",
 ]);
 
-const FRUSTRATION_LEVELS = new Set(["Low", "Moderate", "High"]);
+const FRUSTRATION_LEVELS = new Set(["Low", "Moderate", "High", "Very High"]);
 
 function clean(str) {
   return String(str ?? "").trim();
@@ -54,6 +54,27 @@ function normalizeAnalyticHolisticStyle(value) {
     ])
   );
   return normalized || "Analytic";
+}
+
+function normalizeFrustration(value) {
+  const raw = clean(value);
+  if (!raw) return "";
+  if (FRUSTRATION_LEVELS.has(raw)) return raw;
+  const key = raw.toLowerCase().replace(/[_-]+/g, " ");
+  const map = {
+    low: "Low",
+    moderate: "Moderate",
+    medium: "Moderate",
+    high: "High",
+    "very high": "Very High",
+  };
+  return map[key] || "";
+}
+
+function frustrationFromLoad(loadLevel) {
+  if (loadLevel === "High" || loadLevel === "Very High") return "High";
+  if (loadLevel === "Low" || loadLevel === "Very Low") return "Low";
+  return "Moderate";
 }
 
 function wantsMermaidDiagrams(visualVerbalStyle) {
@@ -130,10 +151,9 @@ function buildPedagogicalPrompt(input = {}) {
     loadLevel = "Medium";
   }
 
-  let frustration = clean(input.cognitiveLoad?.frustration) || "Low";
-  if (!FRUSTRATION_LEVELS.has(frustration)) {
-    frustration = "Low";
-  }
+  const frustration =
+    normalizeFrustration(input.cognitiveLoad?.frustration) ||
+    frustrationFromLoad(loadLevel);
 
   const courseName = clean(input.courseName) || "(course)";
   const subsectionTitle = clean(input.subsectionTitle) || "(subsection)";
@@ -187,7 +207,7 @@ $$
 Inputs:
 Student Profile: {Year: ${year}}
 Cognitive Style: {Visual-Verbal: ${visualVerbalStyle} (Visual, Verbal, or Intermediate), Analytic-Holistic: ${analyticHolisticStyle} (Analytic or Holistic)}
-Current Cognitive Load: {Level: ${loadLevel} (1 of 5: Very Low, Low, Medium, High, Very High), Frustration: ${frustration} (Low, Moderate, High)}
+Current Cognitive Load: {Level: ${loadLevel} (1 of 5: Very Low, Low, Medium, High, Very High), Frustration: ${frustration} (Low, Moderate, High, Very High)}
 Knowledge Chunk: {Unique extractive lesson knowledge. Do not invent facts.}
 
 ${knowledgeChunk}

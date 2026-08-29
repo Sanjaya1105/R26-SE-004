@@ -8,7 +8,7 @@ const router = express.Router();
 const resourceBaseUrl = (
   process.env.RESOURCE_UPLOAD_URL || 'http://localhost:5000'
 ).replace(/\/$/, '');
-const gatewaySecret = process.env.GATEWAY_SHARED_SECRET;
+const configuredGatewaySecret = process.env.GATEWAY_SHARED_SECRET;
 
 const requireStudent = (req, res, next) => {
   if (req.user?.role !== 'Student') {
@@ -22,7 +22,11 @@ const handleServerError = (res, err) => {
   res.status(500).json({ message: 'Internal server error' });
 };
 
-async function assertCourseEnrollmentOpen(courseId) {
+async function assertCourseEnrollmentOpen(courseId, requestGatewaySecret) {
+  // Prefer this service's own configuration, but allow the API Gateway to
+  // provide the shared secret for deployments where only edge-facing and
+  // resource services store it.
+  const gatewaySecret = configuredGatewaySecret || requestGatewaySecret;
   if (!gatewaySecret) {
     const err = new Error('Server misconfiguration: missing GATEWAY_SHARED_SECRET');
     err.status = 500;
@@ -97,7 +101,7 @@ router.post('/', verifyToken, requireStudent, async (req, res) => {
       });
     }
 
-    await assertCourseEnrollmentOpen(courseId);
+    await assertCourseEnrollmentOpen(courseId, req.get('x-gateway-secret'));
 
     const enrollment = await Enrollment.create({
       studentId: req.user.id,

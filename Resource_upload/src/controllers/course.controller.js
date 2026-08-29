@@ -6,10 +6,11 @@ const CourseSubSection = require("../models/courseSubSection.model");
 const { resolveEducatorNameFromRequest } = require("../utils/educatorDisplay");
 const { mapExtractedImages } = require("../services/documentImage.service");
 const {
+  originalOfficeFileName,
   mimeForFileName,
   contentDispositionAttachment,
   fileNameFromStoredUrl,
-  sniffOfficeFileName,
+  fetchOriginalOfficeFile,
 } = require("../utils/officeFiles");
 const { filterWhisperNoise } = require("../services/whisperNoise.service");
 const { buildUniqueKnowledgeChunk } = require("../services/knowledgeMerge.service");
@@ -306,7 +307,9 @@ const downloadPublicSubsectionFile = async (req, res) => {
 
   try {
     const doc = await CourseSubSection.findById(subsectionId)
-      .select("courseId pptUrl pptFileName pdfUrl pdfFileName knowledgeStatus")
+      .select(
+        "courseId pptUrl pptPublicId pptFileName pdfUrl pdfPublicId pdfFileName knowledgeStatus"
+      )
       .lean();
 
     if (!doc || String(doc.courseId) !== String(courseId)) {
@@ -319,23 +322,24 @@ const downloadPublicSubsectionFile = async (req, res) => {
     }
 
     const storedUrl = type === "ppt" ? doc.pptUrl : doc.pdfUrl;
-    if (!storedUrl) {
-      return res.status(404).json({ message: `No ${type.toUpperCase()} is stored for this subsection.` });
+    const publicId = type === "ppt" ? doc.pptPublicId : doc.pdfPublicId;
+    if (!storedUrl && !publicId) {
+      return res.status(404).json({
+        message: `No ${type.toUpperCase()} is stored for this subsection.`,
+      });
     }
 
     const storedName = type === "ppt" ? doc.pptFileName : doc.pdfFileName;
     const fromUrl = fileNameFromStoredUrl(storedUrl, "");
-    const preferredName = storedName || fromUrl;
+    const fileName = originalOfficeFileName(type, storedName || fromUrl);
 
-    const remote = await fetch(storedUrl);
-    if (!remote.ok) {
-      return res.status(502).json({
-        message: `Could not fetch the stored ${type.toUpperCase()} (${remote.status}).`,
-      });
-    }
+    const buffer = await fetchOriginalOfficeFile({
+      storedUrl,
+      publicId,
+      fileName,
+      kind: type,
+    });
 
-    const buffer = Buffer.from(await remote.arrayBuffer());
-    const fileName = sniffOfficeFileName(buffer, type, preferredName);
     res.writeHead(200, {
       "Content-Type": mimeForFileName(fileName),
       "Content-Disposition": contentDispositionAttachment(fileName),
@@ -345,8 +349,10 @@ const downloadPublicSubsectionFile = async (req, res) => {
     });
     return res.end(buffer);
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Failed to download the file." });
+    console.error("[download-subsection-file]", error);
+    return res.status(502).json({
+      message: `Could not download the original ${type.toUpperCase()} the teacher uploaded.`,
+    });
   }
 };
 

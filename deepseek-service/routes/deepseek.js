@@ -30,13 +30,21 @@ function modelCandidates(preferred) {
 }
 
 function textFrom(value) {
+  if (value == null) return "";
   if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
   if (Array.isArray(value)) {
-    return value
-      .map((part) =>
-        typeof part === "string" ? part : String(part?.text || "")
-      )
-      .join("");
+    return value.map((part) => textFrom(part)).join("");
+  }
+  if (typeof value === "object") {
+    return (
+      textFrom(value.text) ||
+      textFrom(value.content) ||
+      textFrom(value.value) ||
+      ""
+    );
   }
   return "";
 }
@@ -47,12 +55,19 @@ function extractAnswer(payload) {
   return (
     textFrom(message.content) ||
     textFrom(message.reasoning_content) ||
+    textFrom(message.reasoning) ||
     textFrom(choice.text) ||
+    textFrom(choice.content) ||
+    textFrom(payload?.output_text) ||
     ""
   ).trim();
 }
 
-async function callDeepseekChat(messages, { maxTokens = 4096 } = {}) {
+function shouldTryNextStatus(status) {
+  return status === 400 || status === 404 || status === 422;
+}
+
+async function callDeepseekChat(messages, { maxTokens = 8192 } = {}) {
   const { apiKey, baseUrl, model } = getDeepseekConfig();
   if (!apiKey) {
     const error = new Error("DEEPSEEK_API_KEY is not configured.");
@@ -60,81 +75,82 @@ async function callDeepseekChat(messages, { maxTokens = 4096 } = {}) {
     throw error;
   }
 
+  const bodyVariants = [
+    { thinking: { type: "disabled" } },
+    {},
+  ];
+
   let lastFailure = null;
   for (const candidate of modelCandidates(model)) {
-    let response;
-    try {
-      response = await axios.post(
-        `${baseUrl}/chat/completions`,
-        {
-          model: candidate,
-          messages,
-          max_tokens: maxTokens,
-          temperature: 0.7,
-          stream: false,
-          // V4 thinking is on by default and can spend the whole token budget
-          // on chain-of-thought, leaving content empty for Ask.
-          thinking: { type: "disabled" },
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
+    for (const extraBody of bodyVariants) {
+      let response;
+      try {
+        response = await axios.post(
+          `${baseUrl}/chat/completions`,
+          {
+            model: candidate,
+            messages,
+            max_tokens: maxTokens,
+            temperature: 0.7,
+            stream: false,
+            ...extraBody,
           },
-          timeout: 180000,
-          validateStatus: () => true,
-        }
-      );
-    } catch (networkError) {
-      lastFailure = {
-        status: 502,
-        detail: `${candidate}: ${networkError.message || "network error"}`,
-      };
-      console.warn("[deepseek]", lastFailure.detail);
-      continue;
-    }
-
-    if (response.status >= 400) {
-      const detail =
-        response.data?.error?.message ||
-        (typeof response.data?.error === "string"
-          ? response.data.error
-          : JSON.stringify(response.data));
-      lastFailure = {
-        status: response.status,
-        detail: `${candidate}: ${detail || "DeepSeek request failed."}`,
-      };
-      console.warn("[deepseek]", lastFailure.detail);
-      if (
-        response.status === 400 ||
-        response.status === 404 ||
-        response.status === 422
-      ) {
+          {
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+            },
+            timeout: 180000,
+            validateStatus: () => true,
+          }
+        );
+      } catch (networkError) {
+        lastFailure = {
+          status: 502,
+          detail: `${candidate}: ${networkError.message || "network error"}`,
+        };
+        console.warn("[deepseek]", lastFailure.detail);
         continue;
       }
-      const error = new Error(lastFailure.detail);
-      error.status = 502;
-      error.detail = lastFailure.detail;
-      throw error;
-    }
 
-    const answer = extractAnswer(response.data);
-    if (answer) {
-      console.log(
-        "[deepseek] ok",
-        candidate,
-        "chars",
-        answer.length,
-        "finish",
-        response.data?.choices?.[0]?.finish_reason || ""
-      );
-      return { answer, model: candidate };
+      if (response.status >= 400) {
+        const detail =
+          response.data?.error?.message ||
+          (typeof response.data?.error === "string"
+            ? response.data.error
+            : JSON.stringify(response.data));
+        lastFailure = {
+          status: response.status,
+          detail: `${candidate}: ${detail || "DeepSeek request failed."}`,
+        };
+        console.warn("[deepseek]", lastFailure.detail);
+        if (shouldTryNextStatus(response.status)) {
+          continue;
+        }
+        const error = new Error(lastFailure.detail);
+        error.status = 502;
+        error.detail = lastFailure.detail;
+        throw error;
+      }
+
+      const answer = extractAnswer(response.data);
+      if (answer) {
+        console.log(
+          "[deepseek] ok",
+          candidate,
+          "chars",
+          answer.length,
+          "finish",
+          response.data?.choices?.[0]?.finish_reason || ""
+        );
+        return { answer, model: candidate };
+      }
+      lastFailure = {
+        status: 502,
+        detail: `${candidate}: empty answer payload (finish=${response.data?.choices?.[0]?.finish_reason || "unknown"})`,
+      };
+      console.warn("[deepseek]", lastFailure.detail);
     }
-    lastFailure = {
-      status: 502,
-      detail: `${candidate}: empty answer payload (finish=${response.data?.choices?.[0]?.finish_reason || "unknown"})`,
-    };
-    console.warn("[deepseek]", lastFailure.detail);
   }
 
   const error = new Error(

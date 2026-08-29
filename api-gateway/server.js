@@ -16,7 +16,7 @@ const DEEPSEEK_SERVICE_URL =
 const RESOURCE_UPLOAD_URL =
   process.env.RESOURCE_UPLOAD_URL || "http://localhost:5000";
 const GATEWAY_SHARED_SECRET =
-  process.env.GATEWAY_SHARED_SECRET || "gateway_secret_change_me";
+  process.env.GATEWAY_SHARED_SECRET || "resource_gateway_secret_2026";
 const EXPLAINABLE_AI_BACKEND_URL =
   process.env.EXPLAINABLE_AI_BACKEND_URL || "http://localhost:8000";
 const LIME_AI_SERVICE_URL =
@@ -146,6 +146,8 @@ app.use(
   createProxyMiddleware({
     target: RESOURCE_UPLOAD_URL,
     changeOrigin: true,
+    timeout: 180000,
+    proxyTimeout: 180000,
     pathFilter: (pathname) =>
       pathname === "/api/public/courses" ||
       pathname.startsWith("/api/public/courses/"),
@@ -155,6 +157,15 @@ app.use(
       proxyReq: (proxyReq) => {
         if (GATEWAY_SHARED_SECRET) {
           proxyReq.setHeader("x-gateway-secret", GATEWAY_SHARED_SECRET);
+        }
+      },
+      proxyRes: (proxyRes, req) => {
+        const origin = req.headers.origin;
+        if (origin && allowedOrigins.includes(origin)) {
+          proxyRes.headers["access-control-allow-origin"] = origin;
+          proxyRes.headers["access-control-allow-credentials"] = "true";
+          proxyRes.headers["access-control-expose-headers"] =
+            "Content-Disposition, Content-Type, Content-Length";
         }
       },
     },

@@ -57,6 +57,18 @@ function matchesSearch(course, query) {
   return name.includes(q) || educator.includes(q);
 }
 
+function courseAllowsEnrollment(course) {
+  const preparing = Number(course?.preparingLessonCount || 0);
+  if (preparing > 0) return false;
+  if (typeof course?.enrollmentOpen === 'boolean') {
+    return course.enrollmentOpen;
+  }
+  if (course?.readyLessonCount != null && course?.readyLessonCount !== '') {
+    return Number(course.readyLessonCount) > 0;
+  }
+  return true;
+}
+
 function CourseThumb({ url, name, play = false, square = false }) {
   return (
     <div className={`course-thumb${square ? ' is-square' : ''}`}>
@@ -331,12 +343,7 @@ const Course = () => {
 
     const courseId = String(course.id);
     if (enrolledIds.has(courseId) || enrollingId === courseId) return;
-    const enrollmentOpen =
-      typeof course.enrollmentOpen === 'boolean'
-        ? course.enrollmentOpen
-        : Number(course.preparingLessonCount || 0) === 0 &&
-          Number(course.readyLessonCount || 0) > 0;
-    if (!enrollmentOpen) {
+    if (!courseAllowsEnrollment(course)) {
       setActionMessage(
         Number(course.preparingLessonCount || 0) > 0
           ? 'This course is still processing uploaded subsections. You can enroll when the queue is complete.'
@@ -448,10 +455,10 @@ const Course = () => {
     const isFavorite = favoriteIds.has(courseId);
     const isEnrolling = enrollingId === courseId;
     const lessonsPreparing = Number(c.preparingLessonCount || 0) > 0;
-    const canEnroll =
-      typeof c.enrollmentOpen === 'boolean'
-        ? c.enrollmentOpen
-        : !lessonsPreparing && Number(c.readyLessonCount || 0) > 0;
+    const canEnroll = courseAllowsEnrollment(c);
+    const enrollHint = lessonsPreparing
+      ? 'Enrollment opens when every subsection has finished processing.'
+      : 'This course has no published lessons yet.';
     const progress = watchByCourse[courseId];
     const percent = Number(progress?.percent) || 0;
 
@@ -508,6 +515,13 @@ const Course = () => {
               type="button"
               className="btn btn-primary"
               disabled={isEnrolled || isEnrolling || !canEnroll}
+              title={
+                isEnrolled
+                  ? 'You are already enrolled'
+                  : !canEnroll
+                    ? enrollHint
+                    : 'Enroll in this course'
+              }
               onClick={(event) => handleEnroll(event, c)}
               style={{
                 opacity: isEnrolled || !canEnroll ? 0.85 : 1,
@@ -524,6 +538,9 @@ const Course = () => {
                       ? 'Enroll now'
                       : 'Not ready yet'}
             </button>
+            {!isEnrolled && !canEnroll ? (
+              <p className="course-card__cta-hint">{enrollHint}</p>
+            ) : null}
           </div>
         ) : null}
       </article>
@@ -622,7 +639,8 @@ const Course = () => {
 
         {!loading && !error && showHome ? (
           <>
-            <section className="home-welcome">
+            <section className="home-hero">
+              <div className="home-welcome">
               <Link
                 to="/student/profile"
                 className="home-welcome__avatar"
@@ -630,11 +648,27 @@ const Course = () => {
               >
                 {initials}
               </Link>
-              <div>
+              <div className="home-welcome__copy">
+                <p className="home-hero__eyebrow">Student catalog</p>
                 <h1>Welcome back, {firstName}</h1>
                 <Link to="/student/profile" className="home-welcome__link">
                   Add occupation and interests
                 </Link>
+              </div>
+              <div className="home-hero__stats" aria-label="Your learning snapshot">
+                <div>
+                  <strong>{enrolledIds.size}</strong>
+                  <span>Enrolled</span>
+                </div>
+                <div>
+                  <strong>{favoriteIds.size}</strong>
+                  <span>Favorites</span>
+                </div>
+                <div>
+                  <strong>{continueLearning.length}</strong>
+                  <span>In progress</span>
+                </div>
+              </div>
               </div>
             </section>
 
@@ -699,7 +733,7 @@ const Course = () => {
                 <div className="home-section__head">
                   <h2>Let’s start learning</h2>
                 </div>
-                <p className="course-catalog__status">
+                <p className="course-catalog__empty">
                   Enroll in a course and your most active lessons will appear here.
                 </p>
               </section>
@@ -719,7 +753,7 @@ const Course = () => {
                   )}
                 </div>
               ) : (
-                <p className="course-catalog__status">
+                <p className="course-catalog__empty">
                   No more suggestions right now. Search an educator to find a course.
                 </p>
               )}
@@ -736,7 +770,7 @@ const Course = () => {
               </div>
             </div>
             {visibleCourses.length === 0 ? (
-              <p className="course-catalog__status">
+              <p className="course-catalog__empty">
                 {searchQuery.trim()
                   ? 'No educator or course matched that search.'
                   : catalogView === 'favorites'
