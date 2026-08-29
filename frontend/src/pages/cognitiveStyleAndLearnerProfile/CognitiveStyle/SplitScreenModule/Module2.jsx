@@ -1,5 +1,5 @@
 
-import React, { useState, useRef,useMemo } from "react";
+import React, { useState, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import CursorTracker from "./CursorTracker";
 import GazeTracker from "./GazeTracker2";
@@ -251,9 +251,7 @@ function Module2() {
                 marginBottom: "22px",
               }}
             >
-              In this module, we will analyze your learning preference and cognitive
-              style based on your interaction with visual and verbal learning
-              materials.
+              To capture your gaze behavior, this module requires webcam access. Please click "Allow" when prompted by your browser to begin.
             </p>
 
             <div
@@ -271,10 +269,22 @@ function Module2() {
                   marginBottom: "10px",
                   fontWeight: "bold",
                   color: "#3b82f6",
-                  fontSize: "16px",
+                  fontSize: "15px",
                 }}
               >
-                Please read the following guidelines carefully:
+                Privacy Notice: We do not record or store any video or photos. Only numerical facial coordinates are calculated and saved locally within your browser.
+              </p>
+
+              <p
+                style={{
+                  marginTop: "16px",
+                  marginBottom: "10px",
+                  fontWeight: "bold",
+                  color: "#334155",
+                  fontSize: "15px",
+                }}
+              >
+                Please review the following calibration steps before starting:
               </p>
 
               <ul
@@ -287,48 +297,16 @@ function Module2() {
                 }}
               >
                 <li>
-                  Your behavioral interaction data will be collected during this
-                  activity.
+                  <strong style={{color: "#475569"}}>Step 1:</strong> A red dot will appear on a white background. Keep your head perfectly still and use only your eyes to follow the moving dot.
                 </li>
                 <li>
-                  This may include cursor movements, clicks, scrolling behavior, and
-                  time spent on different sections.
+                  <strong style={{color: "#475569"}}>Step 2:</strong> The target will change to a black circle with an arrow. For this phase, you should tilt and turn your head in the direction of the moving target.
                 </li>
                 <li>
-                  Your gaze or attention behavior may be captured using your web
-                  camera.
-                </li>
-                <li>
-                  Please keep your face visible to the camera while completing the
-                  module.
-                </li>
-                <li>
-                  Try to interact naturally with the learning materials without
-                  rushing.
-                </li>
-                <li>
-                  Choose the learning format that feels more comfortable and useful
-                  to you.
-                </li>
-                <li>
-                  The collected data will be used only for cognitive style detection
-                  and learning behavior analysis.
+                  <strong style={{color: "#475569"}}>Step 3:</strong> The screen will turn black for the final refinement phase. Keep your head still again and simply focus your eyes on the final red dots as they appear.
                 </li>
               </ul>
             </div>
-
-            <p
-              style={{
-                color: "#64748b",
-                fontSize: "14px",
-                lineHeight: "1.6",
-                textAlign: "center",
-                marginBottom: "24px",
-              }}
-            >
-              By continuing, you acknowledge that you understand the purpose of this
-              module and the types of data being collected.
-            </p>
 
             <div style={{ display: "flex", justifyContent: "center" }}>
               <button
@@ -357,8 +335,120 @@ function Module2() {
       {/* PHASE 2: CALIBRATION */}
       {appPhase === "CALIBRATE" && (
         <CalibrationScreen
-          onComplete={() => setAppPhase("TEST")} // Move to main module test content when done
+          onComplete={() => setAppPhase("PRE_TEST")} // Move to instructions before main test
         />
+      )}
+
+      {/* PHASE 2.5: PRE-TEST INSTRUCTIONS */}
+      {appPhase === "PRE_TEST" && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            backgroundColor: "rgba(15, 23, 42, 0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "#ffffff",
+              width: "620px",
+              maxWidth: "92%",
+              borderRadius: "16px",
+              padding: "30px",
+              boxShadow: "0 18px 40px -24px rgba(148, 163, 184, 0.4)",
+              border: "1px solid rgba(0, 0, 0, 0.05)",
+              fontFamily: "'Inter', sans-serif",
+            }}
+          >
+            <h2
+              style={{
+                marginTop: 0,
+                marginBottom: "12px",
+                fontSize: "25px",
+                textAlign: "center",
+                fontWeight: 800,
+                background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                letterSpacing: "-0.03em"
+              }}
+            >
+              Calibration Complete
+            </h2>
+
+            <p
+              style={{
+                color: "#64748b",
+                fontSize: "16px",
+                lineHeight: "1.7",
+                textAlign: "center",
+                marginBottom: "22px",
+              }}
+            >
+              You are now entering the main learning module. Here is how it works:
+            </p>
+
+            <div
+              style={{
+                backgroundColor: "rgba(59, 130, 246, 0.05)",
+                border: "1px solid rgba(59, 130, 246, 0.15)",
+                borderRadius: "12px",
+                padding: "18px",
+                marginBottom: "24px",
+              }}
+            >
+              <ul
+                style={{
+                  margin: 0,
+                  paddingLeft: "22px",
+                  color: "#64748b",
+                  fontSize: "15px",
+                  lineHeight: "1.8",
+                }}
+              >
+                <li style={{ marginBottom: "8px" }}>
+                  <strong style={{color: "#334155"}}>The Layout:</strong> You will see the exact same information presented side-by-side. One side relies on visual images, while the other uses verbal text.
+                </li>
+                <li style={{ marginBottom: "8px" }}>
+                  <strong style={{color: "#334155"}}>Your Task:</strong> Simply scroll down and read the material. There is no pressure or time limit—interact naturally and focus on whichever side you prefer, or a mix of both.
+                </li>
+                <li style={{ marginBottom: "8px" }}>
+                  <strong style={{color: "#334155"}}>Background Tracking:</strong> As you navigate the page, your gaze and cursor movements are silently captured to help us understand your natural reading habits.
+                </li>
+                <li>
+                  <strong style={{color: "#334155"}}>To Finish:</strong> Once you have scrolled all the way through and finished reading, click the "Next" button at the bottom of either column to proceed.
+                </li>
+              </ul>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "center" }}>
+              <button
+                onClick={() => setAppPhase("TEST")}
+                style={{
+                  padding: "12px 28px",
+                  border: "none",
+                  borderRadius: "99px",
+                  background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
+                  color: "#fff",
+                  fontSize: "16px",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                  boxShadow: "0 10px 24px -12px rgba(37, 99, 235, 0.7)",
+                  transition: "all 0.3s ease",
+                }}
+              >
+                Begin Reading
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* PHASE 3: MAIN MODULE TEST */}
@@ -451,17 +541,6 @@ function Module2() {
                 </button>
               </div>
             </div>
-
-            <p
-              style={{
-                textAlign: "center",
-                fontWeight: "bold",
-                color: "#555",
-                marginTop: 24,
-              }}
-            >
-              Choose if you prefer learning through images
-            </p>
           </div>
 
           {/* VERBAL SCREEN */}
@@ -549,17 +628,6 @@ function Module2() {
                 </button>
               </div>
             </div>
-
-            <p
-              style={{
-                textAlign: "center",
-                fontWeight: "bold",
-                color: "#555",
-                marginTop: 24,
-              }}
-            >
-              Choose if you prefer learning through words
-            </p>
           </div>
         </>
       )}
