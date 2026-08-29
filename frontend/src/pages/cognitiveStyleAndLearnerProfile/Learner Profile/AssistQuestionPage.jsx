@@ -1,5 +1,4 @@
-
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 
 // These are the exact 18 items from the short ASSIST scale
@@ -37,9 +36,33 @@ export default function AssistQuestionPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [hoveredOption, setHoveredOption] = useState(null);
+  const [currentPage, setCurrentPage] = useState(0);
+  const questionRefs = useRef([]);
+
+  const itemsPerPage = 9;
+  const startIdx = currentPage * itemsPerPage;
+  const endIdx = startIdx + itemsPerPage;
 
   const handleChange = (questionIndex, value) => {
-    setAnswers((prev) => ({ ...prev, [questionIndex]: Number(value) }));
+    setAnswers((prev) => {
+      const newAnswers = { ...prev, [questionIndex]: Number(value) };
+      
+      // Find the next unanswered question on the current page to auto-scroll
+      const nextUnanswered = questions.findIndex((_, idx) => idx >= startIdx && idx < endIdx && newAnswers[idx] === "");
+      
+      if (nextUnanswered !== -1 && questionRefs.current[nextUnanswered]) {
+        // Delay slightly so the user sees the visual selection feedback before scrolling
+        setTimeout(() => {
+          questionRefs.current[nextUnanswered]?.scrollIntoView({
+            behavior: "smooth",
+            block: "center"
+          });
+        }, 400);
+      }
+      
+      return newAnswers;
+    });
   };
 
   const userPayload = useMemo(() => {
@@ -47,14 +70,16 @@ export default function AssistQuestionPage() {
     if (!token) return null;
 
     try {
-      console.log("Decoded user payload:", JSON.parse(atob(token.split(".")[1])));
       return JSON.parse(atob(token.split(".")[1]));
     } catch {
       return null;
     }
   }, []);
 
+  const isCurrentPageComplete = questions.slice(startIdx, endIdx).every((_, idx) => answers[startIdx + idx] !== "");
   const isComplete = questions.every((_, index) => answers[index] !== "");
+  const answeredCount = Object.values(answers).filter(val => val !== "").length;
+  const progressPercent = (answeredCount / questions.length) * 100;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -87,11 +112,9 @@ export default function AssistQuestionPage() {
       });
 
       setSuccess("Responses collected successfully.");
-      console.log("Submitted payload:", payload);
       navigate("/split-screen");
     } catch (submitError) {
       setError("Submission failed. Add your backend URL and try again.");
-      console.error(submitError);
     } finally {
       setLoading(false);
     }
@@ -102,29 +125,37 @@ export default function AssistQuestionPage() {
       style={{
         width: "100%",
         minHeight: "100vh",
-        padding: "2rem",
-        background: "radial-gradient(circle at top right, #dbeafe, var(--background))",
+        padding: "3rem 1.5rem",
+        background: "radial-gradient(1200px 480px at 80% -10%, rgba(139, 92, 246, 0.1), transparent 55%), radial-gradient(900px 420px at 0% 100%, rgba(59, 130, 246, 0.08), transparent 50%), #f8fafc",
         display: "flex",
         justifyContent: "center",
         alignItems: "flex-start",
         boxSizing: "border-box",
+        fontFamily: "'Inter', sans-serif",
+        color: "#334155",
       }}
     >
       <div
-        className="glass-panel"
         style={{
           width: "100%",
-          maxWidth: "900px",
-          padding: "2.5rem",
+          maxWidth: "840px",
+          padding: "3rem",
+          background: "#ffffff",
+          border: "1px solid rgba(0, 0, 0, 0.05)",
+          borderRadius: "16px",
+          boxShadow: "0 18px 40px -24px rgba(148, 163, 184, 0.4)",
         }}
       >
-        <div style={{ marginBottom: "2rem" }}>
+        <div style={{ marginBottom: "2.5rem", textAlign: "center" }}>
           <h1
-            className="gradient-text"
             style={{
-              fontSize: "2rem",
-              fontWeight: 700,
-              marginBottom: "0.75rem",
+              fontSize: "2.2rem",
+              fontWeight: 800,
+              marginBottom: "1rem",
+              background: "linear-gradient(135deg, #7c3aed 0%, #2563eb 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              letterSpacing: "-0.03em"
             }}
           >
             Learner Profile Assessment
@@ -132,45 +163,78 @@ export default function AssistQuestionPage() {
 
           <p
             style={{
-              color: "var(--text-muted)",
-              fontSize: "0.95rem",
+              color: "#64748b",
+              fontSize: "1rem",
               lineHeight: 1.6,
-              marginBottom: "1.5rem",
+              marginBottom: "2rem",
+              maxWidth: "600px",
+              margin: "0 auto 2rem"
             }}
           >
             Answer each question based on your actual ways of studying. 
-            These responses will be used to calculate your dominant learner profile: 
-            Deep Approach, Strategic Approach, or Surface Approach.
+            These responses will determine your dominant learner profile.
           </p>
 
-          {/* New Scale Description Box */}
           <div 
             style={{
-              backgroundColor: "rgba(37, 99, 235, 0.05)",
-              borderLeft: "4px solid var(--primary)",
+              background: "rgba(59, 130, 246, 0.05)",
+              border: "1px solid rgba(59, 130, 246, 0.15)",
               padding: "1.25rem",
-              borderRadius: "0 8px 8px 0",
+              borderRadius: "12px",
+              display: "inline-block",
+              textAlign: "left",
+              width: "100%",
+              maxWidth: "600px"
             }}
           >
-            <strong style={{ display: "block", marginBottom: "0.5rem", color: "var(--text)", fontSize: "1rem" }}>
-              Rating Scale Guide:
+            <strong style={{ display: "block", marginBottom: "0.5rem", color: "#3b82f6", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Rating Scale
             </strong>
             <ul style={{ 
               margin: 0, 
-              paddingLeft: "1.25rem", 
-              color: "var(--text-muted)", 
-              fontSize: "0.95rem", 
-              lineHeight: 1.6,
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-              gap: "0.5rem"
+              padding: 0,
+              listStyle: "none",
+              color: "#64748b", 
+              fontSize: "0.9rem", 
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "1rem",
+              justifyContent: "space-between"
             }}>
-              <li><strong>1</strong> = Disagree</li>
-              <li><strong>2</strong> = Disagree somewhat</li>
-              <li><strong>3</strong> = Unsure</li>
-              <li><strong>4</strong> = Agree somewhat</li>
-              <li><strong>5</strong> = Agree</li>
+              <li><strong style={{color:"#334155"}}>1</strong> Disagree</li>
+              <li><strong style={{color:"#334155"}}>2</strong> Somewhat Disagree</li>
+              <li><strong style={{color:"#334155"}}>3</strong> Unsure</li>
+              <li><strong style={{color:"#334155"}}>4</strong> Somewhat Agree</li>
+              <li><strong style={{color:"#334155"}}>5</strong> Agree</li>
             </ul>
+          </div>
+        </div>
+
+        {/* Sticky Progress Bar */}
+        <div style={{
+          position: "sticky",
+          top: "1rem",
+          zIndex: 50,
+          background: "rgba(255, 255, 255, 0.95)",
+          backdropFilter: "blur(12px)",
+          padding: "1rem 1.5rem",
+          borderRadius: "12px",
+          border: "1px solid rgba(0, 0, 0, 0.05)",
+          boxShadow: "0 10px 25px -5px rgba(148, 163, 184, 0.3)",
+          marginBottom: "2rem"
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.6rem", fontSize: "0.9rem", color: "#64748b", fontWeight: 600 }}>
+            <span>Assessment Progress (Page {currentPage + 1} of 2)</span>
+            <span style={{ color: "#7c3aed" }}>{answeredCount} of {questions.length} Answered</span>
+          </div>
+          <div style={{ width: "100%", height: "8px", background: "rgba(0, 0, 0, 0.05)", borderRadius: "99px", overflow: "hidden" }}>
+            <div style={{
+              width: `${progressPercent}%`,
+              height: "100%",
+              background: "linear-gradient(90deg, #7c3aed, #3b82f6)",
+              transition: "width 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+              borderRadius: "99px"
+            }} />
           </div>
         </div>
 
@@ -182,101 +246,132 @@ export default function AssistQuestionPage() {
             gap: "1.5rem",
           }}
         >
-          {questions.map((question, index) => (
-            <div
-              key={index}
-              style={{
-                padding: "1.25rem",
-                borderRadius: "12px",
-                backgroundColor: "var(--surface)",
-                border: "1px solid #e2e8f0",
-                boxShadow: "0 10px 20px -18px rgba(15, 23, 42, 0.35)",
-                transition: "all 0.3s ease",
-              }}
-            >
-              <p
-                style={{
-                  color: "var(--text)",
-                  fontSize: "1rem",
-                  fontWeight: 500,
-                  lineHeight: 1.6,
-                  marginBottom: "1rem",
-                }}
-              >
-                {index + 1}. {question}
-              </p>
-
+          {questions.slice(startIdx, endIdx).map((question, relativeIndex) => {
+            const index = startIdx + relativeIndex;
+            const isAnswered = answers[index] !== "";
+            return (
               <div
+                key={index}
+                ref={(el) => (questionRefs.current[index] = el)}
                 style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: "0.75rem",
+                  padding: "1.5rem",
+                  borderRadius: "12px",
+                  background: isAnswered ? "rgba(241, 245, 249, 0.7)" : "#ffffff",
+                  border: isAnswered ? "1px solid rgba(139, 92, 246, 0.2)" : "1px solid rgba(0, 0, 0, 0.04)",
+                  boxShadow: "0 4px 12px rgba(148, 163, 184, 0.15)",
+                  transition: "all 0.3s ease",
+                  transform: hoveredOption && hoveredOption.startsWith(`${index}-`) ? "translateY(-2px)" : "none",
+                  scrollMarginTop: "120px" // Account for the sticky progress bar when scrolling
                 }}
               >
-                {scaleOptions.map((option) => {
-                  const selected = answers[index] === option;
+                <p
+                  style={{
+                    color: isAnswered ? "#334155" : "#475569",
+                    fontSize: "1.05rem",
+                    fontWeight: 500,
+                    lineHeight: 1.5,
+                    marginBottom: "1.25rem",
+                    display: "flex",
+                    gap: "0.75rem"
+                  }}
+                >
+                  <span style={{ color: "#7c3aed", fontWeight: 700 }}>{index + 1}.</span> 
+                  {question}
+                </p>
 
-                  return (
-                    <label
-                      key={option}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "0.5rem",
-                        minWidth: "54px",
-                        padding: "0.65rem 1rem",
-                        borderRadius: "8px",
-                        border: selected
-                          ? "1px solid var(--primary)"
-                          : "1px solid var(--surface-light)",
-                        background: selected
-                          ? "rgba(37, 99, 235, 0.1)"
-                          : "#ffffff",
-                        color: selected ? "var(--primary)" : "var(--text-muted)",
-                        fontSize: "0.95rem",
-                        fontWeight: 500,
-                        cursor: "pointer",
-                        transition: "all 0.3s ease",
-                      }}
-                    >
-                      <input
-                        type="radio"
-                        name={`question-${index}`}
-                        value={option}
-                        checked={selected}
-                        onChange={(e) => handleChange(index, e.target.value)}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: "0.5rem",
+                    marginTop: "1rem"
+                  }}
+                >
+                  {scaleOptions.map((option) => {
+                    const selected = answers[index] === option;
+                    const isHovered = hoveredOption === `${index}-${option}`;
+
+                    return (
+                      <label
+                        key={option}
+                        onMouseEnter={() => setHoveredOption(`${index}-${option}`)}
+                        onMouseLeave={() => setHoveredOption(null)}
                         style={{
-                          width: "16px",
-                          height: "16px",
-                          accentColor: "var(--primary)",
+                          flex: 1,
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "0.5rem",
+                          padding: "0.75rem 0.5rem",
+                          borderRadius: "8px",
+                          border: selected
+                            ? "2px solid #7c3aed"
+                            : isHovered 
+                              ? "2px solid rgba(139, 92, 246, 0.5)"
+                              : "2px solid rgba(0, 0, 0, 0.06)",
+                          background: selected
+                            ? "rgba(139, 92, 246, 0.1)"
+                            : isHovered
+                              ? "rgba(139, 92, 246, 0.03)"
+                              : "transparent",
+                          color: selected ? "#6d28d9" : "#64748b",
+                          fontSize: "1.1rem",
+                          fontWeight: selected ? 700 : 500,
+                          cursor: "pointer",
+                          transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                          transform: selected ? "scale(1.02)" : "scale(1)",
+                          boxShadow: selected ? "0 4px 12px rgba(139, 92, 246, 0.15)" : "none"
                         }}
-                      />
-                      {option}
-                    </label>
-                  );
-                })}
+                      >
+                        <input
+                          type="radio"
+                          name={`question-${index}`}
+                          value={option}
+                          checked={selected}
+                          onChange={(e) => handleChange(index, e.target.value)}
+                          style={{
+                            appearance: "none",
+                            width: 0,
+                            height: 0,
+                            margin: 0,
+                            opacity: 0,
+                            position: "absolute"
+                          }}
+                        />
+                        {option}
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           {error && (
-            <div className="error-message" style={{ marginBottom: 0 }}>
+            <div style={{
+              background: "rgba(248, 113, 113, 0.1)",
+              border: "1px solid rgba(248, 113, 113, 0.3)",
+              color: "#fca5a5",
+              padding: "1rem",
+              borderRadius: "8px",
+              textAlign: "center",
+              marginTop: "1rem"
+            }}>
               {error}
             </div>
           )}
 
           {success && (
-            <div
-              style={{
-                backgroundColor: "#ecfdf5",
-                color: "var(--success)",
-                padding: "0.75rem 1rem",
-                borderRadius: "8px",
-                fontSize: "0.875rem",
-                border: "1px solid #a7f3d0",
-              }}
-            >
+            <div style={{
+              background: "rgba(52, 211, 153, 0.1)",
+              border: "1px solid rgba(52, 211, 153, 0.3)",
+              color: "#6ee7b7",
+              padding: "1rem",
+              borderRadius: "8px",
+              textAlign: "center",
+              marginTop: "1rem"
+            }}>
               {success}
             </div>
           )}
@@ -284,23 +379,80 @@ export default function AssistQuestionPage() {
           <div
             style={{
               display: "flex",
-              justifyContent: "flex-end",
+              justifyContent: "space-between",
               alignItems: "center",
-              gap: "1rem",
-              paddingTop: "0.5rem",
+              marginTop: "2rem",
+              paddingTop: "2rem",
+              borderTop: "1px solid rgba(0, 0, 0, 0.05)"
             }}
           >
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn btn-primary"
-              style={{
-                opacity: loading ? 0.6 : 1,
-                cursor: loading ? "not-allowed" : "pointer",
-              }}
-            >
-              {loading ? "Submitting..." : "Submit Answers"}
-            </button>
+            {currentPage > 0 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setCurrentPage(prev => prev - 1);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                style={{
+                  background: "transparent",
+                  color: "#7c3aed",
+                  border: "1px solid rgba(139, 92, 246, 0.3)",
+                  padding: "0.8rem 2rem",
+                  fontSize: "1.05rem",
+                  fontWeight: 600,
+                  borderRadius: "99px",
+                  cursor: "pointer",
+                  transition: "all 0.3s ease"
+                }}
+              >
+                Previous
+              </button>
+            ) : <div />}
+
+            {currentPage === 0 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setCurrentPage(prev => prev + 1);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                disabled={!isCurrentPageComplete}
+                style={{
+                  background: isCurrentPageComplete ? "linear-gradient(135deg, #7c3aed 0%, #2563eb 100%)" : "#f1f5f9",
+                  color: isCurrentPageComplete ? "#fff" : "#94a3b8",
+                  border: "none",
+                  padding: "0.8rem 2.5rem",
+                  fontSize: "1.05rem",
+                  fontWeight: 600,
+                  borderRadius: "99px",
+                  cursor: isCurrentPageComplete ? "pointer" : "not-allowed",
+                  boxShadow: isCurrentPageComplete ? "0 10px 24px -12px rgba(124, 58, 237, 0.7)" : "none",
+                  transition: "all 0.3s ease"
+                }}
+              >
+                Next Page
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={loading || !isComplete}
+                style={{
+                  background: (!loading && isComplete) ? "linear-gradient(135deg, #7c3aed 0%, #2563eb 100%)" : "#f1f5f9",
+                  color: (!loading && isComplete) ? "#fff" : "#94a3b8",
+                  border: "none",
+                  padding: "0.8rem 2.5rem",
+                  fontSize: "1.05rem",
+                  fontWeight: 700,
+                  borderRadius: "99px",
+                  cursor: (!loading && isComplete) ? "pointer" : "not-allowed",
+                  boxShadow: (!loading && isComplete) ? "0 10px 24px -12px rgba(124, 58, 237, 0.7)" : "none",
+                  transition: "all 0.3s ease",
+                  transform: (!loading && isComplete) ? "translateY(-2px)" : "none"
+                }}
+              >
+                {loading ? "Submitting..." : "Complete Assessment"}
+              </button>
+            )}
           </div>
         </form>
       </div>
