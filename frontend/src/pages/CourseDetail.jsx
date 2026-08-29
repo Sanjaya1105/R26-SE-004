@@ -80,11 +80,11 @@ const PLAYBACK_PROMPT_COPY = {
     extraInstruction:
       'The student asked for personalization after a short lesson video. Use the exact knowledge chunk. Cognitive load is High and frustration is High. Do not use a measured cognitive style. Do not invent facts.',
   },
-  end: {
-    title: 'Lesson suggestion',
-    body: 'Do you need any suggestion in another way?',
+  longEnd: {
+    title: 'Personalization',
+    body: 'Do you need any personalization for this lesson?',
     extraInstruction:
-      'The student finished the lesson video and asked for a suggestion in another way. Explain the same knowledge chunk using a different method than a first pass, such as a worked example, analogy, or step-by-step recap.',
+      'The student asked for personalization at the end of this lesson. Use the exact knowledge chunk. Match the visual-verbal and analytic-holistic styles from the student profile. Use the latest predicted cognitive load and the matching frustration level. Do not invent facts.',
   },
 };
 
@@ -372,6 +372,10 @@ function normalizeLoadLevel(value) {
     'very high': 'Very High',
   };
   return map[key] || '';
+}
+
+function isHighCognitiveLoad(level) {
+  return level === 'High' || level === 'Very High';
 }
 
 const SEEK_JUMP_THRESHOLD_SECONDS = 2;
@@ -855,6 +859,8 @@ const CourseDetail = () => {
   const playbackPromptRef = useRef(null);
   const endPromptShownRef = useRef(false);
   const shortVideoEndNotifiedRef = useRef(false);
+  const longVideoEndNotifiedRef = useRef(false);
+  const latestPredictedLoadRef = useRef('');
   const pedagogicalPromptRef = useRef('');
   const loadLevelRef = useRef('Medium');
   const promptLoadingRef = useRef(false);
@@ -974,6 +980,8 @@ const CourseDetail = () => {
     playbackPromptRef.current = null;
     endPromptShownRef.current = false;
     shortVideoEndNotifiedRef.current = false;
+    longVideoEndNotifiedRef.current = false;
+    latestPredictedLoadRef.current = '';
     twoMinuteNotifyDoneRef.current = false;
     setLoadLevel('Medium');
     setCognitiveLoadResult(null);
@@ -1004,6 +1012,8 @@ const CourseDetail = () => {
     playbackPromptRef.current = null;
     endPromptShownRef.current = false;
     shortVideoEndNotifiedRef.current = false;
+    longVideoEndNotifiedRef.current = false;
+    latestPredictedLoadRef.current = '';
     twoMinuteNotifyDoneRef.current = false;
     setLoadLevel('Medium');
     setCourseTrackingDisabled(false);
@@ -1099,6 +1109,8 @@ const CourseDetail = () => {
     lastPredictedWindowKeyRef.current = '';
     predictionInFlightWindowKeyRef.current = '';
     twoMinuteNotifyDoneRef.current = false;
+    longVideoEndNotifiedRef.current = false;
+    latestPredictedLoadRef.current = '';
     activeRawEventWindowKeyRef.current = getActiveWindowKey(startedAt, sessionId);
     resetActiveWindowStats(activeRawEventWindowKeyRef.current);
 
@@ -1119,6 +1131,10 @@ const CourseDetail = () => {
   }, [courseId, mainVideo?.lessonId, mainVideo?.subsectionId, mainVideo?.url]);
 
   const offerPersonalizationAfterLoadPrediction = async (predictedLoad) => {
+    if (predictedLoad) {
+      latestPredictedLoadRef.current = predictedLoad;
+      highLoadLevelRef.current = predictedLoad;
+    }
     if (twoMinuteNotifyDoneRef.current) return;
     const duration = Number(videoRef.current?.duration || 0);
     if (isShortLessonVideo(duration)) {
@@ -1128,13 +1144,15 @@ const CourseDetail = () => {
     if (!predictedLoad) return;
 
     twoMinuteNotifyDoneRef.current = true;
-    highLoadLevelRef.current = predictedLoad;
+    if (!isHighCognitiveLoad(predictedLoad)) return;
+
     playbackPromptRef.current = 'highLoad';
     setPlaybackPrompt('highLoad');
     void showHighLoadPersonalizationNotification({
       courseId,
       subsectionId: mainVideo?.subsectionId,
       loadLevel: predictedLoad,
+      kind: 'highLoad',
       url: window.location.href,
     });
   };
@@ -1605,12 +1623,29 @@ const CourseDetail = () => {
     });
   };
 
-  const openPlaybackPersonalizationPrompt = (kind) => {
-    if (kind !== 'highLoad' && kind !== 'end' && kind !== 'shortEnd') return;
-    if (kind === 'end' && endPromptShownRef.current) return;
-    if (kind === 'end') endPromptShownRef.current = true;
-    playbackPromptRef.current = kind;
-    setPlaybackPrompt(kind);
+  const offerLongVideoEndPersonalization = () => {
+    if (longVideoEndNotifiedRef.current) return;
+    const duration = Number(videoRef.current?.duration || 0);
+    if (!Number.isFinite(duration) || duration <= 0) return;
+    if (isShortLessonVideo(duration)) return;
+
+    const lastLoad =
+      latestPredictedLoadRef.current ||
+      normalizeLoadLevel(loadLevelRef.current) ||
+      'Medium';
+
+    longVideoEndNotifiedRef.current = true;
+    highLoadLevelRef.current = lastLoad;
+    playbackPromptRef.current = 'longEnd';
+    setPlaybackPrompt('longEnd');
+    void showHighLoadPersonalizationNotification({
+      courseId,
+      subsectionId: mainVideo?.subsectionId,
+      loadLevel: lastLoad,
+      kind: 'longEnd',
+      body: 'Do you need any personalization for this lesson?',
+      url: window.location.href,
+    });
   };
 
   const dismissPlaybackPersonalizationPrompt = () => {
@@ -1674,7 +1709,7 @@ const CourseDetail = () => {
       return;
     }
     if (currentTime >= duration - 0.35) {
-      openPlaybackPersonalizationPrompt('end');
+      offerLongVideoEndPersonalization();
     }
   };
 
@@ -1698,7 +1733,7 @@ const CourseDetail = () => {
     if (isShortLessonVideo(duration)) {
       offerShortVideoEndPersonalization();
     } else {
-      openPlaybackPersonalizationPrompt('end');
+      offerLongVideoEndPersonalization();
     }
     markInteraction();
   };
@@ -4022,7 +4057,7 @@ const CourseDetail = () => {
               await startForcedHighPersonalization();
               return;
             }
-            if (kind === 'highLoad') {
+            if (kind === 'highLoad' || kind === 'longEnd') {
               await startHighLoadPersonalization(highLoadLevelRef.current);
               return;
             }
