@@ -1,6 +1,6 @@
 const multer = require("multer");
 
-const maxVideoSizeBytes = 40 * 1024 * 1024;
+const maxVideoSizeBytes = 100 * 1024 * 1024;
 
 const uploadVideo = multer({
   storage: multer.memoryStorage(),
