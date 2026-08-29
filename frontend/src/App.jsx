@@ -30,6 +30,7 @@ import ObjectSpacialVerbalQuestionnaire from './pages/cognitiveStyleAndLearnerPr
 import GetExam from './pages/GetExam';
 import NextLessonRecommendation from './pages/NextLessonRecommendation';
 import TeacherPushBridge from './components/TeacherPushBridge';
+import StudentAppShell from './components/StudentAppShell';
 import './index.css';
 
 const getStoredUser = () => {
@@ -68,11 +69,21 @@ function App() {
       <TeacherPushBridge />
       <Routes>
         <Route path="/" element={<Navigate to="/course" replace />} />
-        <Route path="/student/login" element={<StudentLogin />} />
-        <Route path="/student/register" element={<StudentRegistration />} />
+        <Route path="/student/login" element={
+          <StudentAppShell>
+            <StudentLogin />
+          </StudentAppShell>
+        } />
+        <Route path="/student/register" element={
+          <StudentAppShell>
+            <StudentRegistration />
+          </StudentAppShell>
+        } />
         <Route path="/student/profile" element={
           <StudentRoute>
-            <StudentProfile />
+            <StudentAppShell>
+              <StudentProfile />
+            </StudentAppShell>
           </StudentRoute>
         } />
         <Route path="/login" element={<Login />} />
@@ -90,20 +101,48 @@ function App() {
         } />
         <Route path="/course/:courseId" element={
           <StudentRoute>
-            <CourseDetail />
+            <StudentAppShell>
+              <CourseDetail />
+            </StudentAppShell>
           </StudentRoute>
         } />
         <Route path="/course" element={
           <StudentRoute>
-            <Course />
+            <StudentAppShell>
+              <Course />
+            </StudentAppShell>
           </StudentRoute>
         } />
-        <Route path="/learner-profile" element={<AssistQuestionPage />} />
-        <Route path="/split-screen" element={<Module2 />} />
-        <Route path="/geft" element={<QuestionRunner />} />
-        <Route path="/calibration" element={<CalibrationPage />} />
-        <Route path="/ahs-questionnaire" element={<AHSQuestionnaire />} />
-        <Route path="/visualverbalquestionnaire" element={<ObjectSpacialVerbalQuestionnaire />} />
+        <Route path="/learner-profile" element={
+          <StudentAppShell>
+            <AssistQuestionPage />
+          </StudentAppShell>
+        } />
+        <Route path="/split-screen" element={
+          <StudentAppShell>
+            <Module2 />
+          </StudentAppShell>
+        } />
+        <Route path="/geft" element={
+          <StudentAppShell>
+            <QuestionRunner />
+          </StudentAppShell>
+        } />
+        <Route path="/calibration" element={
+          <StudentAppShell>
+            <CalibrationPage />
+          </StudentAppShell>
+        } />
+        <Route path="/ahs-questionnaire" element={
+          <StudentAppShell>
+            <AHSQuestionnaire />
+          </StudentAppShell>
+        } />
+        <Route path="/visualverbalquestionnaire" element={
+          <StudentAppShell>
+            <ObjectSpacialVerbalQuestionnaire />
+          </StudentAppShell>
+        } />
 
         <Route path="/dashboard" element={
           <PrivateRoute>
@@ -167,12 +206,16 @@ function App() {
         } />
         <Route path="/get-exam" element={
           <StudentRoute>
-            <GetExam />
+            <StudentAppShell>
+              <GetExam />
+            </StudentAppShell>
           </StudentRoute>
         } />
         <Route path="/student/previous-lesson-summary" element={
           <StudentRoute>
-            <PreviousLessonSummary />
+            <StudentAppShell>
+              <PreviousLessonSummary />
+            </StudentAppShell>
           </StudentRoute>
         } />
       </Routes>

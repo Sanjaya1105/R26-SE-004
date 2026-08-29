@@ -622,7 +622,8 @@ const Course = () => {
 
         {!loading && !error && showHome ? (
           <>
-            <section className="home-welcome">
+            <section className="home-hero">
+              <div className="home-welcome">
               <Link
                 to="/student/profile"
                 className="home-welcome__avatar"
@@ -630,11 +631,27 @@ const Course = () => {
               >
                 {initials}
               </Link>
-              <div>
+              <div className="home-welcome__copy">
+                <p className="home-hero__eyebrow">Student catalog</p>
                 <h1>Welcome back, {firstName}</h1>
                 <Link to="/student/profile" className="home-welcome__link">
                   Add occupation and interests
                 </Link>
+              </div>
+              <div className="home-hero__stats" aria-label="Your learning snapshot">
+                <div>
+                  <strong>{enrolledIds.size}</strong>
+                  <span>Enrolled</span>
+                </div>
+                <div>
+                  <strong>{favoriteIds.size}</strong>
+                  <span>Favorites</span>
+                </div>
+                <div>
+                  <strong>{continueLearning.length}</strong>
+                  <span>In progress</span>
+                </div>
+              </div>
               </div>
             </section>
 
@@ -699,7 +716,7 @@ const Course = () => {
                 <div className="home-section__head">
                   <h2>Let’s start learning</h2>
                 </div>
-                <p className="course-catalog__status">
+                <p className="course-catalog__empty">
                   Enroll in a course and your most active lessons will appear here.
                 </p>
               </section>
@@ -719,7 +736,7 @@ const Course = () => {
                   )}
                 </div>
               ) : (
-                <p className="course-catalog__status">
+                <p className="course-catalog__empty">
                   No more suggestions right now. Search an educator to find a course.
                 </p>
               )}
@@ -736,7 +753,7 @@ const Course = () => {
               </div>
             </div>
             {visibleCourses.length === 0 ? (
-              <p className="course-catalog__status">
+              <p className="course-catalog__empty">
                 {searchQuery.trim()
                   ? 'No educator or course matched that search.'
                   : catalogView === 'favorites'
