@@ -57,13 +57,33 @@ const StudentProfile = () => {
     };
   }, []);
 
+  const [completeUser, setCompleteUser] = useState(null);
+
+  useEffect(() => {
+    const fetchStudentDetails = async (studentId) => {
+      try {
+        const response = await axios.get(`${getGatewayBaseUrl()}/api/auth/student/${studentId}`);
+        setCompleteUser(response.data.student);
+      } catch (err) {
+        console.error('Failed to fetch student details:', err);
+      }
+    };
+
+    if (user?.id) {
+      fetchStudentDetails(user.id);
+    }
+  }, [user?.id]);
+
+
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     navigate('/student/login');
   };
 
-  const initials = (user?.name || user?.email || 'S')
+  const displayUser = completeUser || user;
+
+  const initials = (displayUser?.name || displayUser?.email || 'S')
     .trim()
     .split(/\s+/)
     .slice(0, 2)
@@ -151,37 +171,52 @@ const StudentProfile = () => {
             {initials}
           </div>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <h2
-              style={{
-                fontSize: '1.25rem',
-                fontWeight: 700,
-                color: 'var(--text)',
-                marginBottom: '0.35rem',
-                wordBreak: 'break-word',
-              }}
-            >
-              {user?.name || 'Student'}
-            </h2>
-            <div
-              style={{
-                display: 'grid',
-                gap: '0.35rem',
-                fontSize: '0.95rem',
-                color: 'var(--text-muted)',
-              }}
-            >
-              <p>
-                <span style={{ color: 'var(--text)' }}>Email:</span>{' '}
-                {user?.email || '—'}
-              </p>
-              <p>
-                <span style={{ color: 'var(--text)' }}>Role:</span>{' '}
-                {user?.role || 'Student'}
-              </p>
-              <p>
-                <span style={{ color: 'var(--text)' }}>Mobile:</span>{' '}
-                {user?.mobileNumber || '—'}
-              </p>
+              <h2
+                style={{
+                  fontSize: '1.25rem',
+                  fontWeight: 700,
+                  color: 'var(--text)',
+                  marginBottom: '0.35rem',
+                  wordBreak: 'break-word',
+                }}
+              >
+                {displayUser?.name || 'Student'}
+              </h2>
+              <div
+                style={{
+                  display: 'grid',
+                  gap: '0.35rem',
+                  fontSize: '0.95rem',
+                  color: 'var(--text-muted)',
+                }}
+              >
+                <p>
+                  <span style={{ color: 'var(--text)' }}>Email:</span>{' '}
+                  {displayUser?.email || '—'}
+                </p>
+                <p>
+                  <span style={{ color: 'var(--text)' }}>Role:</span>{' '}
+                  {displayUser?.role || 'Student'}
+                </p>
+                <p>
+                  <span style={{ color: 'var(--text)' }}>Mobile:</span>{' '}
+                  {displayUser?.mobileNumber || '—'}
+                </p>
+                              <p>
+                  <span style={{ color: 'var(--text)' }}>Visual Verbal Cognitive Style:</span>{' '}
+                  {displayUser?.visualVerbalCognitiveStyle || '—'}
+                </p>
+  
+                                            <p>
+                  <span style={{ color: 'var(--text)' }}>Analytic Wholistic Cognitive Style:</span>{' '}
+                  {displayUser?.analyticWholisticCognitiveStyle || '—'}
+                </p>
+  
+                                                          <p>
+                  <span style={{ color: 'var(--text)' }}>Learner Profile:</span>{' '}
+                  {displayUser?.learnerProfile || '—'}
+                </p>
+              
             </div>
           </div>
           <button

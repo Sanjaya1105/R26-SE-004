@@ -315,4 +315,30 @@ router.post('/student/login', async (req, res) => {
   }
 });
 
+// Get student details by ID
+router.get('/student/:id', async (req, res) => {
+  try {
+    const studentId = req.params.id;
+
+    // Find student and exclude the password field for security
+    const student = await Student.findById(studentId).select('-password');
+
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    res.json({
+      message: 'Student details retrieved successfully',
+      student
+    });
+    
+  } catch (err) {
+    // Handle invalid MongoDB ObjectId format
+    if (err.name === 'CastError' && err.kind === 'ObjectId') {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+    handleServerError(res, err);
+  }
+});
+
 module.exports = router;
