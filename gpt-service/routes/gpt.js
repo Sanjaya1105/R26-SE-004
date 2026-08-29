@@ -5,6 +5,8 @@ const ChatMessage = require("../models/ChatMessage");
 const {
   buildPedagogicalPrompt,
   COGNITIVE_STYLES,
+  VISUAL_VERBAL_STYLES,
+  ANALYTIC_HOLISTIC_STYLES,
   LOAD_LEVELS,
   FRUSTRATION_LEVELS,
 } = require("../components/promptBuilder");
@@ -55,6 +57,8 @@ router.post("/build-prompt", (req, res) => {
       dedupedPptText: body.dedupedPptText,
       dedupedPdfText: body.dedupedPdfText,
       studentProfile: body.studentProfile,
+      visualVerbalCognitiveStyle: body.visualVerbalCognitiveStyle,
+      analyticWholisticCognitiveStyle: body.analyticWholisticCognitiveStyle,
       cognitiveStyle: body.cognitiveStyle,
       cognitiveLoad: body.cognitiveLoad,
       containsMath: body.containsMath,
@@ -65,6 +69,8 @@ router.post("/build-prompt", (req, res) => {
         prompt,
         schema: {
           cognitiveStyles: COGNITIVE_STYLES,
+          visualVerbalStyles: VISUAL_VERBAL_STYLES,
+          analyticHolisticStyles: ANALYTIC_HOLISTIC_STYLES,
           loadLevels: LOAD_LEVELS,
           frustrationLevels: FRUSTRATION_LEVELS,
         },

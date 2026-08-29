@@ -1,12 +1,8 @@
 const { filterWhisperNoise } = require("../lib/whisperNoise");
 
-const COGNITIVE_STYLES = new Set([
-  "Visual",
-  "Intermediate",
-  "Auditory",
-  "Read/Write",
-  "Kinesthetic",
-]);
+const VISUAL_VERBAL_STYLES = new Set(["Visual", "Verbal", "Intermediate"]);
+const ANALYTIC_HOLISTIC_STYLES = new Set(["Analytic", "Holistic"]);
+const COGNITIVE_STYLES = VISUAL_VERBAL_STYLES;
 
 const LOAD_LEVELS = new Set([
   "Very Low",
@@ -22,19 +18,46 @@ function clean(str) {
   return String(str ?? "").trim();
 }
 
-function normalizeCognitiveStyle(value) {
+function normalizeKnownAlias(value, aliases) {
   const raw = clean(value);
-  if (COGNITIVE_STYLES.has(raw)) return raw;
-  const key = raw.toLowerCase();
-  if (key === "intermediary" || key === "intermediatory" || key === "moderate") {
-    return "Intermediate";
-  }
-  if (key === "verbal") return "Read/Write";
-  return "Visual";
+  if (!raw) return "";
+  if (aliases.has(raw)) return raw;
+  const key = raw.toLowerCase().replace(/-/g, "/");
+  return aliases.get(key) || raw;
 }
 
-function wantsMermaidDiagrams(style) {
-  return style === "Visual" || style === "Intermediate";
+function normalizeVisualVerbalStyle(value) {
+  const normalized = normalizeKnownAlias(
+    value,
+    new Map([
+      ["visual", "Visual"],
+      ["verbal", "Verbal"],
+      ["intermediate", "Intermediate"],
+      ["intermediary", "Intermediate"],
+      ["intermediatory", "Intermediate"],
+      ["moderate", "Intermediate"],
+      ["moderate/intermediate", "Intermediate"],
+      ["moderate/intermediatory", "Intermediate"],
+    ])
+  );
+  return normalized || "Visual";
+}
+
+function normalizeAnalyticHolisticStyle(value) {
+  const normalized = normalizeKnownAlias(
+    value,
+    new Map([
+      ["analytic", "Analytic"],
+      ["analytical", "Analytic"],
+      ["holistic", "Holistic"],
+      ["wholistic", "Holistic"],
+    ])
+  );
+  return normalized || "Analytic";
+}
+
+function wantsMermaidDiagrams(visualVerbalStyle) {
+  return visualVerbalStyle === "Visual" || visualVerbalStyle === "Intermediate";
 }
 
 function isTruthyFlag(value) {
@@ -86,17 +109,21 @@ function uniqueKnowledgeText(input = {}) {
  * @param {string} [input.pptText]
  * @param {string} [input.pdfText]
  * @param {boolean} [input.containsMath]
- * @param {{ major?: string, year?: string, interests?: string }} [input.studentProfile]
- * @param {string} [input.cognitiveStyle] - Visual | Intermediate | Auditory | Read/Write | Kinesthetic
+ * @param {{ year?: string }} [input.studentProfile]
+ * @param {string} [input.visualVerbalCognitiveStyle] - Visual | Verbal | Intermediate
+ * @param {string} [input.analyticWholisticCognitiveStyle] - Analytic | Holistic
+ * @param {string} [input.cognitiveStyle] - legacy alias for visual-verbal style
  * @param {{ level?: string, frustration?: string }} [input.cognitiveLoad]
  */
 function buildPedagogicalPrompt(input = {}) {
-  const major = clean(input.studentProfile?.major) || "[Major]";
   const year = clean(input.studentProfile?.year) || "[Year]";
-  const interests =
-    clean(input.studentProfile?.interests) || "[Interests]";
 
-  const style = normalizeCognitiveStyle(input.cognitiveStyle);
+  const visualVerbalStyle = normalizeVisualVerbalStyle(
+    input.visualVerbalCognitiveStyle ?? input.cognitiveStyle
+  );
+  const analyticHolisticStyle = normalizeAnalyticHolisticStyle(
+    input.analyticWholisticCognitiveStyle
+  );
 
   let loadLevel = clean(input.cognitiveLoad?.level) || "Medium";
   if (!LOAD_LEVELS.has(loadLevel)) {
@@ -123,7 +150,7 @@ function buildPedagogicalPrompt(input = {}) {
     uniqueText || "(none)",
   ].join("\n");
 
-  const mermaidInstructions = wantsMermaidDiagrams(style)
+  const mermaidInstructions = wantsMermaidDiagrams(visualVerbalStyle)
     ? `
 Diagram rule: If a process, cycle, comparison, or concept map would help this Visual/Intermediate learner, include one fenced Mermaid block the app will draw. Pick the matching type:
 - flowchart LR or flowchart TB for a process
@@ -158,8 +185,8 @@ $$
   return `System Role: You are a pedagogical expert specializing in instructional content transformation. Your goal is to adapt a specific knowledge chunk for a student to maximize engagement and minimize cognitive fatigue.
 
 Inputs:
-Student Profile: {Major: ${major}, Year: ${year}, Interests: ${interests}}
-Cognitive Style: {Style: ${style} (Visual, Intermediate, Auditory, Read/Write, or Kinesthetic)}
+Student Profile: {Year: ${year}}
+Cognitive Style: {Visual-Verbal: ${visualVerbalStyle} (Visual, Verbal, or Intermediate), Analytic-Holistic: ${analyticHolisticStyle} (Analytic or Holistic)}
 Current Cognitive Load: {Level: ${loadLevel} (1 of 5: Very Low, Low, Medium, High, Very High), Frustration: ${frustration} (Low, Moderate, High)}
 Knowledge Chunk: {Unique extractive lesson knowledge. Do not invent facts.}
 
@@ -167,7 +194,9 @@ ${knowledgeChunk}
 
 Instructions:
 Assess Need: Analyze the knowledge chunk. If it is purely transitional or too simple, output it in its original form.
-Transformation Goal: If adaptation is needed, rewrite the knowledge chunk to reduce cognitive load and match the student's cognitive style while preserving the original meaning.
+Transformation Goal: If adaptation is needed, rewrite the knowledge chunk to reduce cognitive load and match both cognitive styles while preserving the original meaning.
+- Visual-Verbal (${visualVerbalStyle}): Visual learners need spatial layouts and diagrams. Verbal learners need prose, definitions, and spoken-style explanation. Intermediate learners need a mix of both.
+- Analytic-Holistic (${analyticHolisticStyle}): Analytic learners need sequential steps and parts-before-whole. Holistic learners need the big picture first, then how the parts connect.
 
 Visual layout rules:
 - Prefer Markdown headings, short paragraphs, and bullet lists over dense prose.${mermaidInstructions}${mathInstructions}`;
@@ -177,6 +206,8 @@ module.exports = {
   buildPedagogicalPrompt,
   uniqueKnowledgeText,
   COGNITIVE_STYLES: Array.from(COGNITIVE_STYLES),
+  VISUAL_VERBAL_STYLES: Array.from(VISUAL_VERBAL_STYLES),
+  ANALYTIC_HOLISTIC_STYLES: Array.from(ANALYTIC_HOLISTIC_STYLES),
   LOAD_LEVELS: Array.from(LOAD_LEVELS),
   FRUSTRATION_LEVELS: Array.from(FRUSTRATION_LEVELS),
 };

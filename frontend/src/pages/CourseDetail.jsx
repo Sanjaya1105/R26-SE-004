@@ -376,6 +376,43 @@ function getActiveStudentId() {
   }
 }
 
+function getLoggedInStudentId() {
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || 'null');
+    return String(user?.id ?? user?._id ?? '').trim();
+  } catch {
+    return '';
+  }
+}
+
+function resolveVisualVerbalStyle(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return 'Visual';
+  const key = raw.toLowerCase().replace(/-/g, '/');
+  if (key === 'verbal') return 'Verbal';
+  if (
+    key === 'intermediate' ||
+    key === 'intermediary' ||
+    key === 'intermediatory' ||
+    key === 'moderate' ||
+    key === 'moderate/intermediate' ||
+    key === 'moderate/intermediatory'
+  ) {
+    return 'Intermediate';
+  }
+  if (key === 'visual') return 'Visual';
+  return raw;
+}
+
+function resolveAnalyticHolisticStyle(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return 'Analytic';
+  const key = raw.toLowerCase();
+  if (key === 'holistic' || key === 'wholistic') return 'Holistic';
+  if (key === 'analytic' || key === 'analytical') return 'Analytic';
+  return raw;
+}
+
 function splitWords(text) {
   return String(text ?? '')
     .trim()
@@ -763,10 +800,9 @@ const CourseDetail = () => {
   const [pedagogicalPrompt, setPedagogicalPrompt] = useState('');
   const [promptLoading, setPromptLoading] = useState(false);
   const [promptError, setPromptError] = useState('');
-  const [studentMajor, setStudentMajor] = useState('');
   const [studentYear, setStudentYear] = useState('');
-  const [studentInterests, setStudentInterests] = useState('');
-  const [cognitiveStyle, setCognitiveStyle] = useState('Visual');
+  const [visualVerbalStyle, setVisualVerbalStyle] = useState('Visual');
+  const [analyticHolisticStyle, setAnalyticHolisticStyle] = useState('Analytic');
   const [loadLevel, setLoadLevel] = useState('Medium');
   const [frustration, setFrustration] = useState('Low');
   const [profileOpen, setProfileOpen] = useState(false);
@@ -1662,6 +1698,37 @@ const CourseDetail = () => {
   ]);
 
   useEffect(() => {
+    let cancelled = false;
+    const studentId = getLoggedInStudentId();
+    if (!studentId) return undefined;
+
+    (async () => {
+      try {
+        const res = await axios.get(
+          `${getGatewayBaseUrl()}/api/auth/student/${encodeURIComponent(studentId)}`
+        );
+        if (cancelled) return;
+        const student = res.data?.student || {};
+        setVisualVerbalStyle(
+          resolveVisualVerbalStyle(student.visualVerbalCognitiveStyle)
+        );
+        setAnalyticHolisticStyle(
+          resolveAnalyticHolisticStyle(student.analyticWholisticCognitiveStyle)
+        );
+      } catch {
+        if (!cancelled) {
+          setVisualVerbalStyle('Visual');
+          setAnalyticHolisticStyle('Analytic');
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!mainVideo?.url) {
       setPedagogicalPrompt('');
       setPromptLoading(false);
@@ -1679,11 +1746,10 @@ const CourseDetail = () => {
         knowledgeChunk: mainVideo.knowledgeChunk || '',
         containsMath: Boolean(mainVideo.containsMath),
         studentProfile: {
-          major: studentMajor,
           year: studentYear,
-          interests: studentInterests,
         },
-        cognitiveStyle,
+        visualVerbalCognitiveStyle: visualVerbalStyle,
+        analyticWholisticCognitiveStyle: analyticHolisticStyle,
         cognitiveLoad: { level: loadLevel, frustration },
       };
 
@@ -1731,10 +1797,9 @@ const CourseDetail = () => {
     mainVideo?.knowledgeChunk,
     mainVideo?.containsMath,
     course?.courseName,
-    studentMajor,
     studentYear,
-    studentInterests,
-    cognitiveStyle,
+    visualVerbalStyle,
+    analyticHolisticStyle,
     loadLevel,
     frustration,
   ]);
@@ -3143,9 +3208,10 @@ const CourseDetail = () => {
                         }}
                       >
                         {[
-                          cognitiveStyle,
+                          visualVerbalStyle,
+                          analyticHolisticStyle,
+                          studentYear,
                           `Load ${loadLevel}`,
-                          studentMajor,
                         ]
                           .filter(Boolean)
                           .join(' · ')}
@@ -3175,8 +3241,8 @@ const CourseDetail = () => {
                     lineHeight: 1.45,
                   }}
                 >
-                  Adjust these fields. Ask uses the unique knowledge chunk below
-                  (PPT, PDF, and video combined by MiniLM).
+                  Adjust year and load if needed. Cognitive styles come from the
+                  student profile and are inserted into the prompt automatically.
                 </p>
                 <div
                   style={{
@@ -3189,39 +3255,22 @@ const CourseDetail = () => {
                   <input
                     type="text"
                     className="form-input"
-                    placeholder="Major"
-                    value={studentMajor}
-                    onChange={(e) => setStudentMajor(e.target.value)}
-                    style={{ fontSize: '0.82rem' }}
-                  />
-                  <input
-                    type="text"
-                    className="form-input"
                     placeholder="Year"
                     value={studentYear}
                     onChange={(e) => setStudentYear(e.target.value)}
                     style={{ fontSize: '0.82rem' }}
                   />
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Interests"
-                    value={studentInterests}
-                    onChange={(e) => setStudentInterests(e.target.value)}
-                    style={{ gridColumn: '1 / -1', fontSize: '0.82rem' }}
-                  />
-                  <select
-                    className="form-input"
-                    value={cognitiveStyle}
-                    onChange={(e) => setCognitiveStyle(e.target.value)}
-                    style={{ fontSize: '0.82rem' }}
+                  <div
+                    style={{
+                      gridColumn: '1 / -1',
+                      fontSize: '0.82rem',
+                      color: 'var(--text-muted)',
+                      lineHeight: 1.45,
+                    }}
                   >
-                    <option value="Visual">Visual</option>
-                    <option value="Intermediate">Intermediate</option>
-                    <option value="Auditory">Auditory</option>
-                    <option value="Read/Write">Read/Write</option>
-                    <option value="Kinesthetic">Kinesthetic</option>
-                  </select>
+                    Visual-Verbal: {visualVerbalStyle} · Analytic-Holistic:{' '}
+                    {analyticHolisticStyle}
+                  </div>
                   <select
                     className="form-input"
                     value={loadLevel}
@@ -3292,8 +3341,8 @@ const CourseDetail = () => {
                         {promptLoading
                           ? 'Building prompt…'
                           : pedagogicalPrompt.trim()
-                            ? 'Knowledge chunk and pedagogical prompt are ready'
-                            : 'Open to review the knowledge chunk and prompt'}
+                            ? 'Pedagogical prompt is ready'
+                            : 'Open to review the prompt'}
                       </span>
                     ) : null}
                   </span>
@@ -3335,62 +3384,6 @@ const CourseDetail = () => {
                     {promptError}
                   </p>
                 ) : null}
-                {String(mainVideo.knowledgeChunk || '').trim() ? (
-                  <div
-                    style={{
-                      marginTop: '0.75rem',
-                      padding: '0.85rem',
-                      borderRadius: '10px',
-                      border: '1px solid rgba(34, 197, 94, 0.28)',
-                      background: 'rgba(15, 23, 42, 0.35)',
-                    }}
-                  >
-                    <p
-                      className="form-label"
-                      style={{
-                        margin: 0,
-                        fontSize: '0.8rem',
-                        marginBottom: '0.45rem',
-                        letterSpacing: '0.02em',
-                      }}
-                    >
-                      Knowledge chunk
-                    </p>
-                    <p
-                      style={{
-                        margin: '0 0 0.45rem 0',
-                        fontSize: '0.75rem',
-                        color: 'var(--text-muted)',
-                        lineHeight: 1.4,
-                      }}
-                    >
-                      Copied from this subsection’s PPT, PDF, and video transcript.
-                      Repeated lines are removed. Nothing is generated.
-                    </p>
-                    <div
-                      style={{
-                        maxHeight: '280px',
-                        overflowY: 'auto',
-                        whiteSpace: 'pre-wrap',
-                        lineHeight: 1.5,
-                        fontSize: '0.88rem',
-                        color: 'var(--text-muted)',
-                      }}
-                    >
-                      {String(mainVideo.knowledgeChunk).trim()}
-                    </div>
-                  </div>
-                ) : !promptLoading ? (
-                  <p
-                    style={{
-                      margin: '0.45rem 0 0 0',
-                      fontSize: '0.78rem',
-                      color: 'var(--text-muted)',
-                    }}
-                  >
-                    No unique knowledge text for this subsection.
-                  </p>
-                ) : null}
                 <p
                   className="form-label"
                   style={{
@@ -3409,8 +3402,7 @@ const CourseDetail = () => {
                     lineHeight: 1.45,
                   }}
                 >
-                  This prompt uses the unique knowledge chunk above. You can
-                  review it here, then use it in Ask.
+                  Review the prompt here, then use it in Ask.
                 </p>
                 <textarea
                   className="form-input"
