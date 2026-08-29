@@ -152,4 +152,30 @@ router.post('/:id/check', requireTeacher, async (req, res) => {
   }
 });
 
+router.get('/:id/answers', requireTeacher, async (req, res) => {
+  try {
+    const [questions] = await pool.execute(
+      `SELECT q.question_index AS questionIndex, q.correct_option AS correctAnswer,
+              q.explanation
+       FROM exam_quiz_questions q
+       INNER JOIN exam_quizzes e ON e.id = q.quiz_id
+       WHERE q.quiz_id = ? AND e.teacher_id = ?
+       ORDER BY q.question_index ASC`,
+      [req.params.id, String(req.teacher.id)]
+    );
+    if (questions.length !== 10) return res.status(404).json({ message: 'Exam not found.' });
+
+    return res.json({
+      results: questions.map((question) => ({
+        questionIndex: question.questionIndex,
+        correctAnswer: question.correctAnswer,
+        explanation: question.explanation,
+      })),
+    });
+  } catch (error) {
+    console.error('Exam answer sheet load failed:', error);
+    return res.status(500).json({ message: 'Failed to load the exam answer sheet.' });
+  }
+});
+
 module.exports = router;

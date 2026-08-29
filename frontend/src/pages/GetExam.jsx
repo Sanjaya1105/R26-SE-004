@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { checkExamAnswers, fetchExamLessons, generateExamQuiz } from '../exam/apiClient';
-import { downloadQuizPdf } from '../exam/downloadQuizPdf';
+import {
+  checkExamAnswers,
+  fetchExamAnswerSheet,
+  fetchExamLessons,
+  generateExamQuiz,
+} from '../exam/apiClient';
+import { downloadQuizAnswersPdf, downloadQuizPdf } from '../exam/downloadQuizPdf';
 import './GetExam.css';
 
 function formatCognitiveLoadCounts(counts) {
@@ -31,6 +36,7 @@ export default function GetExam() {
   const [generating, setGenerating] = useState(false);
   const [checking, setChecking] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [downloadingAnswers, setDownloadingAnswers] = useState(false);
   const [generationMessageIndex, setGenerationMessageIndex] = useState(0);
   const navigate = useNavigate();
 
@@ -126,6 +132,19 @@ export default function GetExam() {
       setError(downloadError.message || 'The PDF could not be downloaded.');
     } finally {
       setDownloadingPdf(false);
+    }
+  }
+
+  async function downloadAnswers() {
+    try {
+      setError('');
+      setDownloadingAnswers(true);
+      const answerSheet = await fetchExamAnswerSheet(quiz.id);
+      await downloadQuizAnswersPdf(quiz, answerSheet);
+    } catch (downloadError) {
+      setError(downloadError.message || 'The answers PDF could not be downloaded.');
+    } finally {
+      setDownloadingAnswers(false);
     }
   }
 
@@ -249,6 +268,15 @@ export default function GetExam() {
                   disabled={downloadingPdf}
                 >
                   {downloadingPdf ? 'Preparing PDF...' : 'Download PDF'}
+                </button>
+                <button
+                  type="button"
+                  className="get-exam-button download"
+                  onClick={downloadAnswers}
+                  disabled={downloadingAnswers}
+                  title="Download the correct answers and reasons"
+                >
+                  {downloadingAnswers ? 'Preparing Answer Sheet...' : 'Download Answer Sheet'}
                 </button>
               </div>
             </div>

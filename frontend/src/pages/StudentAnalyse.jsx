@@ -766,7 +766,7 @@ export default function StudentAnalyse() {
                   </div>
 
                   <p className="technical-evidence-note">
-                    The values below show how the local model, LIME, and SHAP supported this result.
+                    The ranked features below summarize the strongest combined LIME and SHAP evidence for this result.
                   </p>
 
                   <h4>Top 3 Combined Features</h4>
@@ -775,8 +775,6 @@ export default function StudentAnalyse() {
                       <article className="style-feature-card" key={feature.feature}>
                         <span className="feature-rank">#{index + 1}</span>
                         <h4>{feature.feature}</h4>
-                        <p>Combined importance: {(Number(feature.importance) * 100).toFixed(2)}%</p>
-                        <p>Feature value: {Number(feature.feature_value).toFixed(4)}</p>
                         <span className={`impact-badge ${feature.direction}`}>{feature.direction}</span>
                       </article>
                     ))}

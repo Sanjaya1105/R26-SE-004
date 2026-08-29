@@ -65,6 +65,12 @@ export async function checkExamAnswers(quizId, answers) {
   }));
 }
 
+export async function fetchExamAnswerSheet(quizId) {
+  return parseResponse(await fetch(`${API_BASE}/quizzes/${quizId}/answers`, {
+    headers: authHeaders(),
+  }));
+}
+
 export async function downloadExamMaterial(material) {
   const response = await fetch(`${API_BASE}/materials/${material.id}/file`, { headers: authHeaders() });
   if (!response.ok) {

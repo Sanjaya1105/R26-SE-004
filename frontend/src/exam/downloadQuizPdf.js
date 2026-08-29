@@ -59,13 +59,6 @@ export async function downloadQuizPdf(quiz, answers = [], result = null) {
   document.text(`${quiz.lessonName || 'Lesson'} - Unit ${quiz.unitNo ?? '-'}`, PAGE_MARGIN, 25);
   y = 44;
 
-  writeLines(`Cognitive load: ${quiz.cognitiveLoad || 'Unknown'}`, {
-    fontSize: 10,
-    fontStyle: 'bold',
-    color: [39, 79, 125],
-    gapAfter: result ? 2 : 6,
-  });
-
   if (result) {
     writeLines(`Score: ${result.score}/${result.total}`, {
       fontSize: 12,
@@ -124,5 +117,81 @@ export async function downloadQuizPdf(quiz, answers = [], result = null) {
   }
 
   const filename = `${safeFilename(quiz.lessonName)}-unit-${safeFilename(quiz.unitNo)}-mcq.pdf`;
+  document.save(filename);
+}
+
+export async function downloadQuizAnswersPdf(quiz, result) {
+  if (!quiz?.questions?.length || !result?.results?.length) {
+    throw new Error('Check the exam before downloading the answers.');
+  }
+
+  const { jsPDF } = await import('jspdf');
+  const document = new jsPDF({ unit: 'mm', format: 'a4' });
+  const pageWidth = document.internal.pageSize.getWidth();
+  const contentWidth = pageWidth - (PAGE_MARGIN * 2);
+  let y = PAGE_MARGIN;
+
+  const ensureSpace = (height) => {
+    if (y + height <= PAGE_BOTTOM) return;
+    document.addPage();
+    y = PAGE_MARGIN;
+  };
+
+  const writeLines = (text, options = {}) => {
+    const {
+      fontSize = 10,
+      fontStyle = 'normal',
+      gapAfter = 2,
+      color = [23, 32, 51],
+    } = options;
+    document.setFont('helvetica', fontStyle);
+    document.setFontSize(fontSize);
+    document.setTextColor(...color);
+    const lines = document.splitTextToSize(String(text ?? ''), contentWidth);
+    const lineHeight = fontSize * 0.42;
+    ensureSpace((lines.length * lineHeight) + gapAfter);
+    document.text(lines, PAGE_MARGIN, y);
+    y += (lines.length * lineHeight) + gapAfter;
+  };
+
+  document.setFillColor(23, 107, 85);
+  document.rect(0, 0, pageWidth, 34, 'F');
+  document.setTextColor(255, 255, 255);
+  document.setFont('helvetica', 'bold');
+  document.setFontSize(19);
+  document.text('MCQ Answers', PAGE_MARGIN, 16);
+  document.setFont('helvetica', 'normal');
+  document.setFontSize(10);
+  document.text(`${quiz.lessonName || 'Lesson'} - Unit ${quiz.unitNo ?? '-'}`, PAGE_MARGIN, 25);
+  y = 44;
+
+  result.results.forEach((answer, questionIndex) => {
+    ensureSpace(20);
+    writeLines(`Question ${questionIndex + 1}`, {
+      fontSize: 11,
+      fontStyle: 'bold',
+      gapAfter: 1,
+    });
+    writeLines(`Answer: ${answer.correctAnswer}`, {
+      fontStyle: 'bold',
+      color: [21, 88, 68],
+      gapAfter: 1,
+    });
+    writeLines(`Reason: ${answer.explanation || 'No explanation available.'}`, {
+      color: [71, 85, 105],
+      gapAfter: 5,
+    });
+  });
+
+  const pageCount = document.getNumberOfPages();
+  for (let page = 1; page <= pageCount; page += 1) {
+    document.setPage(page);
+    document.setFont('helvetica', 'normal');
+    document.setFontSize(8);
+    document.setTextColor(100, 116, 139);
+    document.text(`Page ${page} of ${pageCount}`, pageWidth - PAGE_MARGIN, 290, { align: 'right' });
+  }
+
+  const filename = `${safeFilename(quiz.lessonName)}-unit-${safeFilename(quiz.unitNo)}-answers.pdf`;
   document.save(filename);
 }

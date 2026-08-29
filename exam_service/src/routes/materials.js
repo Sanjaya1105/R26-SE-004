@@ -35,7 +35,16 @@ router.post('/', requireTeacher, runUpload, async (req, res) => {
 
   let extraction = null;
   try {
-    if (documentType === 'pdf') extraction = await extractPdf(req.file.path);
+    if (documentType === 'pdf') {
+      extraction = await extractPdf(req.file.path);
+      if (!extraction.chunks?.length) {
+        const noTextError = new Error(
+          'No readable text was found in this PDF, even after OCR. Upload a clearer PDF and try again.'
+        );
+        noTextError.status = 422;
+        throw noTextError;
+      }
+    }
 
     const connection = await pool.getConnection();
     let result;
@@ -102,13 +111,14 @@ router.post('/', requireTeacher, runUpload, async (req, res) => {
         pageCount: extraction?.pageCount ?? null,
         chunkCount: extraction?.chunks.length ?? 0,
         imageCount: extraction?.images.length ?? 0,
+        ocrPageCount: extraction?.ocrPageCount ?? 0,
       },
     });
   } catch (error) {
     await fs.unlink(req.file.path).catch(() => {});
     console.error('Exam material upload failed:', error);
-    return res.status(500).json({
-      message: error.message.startsWith('PDF extraction failed:')
+    return res.status(error.status || 500).json({
+      message: error.status || error.message.startsWith('PDF extraction failed:')
         ? error.message
         : 'Failed to process and save the exam material.',
     });

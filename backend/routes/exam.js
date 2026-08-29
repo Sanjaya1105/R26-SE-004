@@ -201,4 +201,16 @@ router.post('/quizzes/:id/check', verifyToken, async (req, res) => {
   }
 });
 
+router.get('/quizzes/:id/answers', verifyToken, async (req, res) => {
+  try {
+    const upstream = await axios.get(
+      `${examServiceUrl}/quizzes/${req.params.id}/answers`,
+      { headers: teacherHeaders(req) }
+    );
+    return res.status(upstream.status).json(upstream.data);
+  } catch (error) {
+    return upstreamError(res, error);
+  }
+});
+
 module.exports = router;

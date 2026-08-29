@@ -6,7 +6,10 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import re
+import shutil
+import subprocess
 from collections import Counter
 from pathlib import Path
 
@@ -16,6 +19,9 @@ import fitz
 PAGE_NUMBER = re.compile(
     r"^(?:page\s*)?\d+(?:\s*(?:of|/|\|)\s*\d+)?$", re.IGNORECASE
 )
+DEFAULT_OCR_DPI = 200
+DEFAULT_OCR_PAGE_SEGMENTATION_MODE = "3"
+MIN_EMBEDDED_TEXT_CHARACTERS = 20
 
 
 def normalize_line(value: str) -> str:
@@ -111,6 +117,46 @@ def chunks_for_page(text: str, page_number: int, size: int, overlap: int) -> lis
     return chunks
 
 
+def find_tesseract() -> str | None:
+    configured = os.environ.get("TESSERACT_EXECUTABLE", "").strip()
+    candidates = [
+        configured,
+        shutil.which("tesseract"),
+        r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+        r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+    ]
+    for candidate in candidates:
+        if candidate and Path(candidate).is_file():
+            return str(candidate)
+    return None
+
+
+def clean_ocr_text(value: str) -> str:
+    lines: list[str] = []
+    for raw_line in value.replace("\x0c", "\n").splitlines():
+        line = re.sub(r"\s+", " ", raw_line).strip()
+        if not line or PAGE_NUMBER.fullmatch(line):
+            continue
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def ocr_page_text(page: fitz.Page, tesseract: str, dpi: int, language: str, psm: str) -> str:
+    scale = dpi / 72
+    pixmap = page.get_pixmap(matrix=fitz.Matrix(scale, scale), colorspace=fitz.csRGB, alpha=False)
+    completed = subprocess.run(
+        [tesseract, "stdin", "stdout", "--dpi", str(dpi), "-l", language, "--psm", psm],
+        input=pixmap.tobytes("png"),
+        capture_output=True,
+        check=False,
+        timeout=int(os.environ.get("OCR_PAGE_TIMEOUT_SECONDS", "120")),
+    )
+    if completed.returncode != 0:
+        detail = completed.stderr.decode("utf-8", errors="replace").strip()
+        raise RuntimeError(f"OCR failed on page {page.number + 1}: {detail or 'unknown Tesseract error'}")
+    return clean_ocr_text(completed.stdout.decode("utf-8", errors="replace"))
+
+
 def extract_images(document: fitz.Document, output_dir: Path) -> list[dict]:
     output_dir.mkdir(parents=True, exist_ok=True)
     images: list[dict] = []
@@ -150,16 +196,47 @@ def extract(pdf_path: Path, output_dir: Path, chunk_size: int, overlap: int) -> 
         if document.needs_pass:
             raise ValueError("Password-protected PDFs are not supported.")
         repeated = repeated_margin_lines(document)
+        page_texts = [clean_page_text(page, repeated) for page in document]
+        pages_needing_ocr = [
+            index
+            for index, text in enumerate(page_texts)
+            if len(re.sub(r"\s+", "", text)) < MIN_EMBEDDED_TEXT_CHARACTERS
+        ]
+        ocr_pages: list[int] = []
+        tesseract = find_tesseract() if pages_needing_ocr else None
+        if pages_needing_ocr and tesseract:
+            dpi = int(os.environ.get("OCR_DPI", str(DEFAULT_OCR_DPI)))
+            language = os.environ.get("OCR_LANGUAGES", "eng").strip() or "eng"
+            psm = os.environ.get("OCR_PAGE_SEGMENTATION_MODE", DEFAULT_OCR_PAGE_SEGMENTATION_MODE).strip()
+            for page_index in pages_needing_ocr:
+                ocr_text = ocr_page_text(document[page_index], tesseract, dpi, language, psm)
+                if len(ocr_text) > len(page_texts[page_index]):
+                    page_texts[page_index] = ocr_text
+                    if ocr_text:
+                        ocr_pages.append(page_index + 1)
+
         chunks: list[dict] = []
-        for page_number, page in enumerate(document, start=1):
-            chunks.extend(chunks_for_page(clean_page_text(page, repeated), page_number, chunk_size, overlap))
+        for page_number, text in enumerate(page_texts, start=1):
+            chunks.extend(chunks_for_page(text, page_number, chunk_size, overlap))
+
+        if not chunks and pages_needing_ocr and not tesseract:
+            raise RuntimeError(
+                "This PDF contains no extractable text. Install Tesseract OCR or configure "
+                "TESSERACT_EXECUTABLE to process scanned PDFs."
+            )
         for index, chunk in enumerate(chunks):
             chunk["chunkIndex"] = index
             chunk["characterCount"] = len(chunk["content"])
         images = extract_images(document, output_dir)
         for index, image in enumerate(images):
             image["imageIndex"] = index
-        return {"pageCount": document.page_count, "chunks": chunks, "images": images}
+        return {
+            "pageCount": document.page_count,
+            "chunks": chunks,
+            "images": images,
+            "ocrPageCount": len(ocr_pages),
+            "ocrPages": ocr_pages,
+        }
 
 
 def serialize_result(result: dict) -> str:

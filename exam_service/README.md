@@ -6,6 +6,7 @@ PyMuPDF before the material is committed to MySQL:
 - repeated page headers and footers are removed;
 - page-number-only lines in page margins are removed;
 - remaining lecture notes are split into overlapping, page-aware chunks;
+- pages without an embedded text layer use Tesseract OCR before chunking;
 - embedded images are deduplicated and stored as binary data with page metadata.
 
 ## Setup
@@ -24,6 +25,16 @@ Run the extraction test with:
 
 ```powershell
 npm run test:pdf
+```
+
+Install Tesseract OCR for scanned/image-only PDFs and either add `tesseract` to
+`PATH` or set `TESSERACT_EXECUTABLE`. Existing uploaded PDFs with no chunks can
+be repaired after OCR is installed:
+
+```bash
+npm run backfill:ocr -- --dry-run
+npm run backfill:ocr
+npm run backfill:ocr -- --material-ids=8,9,10
 ```
 
 ## Extracted content endpoints

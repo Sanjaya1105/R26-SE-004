@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -65,6 +66,37 @@ class PdfExtractionTests(unittest.TestCase):
             serialized = extract_pdf.serialize_result({"content": "next ➜ section"})
             serialized.encode("cp1252")
             self.assertEqual(json.loads(serialized)["content"], "next ➜ section")
+
+    @unittest.skipUnless(
+        extract_pdf.find_tesseract() or shutil.which("tesseract"),
+        "Tesseract OCR is not installed",
+    )
+    def test_uses_ocr_for_an_image_only_pdf(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = fitz.open()
+            source_page = source.new_page(width=595, height=842)
+            source_page.insert_text(
+                (55, 150),
+                "Binary search repeatedly divides a sorted list into smaller halves.",
+                fontsize=18,
+            )
+            source_pixmap = source_page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+            source.close()
+
+            scanned = fitz.open()
+            scanned_page = scanned.new_page(width=595, height=842)
+            scanned_page.insert_image(scanned_page.rect, stream=source_pixmap.tobytes("png"))
+            pdf_path = root / "scanned-lecture.pdf"
+            scanned.save(pdf_path)
+            scanned.close()
+
+            result = extract_pdf.extract(pdf_path, root / "images", 300, 40)
+            combined_text = " ".join(chunk["content"] for chunk in result["chunks"])
+
+            self.assertEqual(result["ocrPageCount"], 1)
+            self.assertIn("Binary search", combined_text)
+            self.assertTrue(result["chunks"])
 
 
 if __name__ == "__main__":
