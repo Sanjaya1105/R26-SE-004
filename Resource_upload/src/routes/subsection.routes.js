@@ -12,7 +12,7 @@ const router = express.Router();
 
 const uploadSub = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 40 * 1024 * 1024 },
+  limits: { fileSize: 100 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (file.fieldname === "video" && file.originalname) {
       const lower = file.originalname.toLowerCase();
@@ -53,7 +53,7 @@ const subsectionUploadMiddleware = (req, res, next) => {
   ])(req, res, (err) => {
     if (!err) return next();
     if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
-      return res.status(400).json({ message: "One of the files exceeds the size limit." });
+      return res.status(400).json({ message: "One of the files exceeds the 100MB size limit." });
     }
     return res.status(400).json({ message: err.message || "Invalid upload." });
   });

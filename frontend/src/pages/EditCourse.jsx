@@ -271,7 +271,7 @@ function SubsectionMaterialsUpdater({
               }}
             />
             <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: 0 }}>
-              Note: we only accept subsection videos of 15 minutes or less (max 40MB).
+              Note: we only accept subsection videos of 15 minutes or less (max 100MB).
             </p>
             <label className="form-label" style={{ fontSize: '0.75rem' }}>
               PPT / PPTX
@@ -535,7 +535,7 @@ function NewSubsectionForm({
               }
             }} />
             <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: 0 }}>
-              Video: 15 minutes or less only (max 40MB). Longer videos are not accepted.
+              Video: 15 minutes or less only (max 100MB). Longer videos are not accepted.
             </p>
             <input type="file" accept=".ppt,.pptx" className="form-input" style={{ padding: '0.35rem', fontSize: '0.8rem' }} onChange={(e) => setSubPpt(e.target.files?.[0] || null)} />
             <input type="file" accept=".pdf" className="form-input" style={{ padding: '0.35rem', fontSize: '0.8rem' }} onChange={(e) => setSubPdf(e.target.files?.[0] || null)} />

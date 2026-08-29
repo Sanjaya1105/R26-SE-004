@@ -6,7 +6,7 @@ const verifyToken = require('../middleware/verifyToken');
 
 const router = express.Router();
 
-const maxVideoSizeBytes = 40 * 1024 * 1024;
+const maxVideoSizeBytes = 100 * 1024 * 1024;
 
 const uploadVideo = multer({
   storage: multer.memoryStorage(),
@@ -34,7 +34,7 @@ router.post(
     uploadVideo.single('video')(req, res, (err) => {
       if (!err) return next();
       if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
-        return res.status(400).json({ message: 'Video size exceeds 40MB limit.' });
+        return res.status(400).json({ message: 'Video size exceeds 100MB limit.' });
       }
       return res.status(400).json({ message: err.message || 'Invalid file upload.' });
     });

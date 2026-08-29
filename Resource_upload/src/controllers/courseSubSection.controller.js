@@ -19,9 +19,9 @@ const {
   uploadRawDocument,
 } = require("../utils/officeFiles");
 
-const MAX_VIDEO = 40 * 1024 * 1024;
+const MAX_VIDEO = 100 * 1024 * 1024;
 const MAX_OFFICE = 15 * 1024 * 1024;
-const MAX_IMAGE = 5 * 1024 * 1024;
+const MAX_IMAGE = 100 * 1024 * 1024;
 
 function uploadBuffer(buffer, options) {
   return new Promise((resolve, reject) => {
@@ -68,7 +68,7 @@ const createSubSection = async (req, res) => {
   }
 
   if (videoFile?.size > MAX_VIDEO) {
-    return res.status(400).json({ message: "Video must be 40MB or smaller." });
+    return res.status(400).json({ message: "Video must be 100MB or smaller." });
   }
   let videoDurationSec = 0;
   try {
@@ -86,7 +86,7 @@ const createSubSection = async (req, res) => {
   }
   for (const img of imageFiles) {
     if (img.size > MAX_IMAGE) {
-      return res.status(400).json({ message: "Each image must be 5MB or smaller." });
+      return res.status(400).json({ message: "Each image must be 100MB or smaller." });
     }
     if (!img.mimetype.startsWith("image/")) {
       return res.status(400).json({ message: "Images must be image files." });
@@ -314,7 +314,7 @@ const updateSubSection = async (req, res) => {
   }
 
   if (videoFile?.size > MAX_VIDEO) {
-    return res.status(400).json({ message: "Video must be 40MB or smaller." });
+    return res.status(400).json({ message: "Video must be 100MB or smaller." });
   }
   let nextVideoDurationSec = Number(doc.videoDurationSec) || 0;
   if (videoFile?.buffer?.length) {
@@ -334,7 +334,7 @@ const updateSubSection = async (req, res) => {
   }
   for (const img of imageFiles) {
     if (img.size > MAX_IMAGE) {
-      return res.status(400).json({ message: "Each image must be 5MB or smaller." });
+      return res.status(400).json({ message: "Each image must be 100MB or smaller." });
     }
     if (img.buffer?.length && !img.mimetype.startsWith("image/")) {
       return res.status(400).json({ message: "Images must be image files." });

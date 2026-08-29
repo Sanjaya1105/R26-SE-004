@@ -787,7 +787,7 @@ const UploadNewLesson = () => {
                           color: 'var(--text-muted)',
                         }}
                       >
-                        Note: only videos of 15 minutes or less are accepted (max 40MB). Longer videos will be rejected.
+                        Note: only videos of 15 minutes or less are accepted (max 100MB). Longer videos will be rejected.
                       </p>
                     </div>
 
@@ -867,7 +867,7 @@ const UploadNewLesson = () => {
                           color: 'var(--text-muted)',
                         }}
                       >
-                        Up to 15 files, 5MB each.
+                        Up to 15 files, 100MB each.
                       </p>
                     </div>
 

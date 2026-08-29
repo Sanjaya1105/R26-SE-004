@@ -29,7 +29,7 @@ const Upload = () => {
     }
 
     if (videoFile.size > maxVideoSizeBytes) {
-      setMessage("Video size exceeds 40MB limit.");
+      setMessage("Video size exceeds 100MB limit.");
       return;
     }
 
@@ -97,7 +97,7 @@ const Upload = () => {
           onChange={(event) => setName(event.target.value)}
           placeholder="Enter name"
         />
-        <label htmlFor="video">Video (Max 40MB, 15 minutes)</label>
+        <label htmlFor="video">Video (Max 100MB, 15 minutes)</label>
         <input
           id="video"
           name="video"

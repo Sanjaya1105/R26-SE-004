@@ -4,7 +4,7 @@ const handleErrors = (error, req, res, next) => {
   if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
     return res.status(400).json({
       success: false,
-      message: "Video size exceeds 40MB limit",
+      message: "Video size exceeds 100MB limit",
     });
   }
 
