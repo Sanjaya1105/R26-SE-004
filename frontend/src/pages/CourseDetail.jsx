@@ -405,16 +405,23 @@ function getLivePredictionSummary(result) {
     result.feature_window && typeof result.feature_window === 'object'
       ? result.feature_window
       : null;
+  const predictionStatus =
+    prediction?.prediction_status ?? result.prediction_status ?? 'reliable';
+  const reliabilityReason = prediction?.reason ?? result.reason ?? '';
 
   return {
     rawEventCount:
       typeof result.raw_event_count === 'number' ? result.raw_event_count : null,
     predictedLoad:
-      prediction?.predicted_cognitive_load ??
-      prediction?.predicted_label ??
-      result.predicted_cognitive_load ??
-      result.predicted_label ??
-      'Unknown',
+      predictionStatus === 'not_reliable'
+        ? 'Waiting for activity'
+        : prediction?.predicted_cognitive_load ??
+          prediction?.predicted_label ??
+          result.predicted_cognitive_load ??
+          result.predicted_label ??
+          'Unknown',
+    predictionStatus,
+    reliabilityReason,
     minuteIndex:
       prediction?.minute_index ??
       featureWindow?.minute_index ??
@@ -447,11 +454,68 @@ function getLivePredictionSummary(result) {
       featureWindow?.idle_duration_video ??
       result.idle_duration_video ??
       null,
+    pausedDurationVideo:
+      prediction?.paused_duration_video ??
+      featureWindow?.paused_duration_video ??
+      result.paused_duration_video ??
+      0,
     timeOnContent:
       prediction?.time_on_content ??
       featureWindow?.time_on_content ??
       result.time_on_content ??
       null,
+  };
+}
+
+function appendSkippedTrendWindow(previousAnalysis, predictionResult) {
+  const prediction = predictionResult?.prediction || predictionResult || {};
+  const minuteIndex = prediction.minute_index ?? predictionResult?.minute_index ?? null;
+  const timeline = Array.isArray(previousAnalysis?.timeline)
+    ? previousAnalysis.timeline
+    : [];
+  const nextTimeline = [
+    ...timeline.filter((item) => item.minute_index !== minuteIndex),
+    {
+      minute_index: minuteIndex,
+      predicted_load: 'Skipped',
+      predicted_score: null,
+      prediction_status: 'not_reliable',
+      reason: prediction.reason || 'Insufficient learning activity',
+    },
+  ].slice(-8);
+
+  return {
+    ...(previousAnalysis || {}),
+    current_load: previousAnalysis?.current_load || null,
+    trend: previousAnalysis?.trend || 'stable',
+    risk_level: 'insufficient_data',
+    timeline: nextTimeline,
+  };
+}
+
+function mergeSkippedTrendWindows(previousAnalysis, nextAnalysis) {
+  const skippedWindows = (previousAnalysis?.timeline || []).filter(
+    (item) => item.prediction_status === 'not_reliable'
+  );
+
+  if (!skippedWindows.length) return nextAnalysis;
+
+  const nextTimeline = [...(nextAnalysis?.timeline || [])];
+  skippedWindows.forEach((skippedWindow) => {
+    if (
+      !nextTimeline.some(
+        (item) => item.minute_index === skippedWindow.minute_index
+      )
+    ) {
+      nextTimeline.push(skippedWindow);
+    }
+  });
+
+  nextTimeline.sort((a, b) => Number(a.minute_index || 0) - Number(b.minute_index || 0));
+
+  return {
+    ...nextAnalysis,
+    timeline: nextTimeline.slice(-8),
   };
 }
 
@@ -462,6 +526,8 @@ function createEmptyRawEventStats() {
     rewatchCount: 0,
     rateChangeCount: 0,
     idleDuration: 0,
+    pausedDuration: 0,
+    pauseStartedAtMs: null,
     lastEvent: '',
   };
 }
@@ -578,6 +644,13 @@ function updateRawEventStats(previousStats, payload) {
 
   if (payload.event_type === 'pause') {
     nextStats.pauseCount += 1;
+    nextStats.pauseStartedAtMs = nextStats.pauseStartedAtMs || Date.now();
+  } else if (payload.event_type === 'play' && nextStats.pauseStartedAtMs) {
+    nextStats.pausedDuration += Math.max(
+      1,
+      Math.round((Date.now() - nextStats.pauseStartedAtMs) / 1000)
+    );
+    nextStats.pauseStartedAtMs = null;
   } else if (payload.event_type === 'seek_forward') {
     nextStats.seekCount += 1;
   } else if (payload.event_type === 'seek_backward') {
@@ -589,6 +662,30 @@ function updateRawEventStats(previousStats, payload) {
   }
 
   return nextStats;
+}
+
+function getStatsForPrediction(stats, windowEnd) {
+  const nextStats = { ...stats };
+  if (nextStats.pauseStartedAtMs) {
+    const endMs = Math.min(Date.now(), windowEnd.getTime());
+    nextStats.pausedDuration += Math.max(
+      0,
+      Math.round((endMs - nextStats.pauseStartedAtMs) / 1000)
+    );
+  }
+  return nextStats;
+}
+
+function closePauseTimer(stats) {
+  if (!stats?.pauseStartedAtMs) return stats;
+
+  return {
+    ...stats,
+    pausedDuration:
+      Number(stats.pausedDuration || 0) +
+      Math.max(1, Math.round((Date.now() - stats.pauseStartedAtMs) / 1000)),
+    pauseStartedAtMs: null,
+  };
 }
 
 function getCompletedWindowInfo(sessionStart, sessionId, now = new Date()) {
@@ -745,10 +842,15 @@ const CourseDetail = () => {
   };
 
   const resetActiveWindowStats = (windowKey) => {
-    if (windowKey) {
-      windowStatsByKeyRef.current[windowKey] = createEmptyRawEventStats();
+    const nextStats = createEmptyRawEventStats();
+    if (videoRef.current?.paused && !videoRef.current?.ended) {
+      nextStats.pauseStartedAtMs = Date.now();
+      nextStats.lastEvent = 'Pause';
     }
-    setRawEventStats(createEmptyRawEventStats());
+    if (windowKey) {
+      windowStatsByKeyRef.current[windowKey] = nextStats;
+    }
+    setRawEventStats(nextStats);
   };
 
   const updateStatsForWindow = (windowKey, payload) => {
@@ -761,6 +863,19 @@ const CourseDetail = () => {
     windowStatsByKeyRef.current[windowKey] = nextStats;
 
     if (activeRawEventWindowKeyRef.current === windowKey) {
+      setRawEventStats(nextStats);
+    }
+  };
+
+  const closePauseTimerForActiveWindow = () => {
+    const currentWindowKey = getActiveWindowKey(sessionStartRef.current, videoSessionId);
+    if (!currentWindowKey) return;
+    const nextStats = closePauseTimer(
+      windowStatsByKeyRef.current[currentWindowKey] || createEmptyRawEventStats()
+    );
+    windowStatsByKeyRef.current[currentWindowKey] = nextStats;
+
+    if (activeRawEventWindowKeyRef.current === currentWindowKey) {
       setRawEventStats(nextStats);
     }
   };
@@ -955,8 +1070,10 @@ const CourseDetail = () => {
       setCognitiveLoadLoading(true);
       setCognitiveLoadError('');
       predictionInFlightWindowKeyRef.current = windowKey;
-      const completedWindowStats =
-        windowStatsByKeyRef.current[windowKey] || createEmptyRawEventStats();
+      const completedWindowStats = getStatsForPrediction(
+        windowStatsByKeyRef.current[windowKey] || createEmptyRawEventStats(),
+        windowEnd
+      );
       const windowSeconds = Math.max(
         0,
         Math.round((windowEnd.getTime() - windowStart.getTime()) / 1000)
@@ -979,23 +1096,41 @@ const CourseDetail = () => {
           rewatch_segments: completedWindowStats.rewatchCount,
           playback_rate_change: completedWindowStats.rateChangeCount,
           idle_duration_video: idleDurationVideo,
-          time_on_content: Math.max(0, windowSeconds - idleDurationVideo),
+          paused_duration_video: Math.max(
+            0,
+            Number(completedWindowStats.pausedDuration || 0)
+          ),
+          time_on_content: Math.max(
+            0,
+            windowSeconds -
+              idleDurationVideo -
+              Number(completedWindowStats.pausedDuration || 0)
+          ),
           save_result: true,
         }
       );
       setCognitiveLoadResult(res.data);
-      try {
-        setLoadTrendLoading(true);
-        const trend = await fetchLoadTrend(
-          getActiveStudentId(),
-          String(courseId),
-          videoSessionId,
+      const nextPrediction = res.data?.prediction || res.data;
+      if (nextPrediction?.prediction_status === 'not_reliable') {
+        setLoadTrendAnalysis((previous) =>
+          appendSkippedTrendWindow(previous, res.data)
         );
-        setLoadTrendAnalysis(trend);
-      } catch {
-        setLoadTrendAnalysis(null);
-      } finally {
-        setLoadTrendLoading(false);
+      } else {
+        try {
+          setLoadTrendLoading(true);
+          const trend = await fetchLoadTrend(
+            getActiveStudentId(),
+            String(courseId),
+            videoSessionId,
+          );
+          setLoadTrendAnalysis((previous) =>
+            mergeSkippedTrendWindows(previous, trend)
+          );
+        } catch {
+          setLoadTrendAnalysis(null);
+        } finally {
+          setLoadTrendLoading(false);
+        }
       }
       lastPredictedWindowKeyRef.current = windowKey;
     } catch (error) {
@@ -1281,6 +1416,7 @@ const CourseDetail = () => {
       window.clearTimeout(pauseConfirmTimeoutRef.current);
       pauseConfirmTimeoutRef.current = null;
     }
+    closePauseTimerForActiveWindow();
     lastPlaybackMarkRef.current = Number(videoRef.current?.currentTime || 0);
     markInteraction();
   };
@@ -1876,7 +2012,10 @@ const CourseDetail = () => {
       let lastErr;
       for (const url of urls) {
         try {
-          const res = await axios.post(url, body, { headers: authHeaders });
+          const res = await axios.post(url, body, {
+            headers: authHeaders,
+            timeout: 180000,
+          });
           return res;
         } catch (e) {
           lastErr = e;
@@ -2803,6 +2942,10 @@ const CourseDetail = () => {
                                   {livePredictionSummary.minuteIndex != null
                                     ? `Window #${livePredictionSummary.minuteIndex}`
                                     : 'Window N/A'}
+                                  {livePredictionSummary.predictionStatus === 'not_reliable' &&
+                                  livePredictionSummary.reliabilityReason
+                                    ? ` · ${livePredictionSummary.reliabilityReason}`
+                                    : ''}
                                 </span>
                               ) : null}
                             </span>
@@ -2915,6 +3058,10 @@ const CourseDetail = () => {
                               <MiniMetric
                                 label="Video idle"
                                 value={formatSeconds(livePredictionSummary.idleDurationVideo)}
+                              />
+                              <MiniMetric
+                                label="Paused time"
+                                value={formatSeconds(livePredictionSummary.pausedDurationVideo)}
                               />
                               <MiniMetric
                                 label="Time on content"
@@ -3069,6 +3216,7 @@ const CourseDetail = () => {
                     style={{ fontSize: '0.82rem' }}
                   >
                     <option value="Visual">Visual</option>
+                    <option value="Intermediate">Intermediate</option>
                     <option value="Auditory">Auditory</option>
                     <option value="Read/Write">Read/Write</option>
                     <option value="Kinesthetic">Kinesthetic</option>

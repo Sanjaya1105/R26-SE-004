@@ -16,6 +16,7 @@ class CognitiveLoadInput(BaseModel):
     rewatch_segments: int
     playback_rate_change: int
     idle_duration_video: int
+    paused_duration_video: int = 0
     time_on_content: int
     navigation_count_adaptation: int = 0
     revisit_frequency: int = 0
