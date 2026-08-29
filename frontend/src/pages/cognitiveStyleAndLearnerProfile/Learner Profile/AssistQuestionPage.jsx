@@ -152,7 +152,7 @@ export default function AssistQuestionPage() {
             marginTop: "2rem"
           }}
         >
-          <div style={{
+          {/* <div style={{
             width: "64px",
             height: "64px",
             background: "rgba(37, 99, 235, 0.1)",
@@ -166,7 +166,7 @@ export default function AssistQuestionPage() {
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
             </svg>
-          </div>
+          </div> */}
           <h1
             style={{
               fontSize: "2.5rem",
@@ -558,25 +558,42 @@ export default function AssistQuestionPage() {
                     Next Page
                   </button>
                 ) : (
-                  <button
-                    type="submit"
-                    disabled={loading || !isComplete}
-                    style={{
-                      background: (!loading && isComplete) ? "linear-gradient(135deg, #7c3aed 0%, #2563eb 100%)" : "#f1f5f9",
-                      color: (!loading && isComplete) ? "#fff" : "#94a3b8",
-                      border: "none",
-                      padding: "0.8rem 2.5rem",
-                      fontSize: "1.05rem",
-                      fontWeight: 700,
-                      borderRadius: "99px",
-                      cursor: (!loading && isComplete) ? "pointer" : "not-allowed",
-                      boxShadow: (!loading && isComplete) ? "0 10px 24px -12px rgba(124, 58, 237, 0.7)" : "none",
-                      transition: "all 0.3s ease",
-                      transform: (!loading && isComplete) ? "translateY(-2px)" : "none"
-                    }}
-                  >
-                    {loading ? "Submitting..." : "Complete Assessment"}
-                  </button>
+                  <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+                    <button
+                      type="button"
+                      onClick={() => navigate("/split-screen")}
+                      style={{
+                        background: "transparent",
+                        color: "#94a3b8",
+                        border: "none",
+                        fontSize: "0.95rem",
+                        textDecoration: "underline",
+                        cursor: "pointer",
+                        padding: "0.8rem 1rem",
+                      }}
+                    >
+                      Skip Questionnaire
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loading || !isComplete}
+                      style={{
+                        background: (!loading && isComplete) ? "linear-gradient(135deg, #7c3aed 0%, #2563eb 100%)" : "#f1f5f9",
+                        color: (!loading && isComplete) ? "#fff" : "#94a3b8",
+                        border: "none",
+                        padding: "0.8rem 2.5rem",
+                        fontSize: "1.05rem",
+                        fontWeight: 700,
+                        borderRadius: "99px",
+                        cursor: (!loading && isComplete) ? "pointer" : "not-allowed",
+                        boxShadow: (!loading && isComplete) ? "0 10px 24px -12px rgba(124, 58, 237, 0.7)" : "none",
+                        transition: "all 0.3s ease",
+                        transform: (!loading && isComplete) ? "translateY(-2px)" : "none"
+                      }}
+                    >
+                      {loading ? "Submitting..." : "Complete Assessment"}
+                    </button>
+                  </div>
                 )}
               </div>
             </form>

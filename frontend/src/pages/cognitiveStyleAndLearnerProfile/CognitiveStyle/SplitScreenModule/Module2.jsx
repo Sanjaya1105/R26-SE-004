@@ -518,7 +518,7 @@ function Module2() {
               </ul>
             </div>
 
-            <div style={{ display: "flex", justifyContent: "center" }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
               <button
                 // Move to calibration phase instead of immediately dismissing
                 onClick={() => setAppPhase("CALIBRATE")}
@@ -536,6 +536,21 @@ function Module2() {
                 }}
               >
                 I Understand and Continue
+              </button>
+              
+              <button
+                onClick={() => setAppPhase("PRE_TEST")}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#94a3b8",
+                  fontSize: "13px",
+                  textDecoration: "underline",
+                  cursor: "pointer",
+                  padding: "4px"
+                }}
+              >
+                Skip Calibration
               </button>
             </div>
           </div>
