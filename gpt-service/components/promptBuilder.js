@@ -56,6 +56,12 @@ function normalizeAnalyticHolisticStyle(value) {
   return normalized || "Analytic";
 }
 
+function frustrationFromLoad(loadLevel) {
+  if (loadLevel === "High" || loadLevel === "Very High") return "High";
+  if (loadLevel === "Low" || loadLevel === "Very Low") return "Low";
+  return "Moderate";
+}
+
 function wantsMermaidDiagrams(visualVerbalStyle) {
   return visualVerbalStyle === "Visual" || visualVerbalStyle === "Intermediate";
 }
@@ -113,7 +119,7 @@ function uniqueKnowledgeText(input = {}) {
  * @param {string} [input.visualVerbalCognitiveStyle] - Visual | Verbal | Intermediate
  * @param {string} [input.analyticWholisticCognitiveStyle] - Analytic | Holistic
  * @param {string} [input.cognitiveStyle] - legacy alias for visual-verbal style
- * @param {{ level?: string, frustration?: string }} [input.cognitiveLoad]
+ * @param {{ level?: string }} [input.cognitiveLoad]
  */
 function buildPedagogicalPrompt(input = {}) {
   const year = clean(input.studentProfile?.year) || "[Year]";
@@ -130,10 +136,7 @@ function buildPedagogicalPrompt(input = {}) {
     loadLevel = "Medium";
   }
 
-  let frustration = clean(input.cognitiveLoad?.frustration) || "Low";
-  if (!FRUSTRATION_LEVELS.has(frustration)) {
-    frustration = "Low";
-  }
+  const frustration = frustrationFromLoad(loadLevel);
 
   const courseName = clean(input.courseName) || "(course)";
   const subsectionTitle = clean(input.subsectionTitle) || "(subsection)";

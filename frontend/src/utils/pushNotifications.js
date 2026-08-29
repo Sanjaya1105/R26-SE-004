@@ -57,6 +57,66 @@ async function showLocalNotification(title, body, url = '/upload-lesson') {
   }
 }
 
+export const COGNITIVE_LOAD_PERSONALIZATION_MESSAGE =
+  'cognitive-load-personalization';
+
+export async function enableWatchNotifications() {
+  if (typeof window === 'undefined') return false;
+  if (!('serviceWorker' in navigator) || !('Notification' in window)) return false;
+
+  try {
+    await navigator.serviceWorker.register('/sw.js');
+  } catch (error) {
+    console.warn('Service worker registration failed:', error);
+    return false;
+  }
+
+  if (Notification.permission === 'default') {
+    await Notification.requestPermission();
+  }
+  return Notification.permission === 'granted';
+}
+
+export async function showHighLoadPersonalizationNotification({
+  courseId,
+  subsectionId,
+  loadLevel,
+  url,
+}) {
+  const granted = await enableWatchNotifications();
+  if (!granted) return false;
+
+  const title = 'Lesson personalization';
+  const body = `Your cognitive load is ${loadLevel}. Do you need any personalization for this lesson?`;
+  const payload = {
+    type: COGNITIVE_LOAD_PERSONALIZATION_MESSAGE,
+    courseId: String(courseId || ''),
+    subsectionId: String(subsectionId || ''),
+    loadLevel,
+    url: url || (typeof window !== 'undefined' ? window.location.href : '/course'),
+  };
+
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    await reg.showNotification(title, {
+      body,
+      icon: '/favicon.svg',
+      badge: '/favicon.svg',
+      tag: 'cognitive-load-personalization',
+      requireInteraction: true,
+      actions: [
+        { action: 'yes', title: 'Yes' },
+        { action: 'no', title: 'No' },
+      ],
+      data: payload,
+    });
+    return true;
+  } catch (error) {
+    console.warn('High-load notification skipped:', error.message);
+    return false;
+  }
+}
+
 export async function enableTeacherPushNotifications() {
   if (typeof window === 'undefined') return;
   if (!('serviceWorker' in navigator) || !('Notification' in window)) return;

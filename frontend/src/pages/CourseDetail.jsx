@@ -8,6 +8,11 @@ import { fetchLoadTrend } from '../cognitiveLoad/apiClient';
 import { selectBestOutputLocally } from '../utils/selectBestOutputLocal';
 import { parseCanonicalEquations } from '../utils/assistantMath';
 import {
+  COGNITIVE_LOAD_PERSONALIZATION_MESSAGE,
+  enableWatchNotifications,
+  showHighLoadPersonalizationNotification,
+} from '../utils/pushNotifications';
+import {
   addPlaybackInterval,
   coveredSeconds,
   getWatchUserId,
@@ -63,11 +68,11 @@ function buildGptPromptUrls() {
 }
 
 const PLAYBACK_PROMPT_COPY = {
-  mid: {
-    title: 'Lesson suggestion',
-    body: 'Do you need any suggestion?',
+  highLoad: {
+    title: 'Personalization',
+    body: 'Do you need any personalization for this lesson?',
     extraInstruction:
-      'The student is halfway through the lesson video and asked for a suggestion. Adapt the knowledge chunk again for this student.',
+      'The student asked for personalization for this lesson. Use the exact knowledge chunk. Match the visual-verbal and analytic-holistic styles from the student profile. Use the predicted cognitive load and the matching frustration level. Do not invent facts.',
   },
   end: {
     title: 'Lesson suggestion',
@@ -342,6 +347,23 @@ function logOutputSelectionReasoning(data, { loadLevel, sourceChars } = {}) {
 
 const ABOUT_PREVIEW_WORDS = 20;
 const COGNITIVE_LOAD_WINDOW_MS = 120000;
+const PERSONALIZATION_VIDEO_SECONDS = 120;
+
+function normalizeLoadLevel(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw || raw === 'Unknown' || raw === 'Waiting for activity') return '';
+  const key = raw.toLowerCase().replace(/[_-]+/g, ' ');
+  const map = {
+    'very low': 'Very Low',
+    low: 'Low',
+    medium: 'Medium',
+    moderate: 'Medium',
+    high: 'High',
+    'very high': 'Very High',
+  };
+  return map[key] || '';
+}
+
 const SEEK_JUMP_THRESHOLD_SECONDS = 2;
 const SEEK_EVENT_DEBOUNCE_MS = 900;
 const TRACKED_VIDEO_OWNER_TTL_MS = 6000;
@@ -804,7 +826,6 @@ const CourseDetail = () => {
   const [visualVerbalStyle, setVisualVerbalStyle] = useState('Visual');
   const [analyticHolisticStyle, setAnalyticHolisticStyle] = useState('Analytic');
   const [loadLevel, setLoadLevel] = useState('Medium');
-  const [frustration, setFrustration] = useState('Low');
   const [profileOpen, setProfileOpen] = useState(false);
   const [cognitiveLoadOpen, setCognitiveLoadOpen] = useState(false);
   const [predictionFeaturesOpen, setPredictionFeaturesOpen] = useState(false);
@@ -822,8 +843,14 @@ const CourseDetail = () => {
   const videoRef = useRef(null);
   const askPanelRef = useRef(null);
   const playbackPromptRef = useRef(null);
-  const midpointPromptShownRef = useRef(false);
   const endPromptShownRef = useRef(false);
+  const pedagogicalPromptRef = useRef('');
+  const loadLevelRef = useRef('Medium');
+  const promptLoadingRef = useRef(false);
+  const highLoadLevelRef = useRef('High');
+  const twoMinuteNotifyDoneRef = useRef(false);
+  const personalizationAskInFlightRef = useRef(false);
+  const startHighLoadPersonalizationRef = useRef(async () => {});
   const sessionStartRef = useRef(null);
   const lastVideoTimeRef = useRef(0);
   const seekStartTimeRef = useRef(0);
@@ -934,8 +961,9 @@ const CourseDetail = () => {
     setPromptError('');
     setPlaybackPrompt(null);
     playbackPromptRef.current = null;
-    midpointPromptShownRef.current = false;
     endPromptShownRef.current = false;
+    twoMinuteNotifyDoneRef.current = false;
+    setLoadLevel('Medium');
     setCognitiveLoadResult(null);
     setCognitiveLoadError('');
     setCognitiveLoadLoading(false);
@@ -962,8 +990,9 @@ const CourseDetail = () => {
     setPromptError('');
     setPlaybackPrompt(null);
     playbackPromptRef.current = null;
-    midpointPromptShownRef.current = false;
     endPromptShownRef.current = false;
+    twoMinuteNotifyDoneRef.current = false;
+    setLoadLevel('Medium');
     setCourseTrackingDisabled(false);
   }, [mainVideo?.url]);
 
@@ -1056,6 +1085,7 @@ const CourseDetail = () => {
     lastNavigationCommitTimeRef.current = 0;
     lastPredictedWindowKeyRef.current = '';
     predictionInFlightWindowKeyRef.current = '';
+    twoMinuteNotifyDoneRef.current = false;
     activeRawEventWindowKeyRef.current = getActiveWindowKey(startedAt, sessionId);
     resetActiveWindowStats(activeRawEventWindowKeyRef.current);
 
@@ -1074,6 +1104,27 @@ const CourseDetail = () => {
       }
     };
   }, [courseId, mainVideo?.lessonId, mainVideo?.subsectionId, mainVideo?.url]);
+
+  const offerPersonalizationAfterLoadPrediction = async (predictedLoad) => {
+    if (twoMinuteNotifyDoneRef.current) return;
+    const duration = Number(videoRef.current?.duration || 0);
+    if (Number.isFinite(duration) && duration > 0 && duration < PERSONALIZATION_VIDEO_SECONDS) {
+      twoMinuteNotifyDoneRef.current = true;
+      return;
+    }
+    if (!predictedLoad) return;
+
+    twoMinuteNotifyDoneRef.current = true;
+    highLoadLevelRef.current = predictedLoad;
+    playbackPromptRef.current = 'highLoad';
+    setPlaybackPrompt('highLoad');
+    void showHighLoadPersonalizationNotification({
+      courseId,
+      subsectionId: mainVideo?.subsectionId,
+      loadLevel: predictedLoad,
+      url: window.location.href,
+    });
+  };
 
   const runCognitiveLoadPredictionForCompletedWindow = async () => {
     if (
@@ -1148,6 +1199,18 @@ const CourseDetail = () => {
       );
       setCognitiveLoadResult(res.data);
       const nextPrediction = res.data?.prediction || res.data;
+      const predictedLoad = normalizeLoadLevel(
+        nextPrediction?.prediction_status === 'not_reliable'
+          ? ''
+          : nextPrediction?.predicted_cognitive_load ??
+              nextPrediction?.predicted_label ??
+              res.data?.predicted_cognitive_load ??
+              res.data?.predicted_label
+      );
+      if (predictedLoad) {
+        setLoadLevel(predictedLoad);
+      }
+      void offerPersonalizationAfterLoadPrediction(predictedLoad);
       if (nextPrediction?.prediction_status === 'not_reliable') {
         setLoadTrendAnalysis((previous) =>
           appendSkippedTrendWindow(previous, res.data)
@@ -1456,6 +1519,7 @@ const CourseDetail = () => {
     closePauseTimerForActiveWindow();
     lastPlaybackMarkRef.current = Number(videoRef.current?.currentTime || 0);
     markInteraction();
+    enableWatchNotifications();
   };
 
   const handleVideoSeeking = () => {
@@ -1510,11 +1574,8 @@ const CourseDetail = () => {
   };
 
   const openPlaybackPersonalizationPrompt = (kind) => {
-    if (kind !== 'mid' && kind !== 'end') return;
-    if (kind === 'mid' && midpointPromptShownRef.current) return;
+    if (kind !== 'highLoad' && kind !== 'end') return;
     if (kind === 'end' && endPromptShownRef.current) return;
-    if (kind === 'mid' && playbackPromptRef.current) return;
-    if (kind === 'mid') midpointPromptShownRef.current = true;
     if (kind === 'end') endPromptShownRef.current = true;
     playbackPromptRef.current = kind;
     setPlaybackPrompt(kind);
@@ -1573,17 +1634,20 @@ const CourseDetail = () => {
     if (!Number.isFinite(duration) || duration <= 0) {
       return;
     }
+    if (duration < PERSONALIZATION_VIDEO_SECONDS) {
+      twoMinuteNotifyDoneRef.current = true;
+    }
     if (currentTime >= duration - 0.35) {
       openPlaybackPersonalizationPrompt('end');
-      return;
-    }
-    if (duration >= 8 && currentTime >= duration * 0.5) {
-      openPlaybackPersonalizationPrompt('mid');
     }
   };
 
   const handleVideoLoadedMetadata = () => {
-    rememberVideoDuration(Number(videoRef.current?.duration || 0));
+    const duration = Number(videoRef.current?.duration || 0);
+    rememberVideoDuration(duration);
+    if (duration > 0 && duration < PERSONALIZATION_VIDEO_SECONDS) {
+      twoMinuteNotifyDoneRef.current = true;
+    }
   };
 
   const handleVideoEnded = () => {
@@ -1750,7 +1814,7 @@ const CourseDetail = () => {
         },
         visualVerbalCognitiveStyle: visualVerbalStyle,
         analyticWholisticCognitiveStyle: analyticHolisticStyle,
-        cognitiveLoad: { level: loadLevel, frustration },
+        cognitiveLoad: { level: loadLevel },
       };
 
       const urls = buildGptPromptUrls();
@@ -1801,8 +1865,43 @@ const CourseDetail = () => {
     visualVerbalStyle,
     analyticHolisticStyle,
     loadLevel,
-    frustration,
   ]);
+
+  useEffect(() => {
+    pedagogicalPromptRef.current = pedagogicalPrompt;
+  }, [pedagogicalPrompt]);
+
+  useEffect(() => {
+    loadLevelRef.current = loadLevel;
+  }, [loadLevel]);
+
+  useEffect(() => {
+    promptLoadingRef.current = promptLoading;
+  }, [promptLoading]);
+
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+      return undefined;
+    }
+    const onMessage = (event) => {
+      const data = event.data;
+      if (data?.type !== COGNITIVE_LOAD_PERSONALIZATION_MESSAGE) return;
+      if (data.action === 'no') return;
+      if (data.courseId && String(data.courseId) !== String(courseId)) return;
+      if (
+        data.subsectionId &&
+        mainVideo?.subsectionId &&
+        String(data.subsectionId) !== String(mainVideo.subsectionId)
+      ) {
+        return;
+      }
+      startHighLoadPersonalizationRef.current(data.loadLevel);
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => {
+      navigator.serviceWorker.removeEventListener('message', onMessage);
+    };
+  }, [courseId, mainVideo?.subsectionId]);
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 860px)');
@@ -2059,7 +2158,7 @@ const CourseDetail = () => {
       return;
     }
 
-    const prompt = pedagogicalPrompt.trim();
+    const prompt = (pedagogicalPromptRef.current || pedagogicalPrompt).trim();
     const studentQuestion = gptQuestion.trim();
     const extra =
       typeof extraInstruction === 'string' ? extraInstruction.trim() : '';
@@ -2074,7 +2173,7 @@ const CourseDetail = () => {
     const authHeaders = { Authorization: `Bearer ${token}` };
     const sourceContent = String(mainVideo?.knowledgeChunk || '').slice(0, 12000);
 
-    const postWithFallback = async (urls, body) => {
+    const postWithFallback = async (urls, body, retryStatuses = [404]) => {
       let lastErr;
       for (const url of urls) {
         try {
@@ -2085,8 +2184,14 @@ const CourseDetail = () => {
           return res;
         } catch (e) {
           lastErr = e;
-          if (e.response?.status === 404) continue;
-          if (!e.response && e.code === 'ERR_NETWORK') continue;
+          const status = e.response?.status;
+          if (retryStatuses.includes(status)) continue;
+          if (
+            !e.response &&
+            (e.code === 'ERR_NETWORK' || e.code === 'ECONNABORTED')
+          ) {
+            continue;
+          }
           throw e;
         }
       }
@@ -2101,7 +2206,7 @@ const CourseDetail = () => {
         postWithFallback(buildDeepseekChatUrls(), {
           message: q,
           history: [],
-        }),
+        }, [404, 502, 503, 504]),
       ]);
 
       let hfText = '';
@@ -2137,7 +2242,8 @@ const CourseDetail = () => {
       }
 
       if (deepseekResult.status === 'fulfilled') {
-        dsText = String(deepseekResult.value.data?.data?.answer || '').trim();
+        const dsPayload = deepseekResult.value.data?.data || deepseekResult.value.data || {};
+        dsText = String(dsPayload.answer || dsPayload.converted || '').trim();
         setDeepseekAnswer(dsText);
         if (!dsText) {
           setDeepseekError('DeepSeek returned an empty answer.');
@@ -2159,19 +2265,21 @@ const CourseDetail = () => {
         return;
       }
 
+      setShowBothOutputs(true);
+
       // Cross-check both outputs against original source; pick less-hallucinated / better-fit text.
       try {
         const selectRes = await postWithFallback(buildSelectBestUrls(), {
           sourceContent,
           gptOutput: hfText,
           deepseekOutput: dsText,
-          cognitiveLoadLevel: loadLevel,
+          cognitiveLoadLevel: loadLevelRef.current || loadLevel,
         });
         const data = selectRes.data?.data;
         setSelectedAnswer(String(data?.selectedText || '').trim());
         setSelectionMeta(data || null);
         logOutputSelectionReasoning(data, {
-          loadLevel,
+          loadLevel: loadLevelRef.current || loadLevel,
           sourceChars: sourceContent.length,
         });
       } catch (selectErr) {
@@ -2183,7 +2291,7 @@ const CourseDetail = () => {
           sourceContent,
           gptOutput: hfText,
           deepseekOutput: dsText,
-          cognitiveLoadLevel: loadLevel,
+          cognitiveLoadLevel: loadLevelRef.current || loadLevel,
         });
         if (!local.success) {
           setSelectionError(local.message || 'Could not select best output.');
@@ -2193,7 +2301,7 @@ const CourseDetail = () => {
         setSelectionMeta(local);
         setSelectionError('');
         logOutputSelectionReasoning(local, {
-          loadLevel,
+          loadLevel: loadLevelRef.current || loadLevel,
           sourceChars: sourceContent.length,
         });
         console.warn(
@@ -2216,6 +2324,45 @@ const CourseDetail = () => {
       setGptLoading(false);
     }
   };
+
+  const startHighLoadPersonalization = async (level) => {
+    const normalized =
+      normalizeLoadLevel(level) || highLoadLevelRef.current || 'High';
+    if (personalizationAskInFlightRef.current) return;
+    personalizationAskInFlightRef.current = true;
+    try {
+      dismissPlaybackPersonalizationPrompt();
+      setLoadLevel(normalized);
+      highLoadLevelRef.current = normalized;
+      setPromptBarOpen(true);
+      askPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      await new Promise((resolve) => {
+        const started = Date.now();
+        const tick = () => {
+          const prompt = pedagogicalPromptRef.current || '';
+          if (
+            prompt.includes(`Level: ${normalized}`) &&
+            !promptLoadingRef.current
+          ) {
+            resolve();
+            return;
+          }
+          if (Date.now() - started > 4000) {
+            resolve();
+            return;
+          }
+          window.setTimeout(tick, 50);
+        };
+        tick();
+      });
+      await askCourseGpt(
+        `The student asked for personalization for this lesson. Use the exact knowledge chunk. Match the student's visual-verbal style (${visualVerbalStyle}) and analytic-holistic style (${analyticHolisticStyle}) from their profile. Use cognitive load ${normalized} with the matching frustration level. Do not invent facts.`
+      );
+    } finally {
+      personalizationAskInFlightRef.current = false;
+    }
+  };
+  startHighLoadPersonalizationRef.current = startHighLoadPersonalization;
 
   return (
     <div className="course-learn">
@@ -3241,8 +3388,9 @@ const CourseDetail = () => {
                     lineHeight: 1.45,
                   }}
                 >
-                  Adjust year and load if needed. Cognitive styles come from the
-                  student profile and are inserted into the prompt automatically.
+                  Adjust year if needed. Cognitive styles come from the student
+                  profile. Cognitive load starts at Medium and updates every two
+                  minutes from the video session.
                 </p>
                 <div
                   style={{
@@ -3270,29 +3418,9 @@ const CourseDetail = () => {
                   >
                     Visual-Verbal: {visualVerbalStyle} · Analytic-Holistic:{' '}
                     {analyticHolisticStyle}
+                    <br />
+                    Cognitive load: {loadLevel}
                   </div>
-                  <select
-                    className="form-input"
-                    value={loadLevel}
-                    onChange={(e) => setLoadLevel(e.target.value)}
-                    style={{ fontSize: '0.82rem' }}
-                  >
-                    <option value="Very Low">Load: Very Low</option>
-                    <option value="Low">Load: Low</option>
-                    <option value="Medium">Load: Medium</option>
-                    <option value="High">Load: High</option>
-                    <option value="Very High">Load: Very High</option>
-                  </select>
-                  <select
-                    className="form-input"
-                    value={frustration}
-                    onChange={(e) => setFrustration(e.target.value)}
-                    style={{ fontSize: '0.82rem' }}
-                  >
-                    <option value="Low">Frustration: Low</option>
-                    <option value="Moderate">Frustration: Moderate</option>
-                    <option value="High">Frustration: High</option>
-                  </select>
                 </div>
                   </>
                 ) : null}
@@ -3788,7 +3916,12 @@ const CourseDetail = () => {
           busy={gptLoading}
           onNo={dismissPlaybackPersonalizationPrompt}
           onYes={async () => {
-            const copy = PLAYBACK_PROMPT_COPY[playbackPrompt];
+            const kind = playbackPrompt;
+            if (kind === 'highLoad') {
+              await startHighLoadPersonalization(highLoadLevelRef.current);
+              return;
+            }
+            const copy = PLAYBACK_PROMPT_COPY[kind];
             dismissPlaybackPersonalizationPrompt();
             await askCourseGpt(copy?.extraInstruction || '');
           }}
