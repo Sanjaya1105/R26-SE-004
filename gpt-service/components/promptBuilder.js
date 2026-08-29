@@ -12,7 +12,7 @@ const LOAD_LEVELS = new Set([
   "Very High",
 ]);
 
-const FRUSTRATION_LEVELS = new Set(["Low", "Moderate", "High"]);
+const FRUSTRATION_LEVELS = new Set(["Low", "Moderate", "High", "Very High"]);
 
 function clean(str) {
   return String(str ?? "").trim();
@@ -54,6 +54,21 @@ function normalizeAnalyticHolisticStyle(value) {
     ])
   );
   return normalized || "Analytic";
+}
+
+function normalizeFrustration(value) {
+  const raw = clean(value);
+  if (!raw) return "";
+  if (FRUSTRATION_LEVELS.has(raw)) return raw;
+  const key = raw.toLowerCase().replace(/[_-]+/g, " ");
+  const map = {
+    low: "Low",
+    moderate: "Moderate",
+    medium: "Moderate",
+    high: "High",
+    "very high": "Very High",
+  };
+  return map[key] || "";
 }
 
 function frustrationFromLoad(loadLevel) {
@@ -119,7 +134,7 @@ function uniqueKnowledgeText(input = {}) {
  * @param {string} [input.visualVerbalCognitiveStyle] - Visual | Verbal | Intermediate
  * @param {string} [input.analyticWholisticCognitiveStyle] - Analytic | Holistic
  * @param {string} [input.cognitiveStyle] - legacy alias for visual-verbal style
- * @param {{ level?: string }} [input.cognitiveLoad]
+ * @param {{ level?: string, frustration?: string }} [input.cognitiveLoad]
  */
 function buildPedagogicalPrompt(input = {}) {
   const year = clean(input.studentProfile?.year) || "[Year]";
@@ -136,7 +151,9 @@ function buildPedagogicalPrompt(input = {}) {
     loadLevel = "Medium";
   }
 
-  const frustration = frustrationFromLoad(loadLevel);
+  const frustration =
+    normalizeFrustration(input.cognitiveLoad?.frustration) ||
+    frustrationFromLoad(loadLevel);
 
   const courseName = clean(input.courseName) || "(course)";
   const subsectionTitle = clean(input.subsectionTitle) || "(subsection)";
@@ -190,7 +207,7 @@ $$
 Inputs:
 Student Profile: {Year: ${year}}
 Cognitive Style: {Visual-Verbal: ${visualVerbalStyle} (Visual, Verbal, or Intermediate), Analytic-Holistic: ${analyticHolisticStyle} (Analytic or Holistic)}
-Current Cognitive Load: {Level: ${loadLevel} (1 of 5: Very Low, Low, Medium, High, Very High), Frustration: ${frustration} (Low, Moderate, High)}
+Current Cognitive Load: {Level: ${loadLevel} (1 of 5: Very Low, Low, Medium, High, Very High), Frustration: ${frustration} (Low, Moderate, High, Very High)}
 Knowledge Chunk: {Unique extractive lesson knowledge. Do not invent facts.}
 
 ${knowledgeChunk}

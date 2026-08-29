@@ -861,6 +861,7 @@ const CourseDetail = () => {
   const shortVideoEndNotifiedRef = useRef(false);
   const longVideoEndNotifiedRef = useRef(false);
   const latestPredictedLoadRef = useRef('');
+  const promptFrustrationOverrideRef = useRef('');
   const pedagogicalPromptRef = useRef('');
   const loadLevelRef = useRef('Medium');
   const promptLoadingRef = useRef(false);
@@ -982,6 +983,7 @@ const CourseDetail = () => {
     shortVideoEndNotifiedRef.current = false;
     longVideoEndNotifiedRef.current = false;
     latestPredictedLoadRef.current = '';
+    promptFrustrationOverrideRef.current = '';
     twoMinuteNotifyDoneRef.current = false;
     setLoadLevel('Medium');
     setCognitiveLoadResult(null);
@@ -1014,6 +1016,7 @@ const CourseDetail = () => {
     shortVideoEndNotifiedRef.current = false;
     longVideoEndNotifiedRef.current = false;
     latestPredictedLoadRef.current = '';
+    promptFrustrationOverrideRef.current = '';
     twoMinuteNotifyDoneRef.current = false;
     setLoadLevel('Medium');
     setCourseTrackingDisabled(false);
@@ -1111,6 +1114,7 @@ const CourseDetail = () => {
     twoMinuteNotifyDoneRef.current = false;
     longVideoEndNotifiedRef.current = false;
     latestPredictedLoadRef.current = '';
+    promptFrustrationOverrideRef.current = '';
     activeRawEventWindowKeyRef.current = getActiveWindowKey(startedAt, sessionId);
     resetActiveWindowStats(activeRawEventWindowKeyRef.current);
 
@@ -1134,6 +1138,7 @@ const CourseDetail = () => {
     if (predictedLoad) {
       latestPredictedLoadRef.current = predictedLoad;
       highLoadLevelRef.current = predictedLoad;
+      promptFrustrationOverrideRef.current = '';
     }
     if (twoMinuteNotifyDoneRef.current) return;
     const duration = Number(videoRef.current?.duration || 0);
@@ -1889,7 +1894,12 @@ const CourseDetail = () => {
         },
         visualVerbalCognitiveStyle: visualVerbalStyle,
         analyticWholisticCognitiveStyle: analyticHolisticStyle,
-        cognitiveLoad: { level: loadLevel },
+        cognitiveLoad: {
+          level: loadLevel,
+          ...(promptFrustrationOverrideRef.current
+            ? { frustration: promptFrustrationOverrideRef.current }
+            : {}),
+        },
       };
 
       const urls = buildGptPromptUrls();
@@ -2463,6 +2473,7 @@ const CourseDetail = () => {
     personalizationAskInFlightRef.current = true;
     try {
       dismissPlaybackPersonalizationPrompt();
+      promptFrustrationOverrideRef.current = '';
       setLoadLevel(normalized);
       highLoadLevelRef.current = normalized;
       setPromptBarOpen(true);
@@ -2498,6 +2509,70 @@ const CourseDetail = () => {
       return startForcedHighPersonalization();
     }
     return startHighLoadPersonalization(payload?.loadLevel ?? payload);
+  };
+
+  const startManualPersonalizedContent = async () => {
+    if (personalizationAskInFlightRef.current) return;
+    const predicted = latestPredictedLoadRef.current;
+    if (predicted) {
+      await startHighLoadPersonalization(predicted);
+      return;
+    }
+
+    personalizationAskInFlightRef.current = true;
+    try {
+      dismissPlaybackPersonalizationPrompt();
+      promptFrustrationOverrideRef.current = 'Very High';
+      setLoadLevel('Very High');
+      highLoadLevelRef.current = 'Very High';
+      setPromptBarOpen(true);
+      askPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      const body = {
+        courseName: course?.courseName || '',
+        subsectionTitle: mainVideo?.title || '',
+        knowledgeChunk: mainVideo?.knowledgeChunk || '',
+        containsMath: Boolean(mainVideo?.containsMath),
+        studentProfile: {
+          year: studentYear,
+        },
+        visualVerbalCognitiveStyle: visualVerbalStyle,
+        analyticWholisticCognitiveStyle: analyticHolisticStyle,
+        cognitiveLoad: { level: 'Very High', frustration: 'Very High' },
+      };
+      let promptText = '';
+      let lastErr;
+      for (const url of buildGptPromptUrls()) {
+        try {
+          const res = await axios.post(url, body);
+          promptText = String(res.data?.data?.prompt || '').trim();
+          lastErr = null;
+          break;
+        } catch (e) {
+          lastErr = e;
+          if (e.response?.status === 404) continue;
+          if (!e.response && e.code === 'ERR_NETWORK') continue;
+          throw e;
+        }
+      }
+      if (!promptText && lastErr) throw lastErr;
+      if (promptText) {
+        pedagogicalPromptRef.current = promptText;
+        setPedagogicalPrompt(promptText);
+      }
+
+      await askCourseGpt(
+        `The student asked for personalized content. Use the exact knowledge chunk. Match the student's visual-verbal style (${visualVerbalStyle}) and analytic-holistic style (${analyticHolisticStyle}) from their profile. No predicted cognitive load was available, so use cognitive load Very High and frustration Very High. Do not invent facts.`
+      );
+    } catch (err) {
+      setGptError(
+        [err.response?.data?.message, err.response?.data?.detail, err.message]
+          .filter(Boolean)
+          .join('\n\n') || 'Could not get personalized content.'
+      );
+    } finally {
+      personalizationAskInFlightRef.current = false;
+    }
   };
 
   return (
@@ -3044,6 +3119,18 @@ const CourseDetail = () => {
                 </div>
               </div>
               <div className="course-learn__below">
+              <div className="course-learn__personalize">
+                <button
+                  type="button"
+                  className="btn btn-primary course-learn__personalize-btn"
+                  onClick={() => {
+                    void startManualPersonalizedContent();
+                  }}
+                  disabled={gptLoading}
+                >
+                  {gptLoading ? 'Getting personalized content…' : 'Get personalized content'}
+                </button>
+              </div>
               <p style={{ marginTop: 0, marginBottom: 0 }}>
                 <a
                   href={

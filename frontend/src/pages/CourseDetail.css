@@ -393,6 +393,17 @@
   background: var(--learn-panel);
 }
 
+.course-learn__personalize {
+  margin: 0 0 1rem;
+}
+
+.course-learn__personalize-btn {
+  width: 100%;
+  justify-content: center;
+  font-weight: 600;
+  padding: 0.72rem 1rem;
+}
+
 .course-learn__panel {
   margin-top: 1rem;
   padding: 1rem 1.05rem;
