@@ -4,6 +4,7 @@ import axios from 'axios';
 import { getGatewayBaseUrl } from '../config/gateway';
 import { ENABLE_HUGGINGFACE_GENERATION } from '../config/modelGeneration';
 import AssistantMarkdown from '../components/AssistantMarkdown';
+import TeacherWorkspaceLayout from '../components/TeacherWorkspaceLayout';
 
 function buildGptAskUrls() {
   const base = getGatewayBaseUrl();
@@ -89,25 +90,19 @@ const Gpt = () => {
   };
 
   return (
-    <div style={{ width: '100%', minHeight: '100vh', padding: '2rem' }}>
-      <div className="container" style={{ maxWidth: '900px' }}>
-        <div className="glass-panel" style={{ padding: '1.5rem' }}>
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '1rem',
-            }}
-          >
-            <h1 className="gradient-text" style={{ margin: 0 }}>
-              Chat Assistant
-            </h1>
-            <button type="button" className="btn" onClick={() => navigate('/dashboard')}>
-              Back
-            </button>
-          </div>
-
+    <TeacherWorkspaceLayout
+      activePath="/gpt"
+      eyebrow="AI teaching support"
+      title="Chat Assistant"
+      description="Ask teaching questions and turn complex ideas into clear, classroom-ready explanations."
+      badge="AI"
+    >
+      <section className="teacher-workspace-card">
+        <div className="teacher-workspace-card-heading">
+          <h2>Ask the assistant</h2>
+          <p>Enter a question below to receive focused teaching and lesson support.</p>
+        </div>
+        <div className="teacher-workspace-form">
           <label className="form-label" htmlFor="assistant-question">
             Ask a question
           </label>
@@ -123,39 +118,26 @@ const Gpt = () => {
 
           <button
             type="button"
-            className="btn btn-primary"
+            className="teacher-workspace-primary-button"
             onClick={ask}
             disabled={loading}
-            style={{ marginTop: '0.75rem' }}
           >
             {loading ? 'Asking…' : 'Ask'}
           </button>
-
-          {error ? (
-            <p style={{ marginTop: '1rem', color: 'var(--danger)' }}>{error}</p>
-          ) : null}
-
-          {answer ? (
-            <div
-              style={{
-                marginTop: '1rem',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: '10px',
-                padding: '1rem',
-                background: 'rgba(15, 23, 42, 0.35)',
-              }}
-            >
-              <p className="form-label" style={{ marginBottom: '0.5rem' }}>
-                Assistant response
-              </p>
-              <AssistantMarkdown style={{ maxHeight: 'min(60vh, 520px)', overflowY: 'auto' }}>
-                {answer}
-              </AssistantMarkdown>
-            </div>
-          ) : null}
         </div>
-      </div>
-    </div>
+
+        {error ? <p className="teacher-workspace-error">{error}</p> : null}
+
+        {answer ? (
+          <div className="teacher-workspace-answer">
+            <p className="teacher-workspace-answer-label">Assistant response</p>
+            <AssistantMarkdown style={{ maxHeight: 'min(60vh, 520px)', overflowY: 'auto' }}>
+              {answer}
+            </AssistantMarkdown>
+          </div>
+        ) : null}
+      </section>
+    </TeacherWorkspaceLayout>
   );
 };
 
