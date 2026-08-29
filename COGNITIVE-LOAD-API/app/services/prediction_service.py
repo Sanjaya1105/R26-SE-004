@@ -58,6 +58,10 @@ COGNITIVE_LOAD_LABELS = {
     5: "Very High",
 }
 
+MIN_TIME_ON_CONTENT_SECONDS = 60
+MAX_IDLE_SECONDS = 60
+MAX_PAUSED_SECONDS = 60
+
 COGNITIVE_LOAD_SCORES = {
     label.lower(): score for score, label in COGNITIVE_LOAD_LABELS.items()
 }
@@ -194,6 +198,9 @@ def predict_cognitive_load(data, persist: bool | None = None):
         "rewatch_segments": data.rewatch_segments,
         "playback_rate_change": data.playback_rate_change,
         "idle_duration_video": data.idle_duration_video,
+        "paused_duration_video": _storage_int(
+            getattr(data, "paused_duration_video", 0)
+        ),
         "time_on_content": data.time_on_content,
         "navigation_count_adaptation": navigation_count_adaptation,
         "revisit_frequency": revisit_frequency,
@@ -201,6 +208,35 @@ def predict_cognitive_load(data, persist: bool | None = None):
         "quiz_response_time": quiz_response_time,
         "error_rate": error_rate,
     }
+
+    reliability = check_prediction_reliability(data)
+    if not reliability["reliable"]:
+        return {
+            "student_id": data.student_id,
+            "lesson_id": data.lesson_id,
+            "minute_index": data.minute_index,
+            "pause_frequency": data.pause_frequency,
+            "navigation_count_video": data.navigation_count_video,
+            "rewatch_segments": data.rewatch_segments,
+            "playback_rate_change": data.playback_rate_change,
+            "idle_duration_video": data.idle_duration_video,
+            "paused_duration_video": _storage_int(
+                getattr(data, "paused_duration_video", 0)
+            ),
+            "time_on_content": data.time_on_content,
+            "prediction_status": "not_reliable",
+            "predicted_cognitive_load": None,
+            "predicted_score": None,
+            "predicted_label": None,
+            "confidence": 0.0,
+            "reason": reliability["reason"],
+            "reliability_checks": reliability["checks"],
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "lime_dispatch": {
+                "status": "skipped",
+                "reason": "Prediction reliability gate failed",
+            },
+        }
 
     input_df = pd.DataFrame(
         [
@@ -239,6 +275,8 @@ def predict_cognitive_load(data, persist: bool | None = None):
         "predicted_cognitive_load": label,
         "predicted_score": predicted_score,
         "predicted_label": label,
+        "prediction_status": "reliable",
+        "reason": "Enough learning behavior available",
         "confidence": round(float(confidence), 2),
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -263,6 +301,66 @@ def predict_cognitive_load(data, persist: bool | None = None):
         )
 
     return response_data
+
+
+def check_prediction_reliability(data):
+    pause_frequency = _storage_int(getattr(data, "pause_frequency", 0))
+    navigation_count_video = _storage_int(getattr(data, "navigation_count_video", 0))
+    rewatch_segments = _storage_int(getattr(data, "rewatch_segments", 0))
+    playback_rate_change = _storage_int(getattr(data, "playback_rate_change", 0))
+    idle_duration_video = _storage_int(getattr(data, "idle_duration_video", 0))
+    paused_duration_video = _storage_int(getattr(data, "paused_duration_video", 0))
+    time_on_content = _storage_int(getattr(data, "time_on_content", 0))
+    interaction_count = (
+        pause_frequency
+        + navigation_count_video
+        + rewatch_segments
+        + playback_rate_change
+    )
+
+    checks = {
+        "time_on_content": time_on_content,
+        "idle_duration_video": idle_duration_video,
+        "paused_duration_video": paused_duration_video,
+        "interaction_count": interaction_count,
+    }
+
+    insufficient_watch = time_on_content < MIN_TIME_ON_CONTENT_SECONDS
+    long_pause_without_activity = (
+        paused_duration_video >= MAX_PAUSED_SECONDS
+        and navigation_count_video + rewatch_segments + playback_rate_change == 0
+    )
+    idle_without_activity = (
+        idle_duration_video >= MAX_IDLE_SECONDS
+        and interaction_count <= 1
+    )
+
+    if insufficient_watch:
+        return {
+            "reliable": False,
+            "reason": "Not enough video watch time in this window",
+            "checks": checks,
+        }
+
+    if long_pause_without_activity:
+        return {
+            "reliable": False,
+            "reason": "Long pause detected with insufficient learning interaction",
+            "checks": checks,
+        }
+
+    if idle_without_activity:
+        return {
+            "reliable": False,
+            "reason": "Learner inactive for most of this window",
+            "checks": checks,
+        }
+
+    return {
+        "reliable": True,
+        "reason": "Enough learning behavior available",
+        "checks": checks,
+    }
 
 
 def predict_cognitive_load_from_raw(data):
