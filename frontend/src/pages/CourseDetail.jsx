@@ -74,6 +74,12 @@ const PLAYBACK_PROMPT_COPY = {
     extraInstruction:
       'The student asked for personalization for this lesson. Use the exact knowledge chunk. Match the visual-verbal and analytic-holistic styles from the student profile. Use the predicted cognitive load and the matching frustration level. Do not invent facts.',
   },
+  shortEnd: {
+    title: 'Personalization',
+    body: 'Do you need any personalization for this lesson?',
+    extraInstruction:
+      'The student asked for personalization after a short lesson video. Use the exact knowledge chunk. Cognitive load is High and frustration is High. Do not use a measured cognitive style. Do not invent facts.',
+  },
   end: {
     title: 'Lesson suggestion',
     body: 'Do you need any suggestion in another way?',
@@ -348,6 +354,10 @@ function logOutputSelectionReasoning(data, { loadLevel, sourceChars } = {}) {
 const ABOUT_PREVIEW_WORDS = 20;
 const COGNITIVE_LOAD_WINDOW_MS = 120000;
 const PERSONALIZATION_VIDEO_SECONDS = 120;
+
+function isShortLessonVideo(duration) {
+  return Number.isFinite(duration) && duration > 0 && duration < PERSONALIZATION_VIDEO_SECONDS;
+}
 
 function normalizeLoadLevel(value) {
   const raw = String(value ?? '').trim();
@@ -844,6 +854,7 @@ const CourseDetail = () => {
   const askPanelRef = useRef(null);
   const playbackPromptRef = useRef(null);
   const endPromptShownRef = useRef(false);
+  const shortVideoEndNotifiedRef = useRef(false);
   const pedagogicalPromptRef = useRef('');
   const loadLevelRef = useRef('Medium');
   const promptLoadingRef = useRef(false);
@@ -962,6 +973,7 @@ const CourseDetail = () => {
     setPlaybackPrompt(null);
     playbackPromptRef.current = null;
     endPromptShownRef.current = false;
+    shortVideoEndNotifiedRef.current = false;
     twoMinuteNotifyDoneRef.current = false;
     setLoadLevel('Medium');
     setCognitiveLoadResult(null);
@@ -991,6 +1003,7 @@ const CourseDetail = () => {
     setPlaybackPrompt(null);
     playbackPromptRef.current = null;
     endPromptShownRef.current = false;
+    shortVideoEndNotifiedRef.current = false;
     twoMinuteNotifyDoneRef.current = false;
     setLoadLevel('Medium');
     setCourseTrackingDisabled(false);
@@ -1108,7 +1121,7 @@ const CourseDetail = () => {
   const offerPersonalizationAfterLoadPrediction = async (predictedLoad) => {
     if (twoMinuteNotifyDoneRef.current) return;
     const duration = Number(videoRef.current?.duration || 0);
-    if (Number.isFinite(duration) && duration > 0 && duration < PERSONALIZATION_VIDEO_SECONDS) {
+    if (isShortLessonVideo(duration)) {
       twoMinuteNotifyDoneRef.current = true;
       return;
     }
@@ -1573,8 +1586,27 @@ const CourseDetail = () => {
     }, 0);
   };
 
+  const offerShortVideoEndPersonalization = () => {
+    if (shortVideoEndNotifiedRef.current) return;
+    const duration = Number(videoRef.current?.duration || 0);
+    if (!isShortLessonVideo(duration)) return;
+
+    shortVideoEndNotifiedRef.current = true;
+    highLoadLevelRef.current = 'High';
+    playbackPromptRef.current = 'shortEnd';
+    setPlaybackPrompt('shortEnd');
+    void showHighLoadPersonalizationNotification({
+      courseId,
+      subsectionId: mainVideo?.subsectionId,
+      loadLevel: 'High',
+      kind: 'shortEnd',
+      body: 'Do you need any personalization for this lesson?',
+      url: window.location.href,
+    });
+  };
+
   const openPlaybackPersonalizationPrompt = (kind) => {
-    if (kind !== 'highLoad' && kind !== 'end') return;
+    if (kind !== 'highLoad' && kind !== 'end' && kind !== 'shortEnd') return;
     if (kind === 'end' && endPromptShownRef.current) return;
     if (kind === 'end') endPromptShownRef.current = true;
     playbackPromptRef.current = kind;
@@ -1634,8 +1666,12 @@ const CourseDetail = () => {
     if (!Number.isFinite(duration) || duration <= 0) {
       return;
     }
-    if (duration < PERSONALIZATION_VIDEO_SECONDS) {
+    if (isShortLessonVideo(duration)) {
       twoMinuteNotifyDoneRef.current = true;
+      if (currentTime >= duration - 0.35) {
+        offerShortVideoEndPersonalization();
+      }
+      return;
     }
     if (currentTime >= duration - 0.35) {
       openPlaybackPersonalizationPrompt('end');
@@ -1645,7 +1681,7 @@ const CourseDetail = () => {
   const handleVideoLoadedMetadata = () => {
     const duration = Number(videoRef.current?.duration || 0);
     rememberVideoDuration(duration);
-    if (duration > 0 && duration < PERSONALIZATION_VIDEO_SECONDS) {
+    if (isShortLessonVideo(duration)) {
       twoMinuteNotifyDoneRef.current = true;
     }
   };
@@ -1659,7 +1695,11 @@ const CourseDetail = () => {
       recordWatchRange(Math.max(0, currentTime - 0.5), currentTime, currentTime);
     }
     flushCurrentWatch();
-    openPlaybackPersonalizationPrompt('end');
+    if (isShortLessonVideo(duration)) {
+      offerShortVideoEndPersonalization();
+    } else {
+      openPlaybackPersonalizationPrompt('end');
+    }
     markInteraction();
   };
 
@@ -1895,7 +1935,10 @@ const CourseDetail = () => {
       ) {
         return;
       }
-      startHighLoadPersonalizationRef.current(data.loadLevel);
+      startHighLoadPersonalizationRef.current({
+        kind: data.kind,
+        loadLevel: data.loadLevel,
+      });
     };
     navigator.serviceWorker.addEventListener('message', onMessage);
     return () => {
@@ -2325,6 +2368,59 @@ const CourseDetail = () => {
     }
   };
 
+  const startForcedHighPersonalization = async () => {
+    if (personalizationAskInFlightRef.current) return;
+    personalizationAskInFlightRef.current = true;
+    try {
+      dismissPlaybackPersonalizationPrompt();
+      setLoadLevel('High');
+      highLoadLevelRef.current = 'High';
+      setPromptBarOpen(true);
+      askPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      const body = {
+        courseName: course?.courseName || '',
+        subsectionTitle: mainVideo?.title || '',
+        knowledgeChunk: mainVideo?.knowledgeChunk || '',
+        containsMath: Boolean(mainVideo?.containsMath),
+        studentProfile: {
+          year: studentYear,
+        },
+        cognitiveLoad: { level: 'High' },
+      };
+      let promptText = '';
+      let lastErr;
+      for (const url of buildGptPromptUrls()) {
+        try {
+          const res = await axios.post(url, body);
+          promptText = String(res.data?.data?.prompt || '').trim();
+          lastErr = null;
+          break;
+        } catch (e) {
+          lastErr = e;
+          if (e.response?.status === 404) continue;
+          if (!e.response && e.code === 'ERR_NETWORK') continue;
+          throw e;
+        }
+      }
+      if (!promptText && lastErr) throw lastErr;
+      if (promptText) {
+        pedagogicalPromptRef.current = promptText;
+        setPedagogicalPrompt(promptText);
+      }
+
+      await askCourseGpt(PLAYBACK_PROMPT_COPY.shortEnd.extraInstruction);
+    } catch (err) {
+      setGptError(
+        [err.response?.data?.message, err.response?.data?.detail, err.message]
+          .filter(Boolean)
+          .join('\n\n') || 'Could not start short-lesson personalization.'
+      );
+    } finally {
+      personalizationAskInFlightRef.current = false;
+    }
+  };
+
   const startHighLoadPersonalization = async (level) => {
     const normalized =
       normalizeLoadLevel(level) || highLoadLevelRef.current || 'High';
@@ -2362,7 +2458,12 @@ const CourseDetail = () => {
       personalizationAskInFlightRef.current = false;
     }
   };
-  startHighLoadPersonalizationRef.current = startHighLoadPersonalization;
+  startHighLoadPersonalizationRef.current = (payload) => {
+    if (payload?.kind === 'shortEnd') {
+      return startForcedHighPersonalization();
+    }
+    return startHighLoadPersonalization(payload?.loadLevel ?? payload);
+  };
 
   return (
     <div className="course-learn">
@@ -3917,6 +4018,10 @@ const CourseDetail = () => {
           onNo={dismissPlaybackPersonalizationPrompt}
           onYes={async () => {
             const kind = playbackPrompt;
+            if (kind === 'shortEnd') {
+              await startForcedHighPersonalization();
+              return;
+            }
             if (kind === 'highLoad') {
               await startHighLoadPersonalization(highLoadLevelRef.current);
               return;

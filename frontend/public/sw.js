@@ -37,6 +37,7 @@ self.addEventListener("notificationclick", (event) => {
           const payload = {
             type: "cognitive-load-personalization",
             action: "yes",
+            kind: data.kind || "highLoad",
             courseId: data.courseId,
             subsectionId: data.subsectionId,
             loadLevel: data.loadLevel,

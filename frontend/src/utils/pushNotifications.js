@@ -82,14 +82,19 @@ export async function showHighLoadPersonalizationNotification({
   subsectionId,
   loadLevel,
   url,
+  kind = 'highLoad',
+  body,
 }) {
   const granted = await enableWatchNotifications();
   if (!granted) return false;
 
   const title = 'Lesson personalization';
-  const body = `Your cognitive load is ${loadLevel}. Do you need any personalization for this lesson?`;
+  const text =
+    body ||
+    `Your cognitive load is ${loadLevel}. Do you need any personalization for this lesson?`;
   const payload = {
     type: COGNITIVE_LOAD_PERSONALIZATION_MESSAGE,
+    kind,
     courseId: String(courseId || ''),
     subsectionId: String(subsectionId || ''),
     loadLevel,
@@ -99,7 +104,7 @@ export async function showHighLoadPersonalizationNotification({
   try {
     const reg = await navigator.serviceWorker.ready;
     await reg.showNotification(title, {
-      body,
+      body: text,
       icon: '/favicon.svg',
       badge: '/favicon.svg',
       tag: 'cognitive-load-personalization',
