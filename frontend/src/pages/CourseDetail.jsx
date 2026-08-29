@@ -1876,7 +1876,10 @@ const CourseDetail = () => {
       let lastErr;
       for (const url of urls) {
         try {
-          const res = await axios.post(url, body, { headers: authHeaders });
+          const res = await axios.post(url, body, {
+            headers: authHeaders,
+            timeout: 180000,
+          });
           return res;
         } catch (e) {
           lastErr = e;
@@ -3069,6 +3072,7 @@ const CourseDetail = () => {
                     style={{ fontSize: '0.82rem' }}
                   >
                     <option value="Visual">Visual</option>
+                    <option value="Intermediate">Intermediate</option>
                     <option value="Auditory">Auditory</option>
                     <option value="Read/Write">Read/Write</option>
                     <option value="Kinesthetic">Kinesthetic</option>

@@ -1,6 +1,4 @@
-import MermaidChart from './MermaidChart';
 import {
-  conceptBoardToMermaid,
   parseAsciiBoxTable,
 } from '../utils/asciiDiagram';
 
@@ -16,7 +14,6 @@ export default function ConceptBoard({ block }) {
   if (!parsed?.cards?.length) {
     return <pre className="assistant-md-ascii-fallback">{block}</pre>;
   }
-  const mermaid = conceptBoardToMermaid(parsed);
   const columns = Math.min(Math.max(parsed.columnCount, 1), 3);
 
   return (
@@ -42,7 +39,6 @@ export default function ConceptBoard({ block }) {
           </article>
         ))}
       </div>
-      {mermaid ? <MermaidChart definition={mermaid} /> : null}
     </div>
   );
 }

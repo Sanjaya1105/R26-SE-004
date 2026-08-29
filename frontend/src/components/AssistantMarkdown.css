@@ -196,6 +196,236 @@
   font-size: 0.78rem;
 }
 
+.assistant-md-mermaid svg[aria-roledescription='error'] {
+  display: none;
+}
+
+.diagram-visual {
+  margin: 0.9rem 0;
+  padding: 0.9rem 1rem 1rem;
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid rgba(129, 140, 248, 0.28);
+  background: linear-gradient(180deg, rgba(30, 27, 75, 0.55), rgba(15, 23, 42, 0.9));
+}
+
+.diagram-visual figcaption,
+.assistant-md-mermaid figcaption {
+  margin: 0 0 0.7rem;
+  color: #a5b4fc;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.diagram-visual .simple-flow {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.diagram-tree {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-tree-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.diagram-tree-label {
+  max-width: 12rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid rgba(129, 140, 248, 0.45);
+  background: rgba(49, 46, 129, 0.72);
+  color: #e2e8f0;
+  font-size: 0.82rem;
+  text-align: center;
+}
+
+.diagram-tree-children {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed rgba(165, 180, 252, 0.35);
+}
+
+.diagram-seq-actors {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.diagram-seq-actor,
+.diagram-boxes .simple-flow-node {
+  padding: 0.5rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid rgba(129, 140, 248, 0.45);
+  background: rgba(49, 46, 129, 0.72);
+  color: #e2e8f0;
+  font-size: 0.82rem;
+  text-align: center;
+}
+
+.diagram-seq-messages {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.diagram-seq-messages li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.35rem 0;
+  color: #cbd5e1;
+  font-size: 0.84rem;
+}
+
+.diagram-seq-arrow {
+  color: #a5b4fc;
+}
+
+.diagram-seq-messages em {
+  color: #94a3b8;
+  font-style: normal;
+}
+
+.diagram-timeline {
+  margin: 0;
+}
+
+.diagram-timeline h3,
+.diagram-pie h3 {
+  margin: 0 0 0.7rem;
+  color: #e2e8f0;
+  font-size: 0.95rem;
+}
+
+.diagram-timeline ol {
+  margin: 0;
+  padding: 0 0 0 0.4rem;
+  border-left: 2px solid rgba(129, 140, 248, 0.45);
+  list-style: none;
+}
+
+.diagram-timeline li {
+  position: relative;
+  padding: 0 0 0.85rem 1rem;
+}
+
+.diagram-timeline li::before {
+  content: '';
+  position: absolute;
+  left: -0.42rem;
+  top: 0.35rem;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: #818cf8;
+}
+
+.diagram-timeline-when {
+  display: block;
+  color: #a5b4fc;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.diagram-timeline-text {
+  color: #e2e8f0;
+  font-size: 0.84rem;
+}
+
+.diagram-pie-row {
+  display: grid;
+  grid-template-columns: 7rem minmax(4rem, 1fr) auto;
+  gap: 0.55rem;
+  align-items: center;
+  margin: 0.4rem 0;
+  color: #cbd5e1;
+  font-size: 0.8rem;
+}
+
+.diagram-pie-bar {
+  height: 0.55rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #6366f1, #38bdf8);
+}
+
+.diagram-boxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.simple-flow {
+  margin: 0.9rem 0;
+  padding: 0.9rem;
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid rgba(129, 140, 248, 0.28);
+  background: linear-gradient(180deg, rgba(30, 27, 75, 0.55), rgba(15, 23, 42, 0.9));
+}
+
+.simple-flow--lr,
+.simple-flow--lr .simple-flow-group {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.simple-flow--tb,
+.simple-flow--tb .simple-flow-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.simple-flow-group {
+  gap: 0.55rem;
+}
+
+.simple-flow-layer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.simple-flow--tb .simple-flow-layer {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.simple-flow-node {
+  max-width: 12rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid rgba(129, 140, 248, 0.45);
+  background: rgba(49, 46, 129, 0.72);
+  color: #e2e8f0;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.simple-flow-arrow {
+  color: #a5b4fc;
+  font-size: 1.15rem;
+  line-height: 1;
+  padding: 0.15rem 0.35rem;
+}
+
 .assistant-concept-board {
   overflow: hidden;
   border-radius: 14px;

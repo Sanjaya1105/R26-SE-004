@@ -18,6 +18,7 @@ import MermaidChart from './MermaidChart';
 import ConceptBoard from './ConceptBoard';
 
 const assistantComponents = {
+  pre: ({ children }) => <div className="assistant-md-pre">{children}</div>,
   table: ({ children, ...props }) => (
     <div className="assistant-md-table-wrap">
       <table {...props}>{children}</table>
@@ -76,6 +77,11 @@ export default function AssistantMarkdown({
       {segments.map((segment, index) => {
         if (segment.type === 'ascii') {
           return <ConceptBoard key={`ascii-${index}`} block={segment.content} />;
+        }
+        if (segment.type === 'mermaid') {
+          return (
+            <MermaidChart key={`mermaid-${index}`} definition={segment.content} />
+          );
         }
         return (
           <MarkdownBlock

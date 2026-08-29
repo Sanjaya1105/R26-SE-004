@@ -2,6 +2,7 @@ const { filterWhisperNoise } = require("../lib/whisperNoise");
 
 const COGNITIVE_STYLES = new Set([
   "Visual",
+  "Intermediate",
   "Auditory",
   "Read/Write",
   "Kinesthetic",
@@ -19,6 +20,21 @@ const FRUSTRATION_LEVELS = new Set(["Low", "Moderate", "High"]);
 
 function clean(str) {
   return String(str ?? "").trim();
+}
+
+function normalizeCognitiveStyle(value) {
+  const raw = clean(value);
+  if (COGNITIVE_STYLES.has(raw)) return raw;
+  const key = raw.toLowerCase();
+  if (key === "intermediary" || key === "intermediatory" || key === "moderate") {
+    return "Intermediate";
+  }
+  if (key === "verbal") return "Read/Write";
+  return "Visual";
+}
+
+function wantsMermaidDiagrams(style) {
+  return style === "Visual" || style === "Intermediate";
 }
 
 function isTruthyFlag(value) {
@@ -71,7 +87,7 @@ function uniqueKnowledgeText(input = {}) {
  * @param {string} [input.pdfText]
  * @param {boolean} [input.containsMath]
  * @param {{ major?: string, year?: string, interests?: string }} [input.studentProfile]
- * @param {string} [input.cognitiveStyle] - one of Visual | Auditory | Read/Write | Kinesthetic
+ * @param {string} [input.cognitiveStyle] - Visual | Intermediate | Auditory | Read/Write | Kinesthetic
  * @param {{ level?: string, frustration?: string }} [input.cognitiveLoad]
  */
 function buildPedagogicalPrompt(input = {}) {
@@ -80,10 +96,7 @@ function buildPedagogicalPrompt(input = {}) {
   const interests =
     clean(input.studentProfile?.interests) || "[Interests]";
 
-  let style = clean(input.cognitiveStyle) || "Visual";
-  if (!COGNITIVE_STYLES.has(style)) {
-    style = "Visual";
-  }
+  const style = normalizeCognitiveStyle(input.cognitiveStyle);
 
   let loadLevel = clean(input.cognitiveLoad?.level) || "Medium";
   if (!LOAD_LEVELS.has(loadLevel)) {
@@ -110,6 +123,23 @@ function buildPedagogicalPrompt(input = {}) {
     uniqueText || "(none)",
   ].join("\n");
 
+  const mermaidInstructions = wantsMermaidDiagrams(style)
+    ? `
+Diagram rule: If a process, cycle, comparison, or concept map would help this Visual/Intermediate learner, include one fenced Mermaid block the app will draw. Pick the matching type:
+- flowchart LR or flowchart TB for a process
+- mindmap for a concept tree
+- sequenceDiagram for an interaction
+- timeline for ordered events
+Quote every label, ASCII only, for example:
+
+\`\`\`mermaid
+flowchart LR
+  A["Sunlight"] --> B["Chlorophyll"]
+  B --> C["Glucose"]
+\`\`\`
+`
+    : "";
+
   const mathInstructions = containsMath
     ? `
 Equation output rules (mandatory):
@@ -129,7 +159,7 @@ $$
 
 Inputs:
 Student Profile: {Major: ${major}, Year: ${year}, Interests: ${interests}}
-Cognitive Style: {Style: ${style} (1 of 4: Visual, Auditory, Read/Write, Kinesthetic)}
+Cognitive Style: {Style: ${style} (Visual, Intermediate, Auditory, Read/Write, or Kinesthetic)}
 Current Cognitive Load: {Level: ${loadLevel} (1 of 5: Very Low, Low, Medium, High, Very High), Frustration: ${frustration} (Low, Moderate, High)}
 Knowledge Chunk: {Unique extractive lesson knowledge. Do not invent facts.}
 
@@ -140,16 +170,7 @@ Assess Need: Analyze the knowledge chunk. If it is purely transitional or too si
 Transformation Goal: If adaptation is needed, rewrite the knowledge chunk to reduce cognitive load and match the student's cognitive style while preserving the original meaning.
 
 Visual layout rules:
-- Prefer Markdown headings, short paragraphs, and bullet lists over dense prose.
-- For processes, cycles, comparisons, or concept maps, output a fenced Mermaid diagram, for example:
-
-\`\`\`mermaid
-flowchart LR
-  Water --> Reaction --> Glucose
-\`\`\`
-
-- Do not draw ASCII box tables with +---+ and | columns. Use a Markdown table or Mermaid instead.
-- Keep labels short so diagrams stay readable.${mathInstructions}`;
+- Prefer Markdown headings, short paragraphs, and bullet lists over dense prose.${mermaidInstructions}${mathInstructions}`;
 }
 
 module.exports = {

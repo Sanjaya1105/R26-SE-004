@@ -1,5 +1,12 @@
 import { useEffect, useId, useState } from 'react';
 import mermaid from 'mermaid';
+import {
+  detectDiagramKind,
+  isMermaidErrorSvg,
+  sanitizeMermaidDefinition,
+} from '../utils/asciiDiagram';
+import { KIND_LABEL } from '../utils/diagramKinds';
+import DiagramVisual from './DiagramVisual';
 
 let mermaidReady = false;
 
@@ -8,6 +15,7 @@ function ensureMermaid() {
   mermaid.initialize({
     startOnLoad: false,
     securityLevel: 'strict',
+    suppressErrorRendering: true,
     theme: 'dark',
     fontFamily: 'ui-sans-serif, system-ui, sans-serif',
     themeVariables: {
@@ -26,59 +34,84 @@ function ensureMermaid() {
     },
     flowchart: {
       curve: 'basis',
-      htmlLabels: true,
+      htmlLabels: false,
       padding: 12,
     },
   });
   mermaidReady = true;
 }
 
+function removeMermaidArtifacts(id) {
+  if (typeof document === 'undefined') return;
+  const prefixes = [id, `d${id}`];
+  for (const prefix of prefixes) {
+    document.getElementById(prefix)?.remove();
+    document.querySelectorAll(`[id^="${prefix}"]`).forEach((el) => {
+      if (el.closest('.assistant-md-mermaid')) return;
+      el.remove();
+    });
+  }
+  document.querySelectorAll('body > svg, body > div').forEach((el) => {
+    if (/Syntax error in text/i.test(el.textContent || '')) el.remove();
+  });
+}
+
 export default function MermaidChart({ definition }) {
   const reactId = useId().replace(/:/g, '');
   const [svg, setSvg] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState(false);
+  const kind = detectDiagramKind(definition);
 
   useEffect(() => {
     let cancelled = false;
-    const source = String(definition || '').trim();
+    const source = sanitizeMermaidDefinition(definition);
     if (!source) {
       setSvg('');
-      setError('');
+      setError(false);
       return undefined;
     }
 
     ensureMermaid();
-    const id = `mermaid-${reactId}-${Math.random().toString(36).slice(2, 8)}`;
+    const id = `mmd${reactId}${Math.random().toString(36).slice(2, 8)}`;
+
     mermaid
       .render(id, source)
       .then((result) => {
-        if (!cancelled) {
-          setError('');
-          setSvg(result.svg || '');
+        removeMermaidArtifacts(id);
+        if (cancelled) return;
+        if (!result?.svg || isMermaidErrorSvg(result.svg)) {
+          setSvg('');
+          setError(true);
+          return;
         }
+        setError(false);
+        setSvg(result.svg);
       })
-      .catch((err) => {
+      .catch(() => {
+        removeMermaidArtifacts(id);
         if (!cancelled) {
           setSvg('');
-          setError(err?.message || 'Could not draw this diagram.');
+          setError(true);
         }
       });
 
     return () => {
       cancelled = true;
+      removeMermaidArtifacts(id);
     };
   }, [definition, reactId]);
 
+  if (svg) {
+    return (
+      <figure className={`assistant-md-mermaid assistant-md-mermaid--${kind} diagram-visual`}>
+        <figcaption>{KIND_LABEL[kind] || 'Diagram'}</figcaption>
+        <div dangerouslySetInnerHTML={{ __html: svg }} />
+      </figure>
+    );
+  }
   if (error) {
-    return <pre className="assistant-md-mermaid-fallback">{definition}</pre>;
+    return <DiagramVisual definition={definition} kind={kind} />;
   }
-  if (!svg) {
-    return <p className="assistant-md-mermaid-loading">Drawing diagram…</p>;
-  }
-  return (
-    <div
-      className="assistant-md-mermaid"
-      dangerouslySetInnerHTML={{ __html: svg }}
-    />
-  );
+  if (!String(definition || '').trim()) return null;
+  return <p className="assistant-md-mermaid-loading">Drawing diagram…</p>;
 }

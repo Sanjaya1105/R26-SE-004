@@ -29,18 +29,30 @@ function modelCandidates(preferred) {
   );
 }
 
+function textFrom(value) {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) {
+    return value
+      .map((part) =>
+        typeof part === "string" ? part : String(part?.text || "")
+      )
+      .join("");
+  }
+  return "";
+}
+
 function extractAnswer(payload) {
   const choice = payload?.choices?.[0] || {};
   const message = choice.message || {};
-  return String(
-    message.content ||
-      message.reasoning_content ||
-      choice.text ||
-      ""
+  return (
+    textFrom(message.content) ||
+    textFrom(message.reasoning_content) ||
+    textFrom(choice.text) ||
+    ""
   ).trim();
 }
 
-async function callDeepseekChat(messages, { maxTokens = 2048 } = {}) {
+async function callDeepseekChat(messages, { maxTokens = 4096 } = {}) {
   const { apiKey, baseUrl, model } = getDeepseekConfig();
   if (!apiKey) {
     const error = new Error("DEEPSEEK_API_KEY is not configured.");
@@ -50,24 +62,37 @@ async function callDeepseekChat(messages, { maxTokens = 2048 } = {}) {
 
   let lastFailure = null;
   for (const candidate of modelCandidates(model)) {
-    const response = await axios.post(
-      `${baseUrl}/chat/completions`,
-      {
-        model: candidate,
-        messages,
-        max_tokens: maxTokens,
-        temperature: 0.7,
-        stream: false,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
+    let response;
+    try {
+      response = await axios.post(
+        `${baseUrl}/chat/completions`,
+        {
+          model: candidate,
+          messages,
+          max_tokens: maxTokens,
+          temperature: 0.7,
+          stream: false,
+          // V4 thinking is on by default and can spend the whole token budget
+          // on chain-of-thought, leaving content empty for Ask.
+          thinking: { type: "disabled" },
         },
-        timeout: 120000,
-        validateStatus: () => true,
-      }
-    );
+        {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          timeout: 180000,
+          validateStatus: () => true,
+        }
+      );
+    } catch (networkError) {
+      lastFailure = {
+        status: 502,
+        detail: `${candidate}: ${networkError.message || "network error"}`,
+      };
+      console.warn("[deepseek]", lastFailure.detail);
+      continue;
+    }
 
     if (response.status >= 400) {
       const detail =
@@ -95,12 +120,21 @@ async function callDeepseekChat(messages, { maxTokens = 2048 } = {}) {
 
     const answer = extractAnswer(response.data);
     if (answer) {
+      console.log(
+        "[deepseek] ok",
+        candidate,
+        "chars",
+        answer.length,
+        "finish",
+        response.data?.choices?.[0]?.finish_reason || ""
+      );
       return { answer, model: candidate };
     }
     lastFailure = {
       status: 502,
-      detail: `${candidate}: empty answer payload`,
+      detail: `${candidate}: empty answer payload (finish=${response.data?.choices?.[0]?.finish_reason || "unknown"})`,
     };
+    console.warn("[deepseek]", lastFailure.detail);
   }
 
   const error = new Error(
@@ -145,6 +179,7 @@ router.post("/chat", verifyToken, async (req, res) => {
     { role: "user", content: message },
   ];
 
+  console.log("[deepseek] /chat", { messageChars: message.length });
   try {
     const { answer, model } = await callDeepseekChat(messages);
     return res.status(200).json({
@@ -152,6 +187,7 @@ router.post("/chat", verifyToken, async (req, res) => {
       data: { answer, model },
     });
   } catch (error) {
+    console.warn("[deepseek] /chat failed", error.message || error);
     return res.status(error.status || 500).json({
       message: error.message || "Failed to get response from DeepSeek.",
       detail: error.detail,
@@ -188,7 +224,7 @@ router.post("/convert", async (req, res) => {
 
   try {
     const { answer, model } = await callDeepseekChat(messages, {
-      maxTokens: 2048,
+      maxTokens: 4096,
     });
     return res.status(200).json({
       success: true,
