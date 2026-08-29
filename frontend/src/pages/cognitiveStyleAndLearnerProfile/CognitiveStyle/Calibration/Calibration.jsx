@@ -11,12 +11,11 @@ gridStops.forEach(y => {
 });
 
 const ARROW_POSITIONS = [
-  { top: '15%', left: '50%', symbol: '⬆️' }, 
-  { top: '85%', left: '50%', symbol: '⬇️' }, 
-  { top: '50%', left: '15%', symbol: '⬅️' }, 
-  { top: '50%', left: '85%', symbol: '➡️' }, 
+  { top: '15%', left: '50%', rotation: 0 },    // Up
+  { top: '85%', left: '50%', rotation: 180 },  // Down
+  { top: '50%', left: '15%', rotation: -90 },  // Left
+  { top: '50%', left: '85%', rotation: 90 },   // Right
 ];
-
 const REFINE_POINTS = [
   { top: '50%', left: '50%' }, 
   { top: '25%', left: '25%' }, { top: '25%', left: '75%' },
@@ -230,14 +229,21 @@ export default function CalibrationScreen({ onComplete }) {
   return (
     <div style={{ width: '100vw', height: '100vh', background: bgColors[phase], transition: 'background 0.5s', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
       
-      <style>{`
-        @keyframes shrinkRing {
-          0% { transform: translate(-50%, -50%) scale(3); opacity: 0; border-width: 2px; }
-          20% { transform: translate(-50%, -50%) scale(2.6); opacity: 1; border-width: 4px; }
-          100% { transform: translate(-50%, -50%) scale(1); opacity: 1; border-width: 8px; }
-        }
-        .animated-dot { transition: top 0.7s cubic-bezier(0.4, 0, 0.2, 1), left 0.7s cubic-bezier(0.4, 0, 0.2, 1); }
-      `}</style>
+<style>{`
+  @keyframes shrinkRing {
+    0% { transform: translate(-50%, -50%) scale(3); opacity: 0; border-width: 2px; }
+    20% { transform: translate(-50%, -50%) scale(2.6); opacity: 1; border-width: 4px; }
+    100% { transform: translate(-50%, -50%) scale(1); opacity: 1; border-width: 8px; }
+  }
+  .animated-dot { 
+    transition: top 0.7s cubic-bezier(0.4, 0, 0.2, 1), 
+                left 0.7s cubic-bezier(0.4, 0, 0.2, 1),
+                width 0.3s ease,
+                height 0.3s ease,
+                background 0.3s ease; 
+  }
+`}</style>
+      
 
       {phase === 'positioning' && (
         <div style={{ zIndex: 10, textAlign: 'center', background: '#ffffff', padding: '2.5rem', borderRadius: '16px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)', maxWidth: '500px', width: '90%' }}>
@@ -268,16 +274,51 @@ export default function CalibrationScreen({ onComplete }) {
         </>
       )}
 
-      {phase === 'head' && (
+{phase === 'head' && (
+  <>
+    <h2 style={{ position: 'absolute', top: '10%', color: '#000', fontSize: '1.4rem' }}>Turn your head in the direction of the moving target</h2>
+    <div 
+      className="animated-dot" 
+      style={{ 
+        position: 'absolute', 
+        top: isAtCenter ? '50%' : ARROW_POSITIONS[step].top, 
+        left: isAtCenter ? '50%' : ARROW_POSITIONS[step].left, 
+        transform: 'translate(-50%, -50%)', 
+        width: 80,  // Restored to your original size
+        height: 80, // Restored to your original size
+        background: isAtCenter ? 'red' : 'black', 
+        borderRadius: '50%', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        boxShadow: '0 10px 25px rgba(0,0,0,0.3)', 
+        zIndex: 100 
+      }}
+    >
+      {isAtCenter ? (
+        // Scaled up crosshairs to fit the larger 80x80 container
         <>
-          <h2 style={{ position: 'absolute', top: '10%', color: '#000', fontSize: '1.4rem' }}>Turn your head in the direction of the moving target</h2>
-          <div className="animated-dot" style={{ position: 'absolute', top: isAtCenter ? '50%' : ARROW_POSITIONS[step].top, left: isAtCenter ? '50%' : ARROW_POSITIONS[step].left, transform: 'translate(-50%, -50%)', width: 80, height: 80, background: 'black', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', color: 'white', boxShadow: '0 10px 25px rgba(0,0,0,0.3)', zIndex: 100 }}>
-            {isAtCenter ? '🎯' : ARROW_POSITIONS[step].symbol}
-            {isCapturing && <CaptureRing size={120} invertColors={false} />}
-          </div>
+          <div style={{ width: '60%', height: 2, background: 'black', position: 'absolute' }} />
+          <div style={{ width: 2, height: '60%', background: 'black', position: 'absolute' }} />
         </>
+      ) : (
+        // Scaled up SVG Arrow to fit the 80x80 container
+        <svg 
+          width="48" height="48" viewBox="0 0 24 24" 
+          style={{ transform: `rotate(${ARROW_POSITIONS[step].rotation}deg)` }}
+        >
+          <path 
+            d="M12 20 L12 4 M12 4 L5 11 M12 4 L19 11" 
+            stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" 
+          />
+        </svg>
       )}
-
+      
+      {/* Restored to your original size */}
+      {isCapturing && <CaptureRing size={120} invertColors={false} />}
+    </div>
+  </>
+)}
       {phase === 'refine' && (
         <>
           <h2 style={{ position: 'absolute', top: '10%', color: '#888', fontSize: '1.4rem' }}>Focus on the dot.</h2>
