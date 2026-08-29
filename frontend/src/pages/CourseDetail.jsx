@@ -157,6 +157,44 @@ function subsectionDownloadUrl(courseId, subsectionId, kind) {
   )}/subsections/${encodeURIComponent(subsectionId)}/${kind}`;
 }
 
+async function downloadSubsectionFile(event, url, fileName) {
+  event.preventDefault();
+  const fallbackName = fileName || 'download';
+  try {
+    const response = await fetch(url, { credentials: 'include' });
+    const contentType = String(response.headers.get('content-type') || '');
+    if (!response.ok) {
+      let message = `Download failed (${response.status})`;
+      if (contentType.includes('application/json')) {
+        const body = await response.json().catch(() => null);
+        if (body?.message) message = body.message;
+      }
+      throw new Error(message);
+    }
+    if (
+      contentType.includes('application/json') ||
+      contentType.includes('text/html')
+    ) {
+      throw new Error('The server did not return the original file.');
+    }
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = fallbackName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+  } catch (error) {
+    if (error instanceof TypeError) {
+      window.location.assign(url);
+      return;
+    }
+    window.alert(error.message || 'Could not download the file.');
+  }
+}
+
 function collectSubsectionImages(sub) {
   const seen = new Set();
   const images = [];
@@ -3000,6 +3038,18 @@ const CourseDetail = () => {
                                                 download={
                                                   sub.pptFileName || 'lesson.pptx'
                                                 }
+                                                onClick={(event) =>
+                                                  downloadSubsectionFile(
+                                                    event,
+                                                    subsectionDownloadUrl(
+                                                      courseId,
+                                                      sub.id,
+                                                      'ppt'
+                                                    ),
+                                                    sub.pptFileName ||
+                                                      'lesson.pptx'
+                                                  )
+                                                }
                                               >
                                                 <span className="course-learn__resource-icon">PPT</span>
                                                 <span className="course-learn__resource-copy">
@@ -3018,6 +3068,18 @@ const CourseDetail = () => {
                                                 )}
                                                 download={
                                                   sub.pdfFileName || 'lesson.pdf'
+                                                }
+                                                onClick={(event) =>
+                                                  downloadSubsectionFile(
+                                                    event,
+                                                    subsectionDownloadUrl(
+                                                      courseId,
+                                                      sub.id,
+                                                      'pdf'
+                                                    ),
+                                                    sub.pdfFileName ||
+                                                      'lesson.pdf'
+                                                  )
                                                 }
                                               >
                                                 <span className="course-learn__resource-icon">PDF</span>

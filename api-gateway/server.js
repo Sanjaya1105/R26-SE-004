@@ -146,6 +146,8 @@ app.use(
   createProxyMiddleware({
     target: RESOURCE_UPLOAD_URL,
     changeOrigin: true,
+    timeout: 180000,
+    proxyTimeout: 180000,
     pathFilter: (pathname) =>
       pathname === "/api/public/courses" ||
       pathname.startsWith("/api/public/courses/"),
@@ -155,6 +157,15 @@ app.use(
       proxyReq: (proxyReq) => {
         if (GATEWAY_SHARED_SECRET) {
           proxyReq.setHeader("x-gateway-secret", GATEWAY_SHARED_SECRET);
+        }
+      },
+      proxyRes: (proxyRes, req) => {
+        const origin = req.headers.origin;
+        if (origin && allowedOrigins.includes(origin)) {
+          proxyRes.headers["access-control-allow-origin"] = origin;
+          proxyRes.headers["access-control-allow-credentials"] = "true";
+          proxyRes.headers["access-control-expose-headers"] =
+            "Content-Disposition, Content-Type, Content-Length";
         }
       },
     },
