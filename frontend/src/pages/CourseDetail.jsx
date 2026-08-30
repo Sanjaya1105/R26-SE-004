@@ -41,12 +41,13 @@ function buildGptAskUrls() {
 
 function buildDeepseekChatUrls() {
   const base = getGatewayBaseUrl();
-  return [
-    `${base}/api/deepseek/chat`,
-    'http://localhost:4000/api/deepseek/chat',
-    'http://127.0.0.1:4000/api/deepseek/chat',
-    'http://localhost:5004/api/deepseek/chat',
-  ].filter((url, i, arr) => arr.indexOf(url) === i);
+  const urls = [`${base}/api/deepseek/chat`];
+  const isLocalGateway = /localhost:4000|127\.0\.0\.1:4000/i.test(base);
+  if (!isLocalGateway) {
+    urls.push('http://localhost:4000/api/deepseek/chat');
+  }
+  urls.push('http://localhost:5004/api/deepseek/chat');
+  return urls.filter((url, i, arr) => arr.indexOf(url) === i);
 }
 
 function buildSelectBestUrls() {
@@ -89,6 +90,133 @@ const PLAYBACK_PROMPT_COPY = {
       'The student asked for personalization at the end of this lesson. Use the exact knowledge chunk. Match the visual-verbal and analytic-holistic styles from the student profile. Use the stored learner profile if it is present; if it is empty, leave it empty and do not invent one. Use the latest predicted cognitive load and the matching frustration level. Do not invent facts.',
   },
 };
+
+const VISUAL_VERBAL_CHOICES = ['Visual', 'Verbal', 'Intermediate'];
+const ANALYTIC_HOLISTIC_CHOICES = ['Analytic', 'Holistic'];
+const COGNITIVE_LOAD_CHOICES = [
+  'Very Low',
+  'Low',
+  'Medium',
+  'High',
+  'Very High',
+];
+
+function frustrationForLoad(level) {
+  if (level === 'High' || level === 'Very High') return 'High';
+  if (level === 'Low' || level === 'Very Low') return 'Low';
+  return 'Moderate';
+}
+
+async function requestPedagogicalPrompt(body) {
+  let lastErr;
+  for (const url of buildGptPromptUrls()) {
+    try {
+      const res = await axios.post(url, body);
+      return String(res.data?.data?.prompt || '').trim();
+    } catch (e) {
+      lastErr = e;
+      if (e.response?.status === 404) continue;
+      if (!e.response && e.code === 'ERR_NETWORK') continue;
+      throw e;
+    }
+  }
+  if (lastErr) throw lastErr;
+  return '';
+}
+
+function PersonalizeChoicesForm({
+  visualVerbal,
+  analyticHolistic,
+  loadLevel,
+  onVisualVerbal,
+  onAnalyticHolistic,
+  onLoadLevel,
+  onGenerate,
+  onCancel,
+  busy,
+}) {
+  return (
+    <form
+      className="course-learn__personalize-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!busy) onGenerate();
+      }}
+    >
+      <p className="course-learn__personalization-panel-title">
+        Choose styles and load
+      </p>
+      <p className="course-learn__profile-meta">
+        Pick the two cognitive styles and the cognitive load for this lesson.
+        Generation uses these values, not the stored profile defaults.
+      </p>
+      <div className="course-learn__personalize-fields">
+        <label className="form-group">
+          <span className="form-label">Visual–verbal style</span>
+          <select
+            className="form-input"
+            value={visualVerbal}
+            disabled={busy}
+            onChange={(event) => onVisualVerbal(event.target.value)}
+          >
+            {VISUAL_VERBAL_CHOICES.map((choice) => (
+              <option key={choice} value={choice}>
+                {choice}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="form-group">
+          <span className="form-label">Analytic–holistic style</span>
+          <select
+            className="form-input"
+            value={analyticHolistic}
+            disabled={busy}
+            onChange={(event) => onAnalyticHolistic(event.target.value)}
+          >
+            {ANALYTIC_HOLISTIC_CHOICES.map((choice) => (
+              <option key={choice} value={choice}>
+                {choice}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="form-group">
+          <span className="form-label">Cognitive load</span>
+          <select
+            className="form-input"
+            value={loadLevel}
+            disabled={busy}
+            onChange={(event) => onLoadLevel(event.target.value)}
+          >
+            {COGNITIVE_LOAD_CHOICES.map((choice) => (
+              <option key={choice} value={choice}>
+                {choice}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="course-learn__personalize-actions">
+        <button
+          type="submit"
+          className="btn btn-primary"
+          disabled={busy}
+        >
+          {busy ? 'Generating…' : 'Generate'}
+        </button>
+        <button
+          type="button"
+          className="btn"
+          disabled={busy}
+          onClick={onCancel}
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
 
 function PlaybackPersonalizationPrompt({ kind, onYes, onNo, busy }) {
   const copy = PLAYBACK_PROMPT_COPY[kind];
@@ -968,6 +1096,10 @@ const CourseDetail = () => {
   const [cognitiveLoadOpen, setCognitiveLoadOpen] = useState(false);
   const [predictionFeaturesOpen, setPredictionFeaturesOpen] = useState(false);
   const [promptBarOpen, setPromptBarOpen] = useState(false);
+  const [personalizeFormOpen, setPersonalizeFormOpen] = useState(false);
+  const [formVisualVerbal, setFormVisualVerbal] = useState('Visual');
+  const [formAnalyticHolistic, setFormAnalyticHolistic] = useState('Analytic');
+  const [formLoadLevel, setFormLoadLevel] = useState('Medium');
   const [playbackPrompt, setPlaybackPrompt] = useState(null);
   const [cognitiveLoadResult, setCognitiveLoadResult] = useState(null);
   const [cognitiveLoadError, setCognitiveLoadError] = useState('');
@@ -1110,6 +1242,7 @@ const CourseDetail = () => {
     setFurtherReadingModel('');
     setPedagogicalPrompt('');
     setPromptError('');
+    setPersonalizeFormOpen(false);
     setPlaybackPrompt(null);
     playbackPromptRef.current = null;
     endPromptShownRef.current = false;
@@ -1146,6 +1279,7 @@ const CourseDetail = () => {
     setFurtherReadingModel('');
     setPedagogicalPrompt('');
     setPromptError('');
+    setPersonalizeFormOpen(false);
     setPlaybackPrompt(null);
     playbackPromptRef.current = null;
     endPromptShownRef.current = false;
@@ -2077,6 +2211,7 @@ const CourseDetail = () => {
       setPromptError('');
       return undefined;
     }
+    if (personalizeFormOpen) return undefined;
 
     let cancelled = false;
     const timer = window.setTimeout(async () => {
@@ -2144,6 +2279,69 @@ const CourseDetail = () => {
     visualVerbalStyle,
     analyticHolisticStyle,
     loadLevel,
+    personalizeFormOpen,
+  ]);
+
+  useEffect(() => {
+    if (!personalizeFormOpen || !mainVideo?.url || isGuestPreview()) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setPromptLoading(true);
+      setPromptError('');
+      const nextLoad = normalizeLoadLevel(formLoadLevel) || 'Medium';
+      try {
+        const promptText = await requestPedagogicalPrompt(
+          buildLessonPromptPayload({
+            courseName: course?.courseName,
+            subsectionTitle: mainVideo.title,
+            knowledgeChunk: mainVideo.knowledgeChunk,
+            containsMath: mainVideo.containsMath,
+            studentYear,
+            learnerProfile,
+            visualVerbalStyle: resolveVisualVerbalStyle(formVisualVerbal),
+            analyticHolisticStyle: resolveAnalyticHolisticStyle(
+              formAnalyticHolistic
+            ),
+            loadLevel: nextLoad,
+            frustration: frustrationForLoad(nextLoad),
+          })
+        );
+        if (!cancelled) {
+          pedagogicalPromptRef.current = promptText;
+          setPedagogicalPrompt(promptText);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setPromptError(
+            [err.response?.data?.message, err.response?.data?.detail, err.message]
+              .filter(Boolean)
+              .join('\n\n') || 'Could not build pedagogical prompt.'
+          );
+        }
+      } finally {
+        if (!cancelled) setPromptLoading(false);
+      }
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    personalizeFormOpen,
+    formVisualVerbal,
+    formAnalyticHolistic,
+    formLoadLevel,
+    mainVideo?.url,
+    mainVideo?.title,
+    mainVideo?.knowledgeChunk,
+    mainVideo?.containsMath,
+    course?.courseName,
+    studentYear,
+    learnerProfile,
   ]);
 
   useEffect(() => {
@@ -2857,61 +3055,67 @@ const CourseDetail = () => {
     return startHighLoadPersonalization(payload?.loadLevel ?? payload);
   };
 
-  const startManualPersonalizedContent = async () => {
-    if (personalizationAskInFlightRef.current) return;
-    const predicted = latestPredictedLoadRef.current;
-    if (predicted) {
-      await startHighLoadPersonalization(predicted);
-      return;
-    }
+  const openPersonalizeForm = () => {
+    if (gptLoading || personalizationAskInFlightRef.current) return;
+    setFormVisualVerbal(resolveVisualVerbalStyle(visualVerbalStyle));
+    setFormAnalyticHolistic(resolveAnalyticHolisticStyle(analyticHolisticStyle));
+    setFormLoadLevel(
+      normalizeLoadLevel(latestPredictedLoadRef.current) ||
+        normalizeLoadLevel(loadLevel) ||
+        'Medium'
+    );
+    setPersonalizeFormOpen(true);
+    askPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const closePersonalizeForm = () => {
+    setPersonalizeFormOpen(false);
+  };
+
+  const generatePersonalizedFromChoices = async () => {
+    if (personalizationAskInFlightRef.current || gptLoading) return;
+    const nextVisual = resolveVisualVerbalStyle(formVisualVerbal);
+    const nextAnalytic = resolveAnalyticHolisticStyle(formAnalyticHolistic);
+    const nextLoad = normalizeLoadLevel(formLoadLevel) || 'Medium';
+    const nextFrustration = frustrationForLoad(nextLoad);
 
     personalizationAskInFlightRef.current = true;
+    setPersonalizeFormOpen(false);
     try {
       dismissPlaybackPersonalizationPrompt();
-      promptFrustrationOverrideRef.current = 'Very High';
-      setLoadLevel('Very High');
-      highLoadLevelRef.current = 'Very High';
+      promptFrustrationOverrideRef.current = nextFrustration;
+      setVisualVerbalStyle(nextVisual);
+      setAnalyticHolisticStyle(nextAnalytic);
+      setLoadLevel(nextLoad);
+      highLoadLevelRef.current = nextLoad;
       askPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-      const body = buildLessonPromptPayload({
-        courseName: course?.courseName,
-        subsectionTitle: mainVideo?.title,
-        knowledgeChunk: mainVideo?.knowledgeChunk,
-        containsMath: mainVideo?.containsMath,
-        studentYear,
-        learnerProfile,
-        visualVerbalStyle,
-        analyticHolisticStyle,
-        loadLevel: 'Very High',
-        frustration: 'Very High',
-      });
-      let promptText = '';
-      let lastErr;
-      for (const url of buildGptPromptUrls()) {
-        try {
-          const res = await axios.post(url, body);
-          promptText = String(res.data?.data?.prompt || '').trim();
-          lastErr = null;
-          break;
-        } catch (e) {
-          lastErr = e;
-          if (e.response?.status === 404) continue;
-          if (!e.response && e.code === 'ERR_NETWORK') continue;
-          throw e;
-        }
+      const promptText = await requestPedagogicalPrompt(
+        buildLessonPromptPayload({
+          courseName: course?.courseName,
+          subsectionTitle: mainVideo?.title,
+          knowledgeChunk: mainVideo?.knowledgeChunk,
+          containsMath: mainVideo?.containsMath,
+          studentYear,
+          learnerProfile,
+          visualVerbalStyle: nextVisual,
+          analyticHolisticStyle: nextAnalytic,
+          loadLevel: nextLoad,
+          frustration: nextFrustration,
+        })
+      );
+      if (!promptText) {
+        throw new Error('Could not build the prompt for the selected styles.');
       }
-      if (!promptText && lastErr) throw lastErr;
-      if (promptText) {
-        pedagogicalPromptRef.current = promptText;
-        setPedagogicalPrompt(promptText);
-      }
+      pedagogicalPromptRef.current = promptText;
+      setPedagogicalPrompt(promptText);
 
       await askCourseGpt(
-        `The student asked for personalized content. Use the exact knowledge chunk. Match the student's visual-verbal style (${visualVerbalStyle}) and analytic-holistic style (${analyticHolisticStyle}) from their profile.${
+        `The student asked for personalized content. Use the exact knowledge chunk. Match visual-verbal style (${nextVisual}) and analytic-holistic style (${nextAnalytic}) as selected for this request.${
           learnerProfile
             ? ` Match the stored learner profile (${learnerProfile}).`
             : ' Learner profile is empty; do not invent one.'
-        } No predicted cognitive load was available, so use cognitive load Very High and frustration Very High. Do not invent facts.`
+        } Use cognitive load ${nextLoad} with frustration ${nextFrustration}. Do not invent facts.`
       );
     } catch (err) {
       setGptError(
@@ -4036,15 +4240,36 @@ const CourseDetail = () => {
                     type="button"
                     className="btn btn-primary course-learn__personalize-btn"
                     onClick={() => {
-                      void startManualPersonalizedContent();
+                      if (personalizeFormOpen) {
+                        closePersonalizeForm();
+                        return;
+                      }
+                      openPersonalizeForm();
                     }}
                     disabled={gptLoading}
                   >
                     {gptLoading
                       ? 'Getting personalized content…'
-                      : 'Get personalized content'}
+                      : personalizeFormOpen
+                        ? 'Hide choices'
+                        : 'Get personalized content'}
                   </button>
                 </header>
+                {personalizeFormOpen ? (
+                  <PersonalizeChoicesForm
+                    visualVerbal={formVisualVerbal}
+                    analyticHolistic={formAnalyticHolistic}
+                    loadLevel={formLoadLevel}
+                    onVisualVerbal={setFormVisualVerbal}
+                    onAnalyticHolistic={setFormAnalyticHolistic}
+                    onLoadLevel={setFormLoadLevel}
+                    onGenerate={() => {
+                      void generatePersonalizedFromChoices();
+                    }}
+                    onCancel={closePersonalizeForm}
+                    busy={gptLoading}
+                  />
+                ) : null}
                 {gptLoading ? (
                   <div
                     className="course-learn__personalization-loading"

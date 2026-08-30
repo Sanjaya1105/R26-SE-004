@@ -8,37 +8,53 @@ import {
 import { KIND_LABEL } from '../utils/diagramKinds';
 import DiagramVisual from './DiagramVisual';
 
-let mermaidReady = false;
+let mermaidTheme = '';
 
-function ensureMermaid() {
-  if (mermaidReady) return;
+function ensureMermaid(light) {
+  const theme = light ? 'default' : 'dark';
+  if (mermaidTheme === theme) return;
   mermaid.initialize({
     startOnLoad: false,
     securityLevel: 'strict',
     suppressErrorRendering: true,
-    theme: 'dark',
+    theme,
     fontFamily: 'ui-sans-serif, system-ui, sans-serif',
-    themeVariables: {
-      darkMode: true,
-      background: 'transparent',
-      primaryColor: '#312e81',
-      primaryTextColor: '#e2e8f0',
-      primaryBorderColor: '#818cf8',
-      lineColor: '#a5b4fc',
-      secondaryColor: '#1e293b',
-      tertiaryColor: '#0f172a',
-      clusterBkg: '#1e293b',
-      clusterBorder: '#6366f1',
-      titleColor: '#f8fafc',
-      nodeTextColor: '#e2e8f0',
-    },
+    themeVariables: light
+      ? {
+          darkMode: false,
+          background: '#f8faff',
+          primaryColor: '#eef2ff',
+          primaryTextColor: '#1e1b4b',
+          primaryBorderColor: '#6366f1',
+          lineColor: '#4f46e5',
+          secondaryColor: '#ffffff',
+          tertiaryColor: '#e0e7ff',
+          clusterBkg: '#eef2ff',
+          clusterBorder: '#a5b4fc',
+          titleColor: '#312e81',
+          nodeTextColor: '#1e1b4b',
+        }
+      : {
+          darkMode: true,
+          background: 'transparent',
+          primaryColor: '#312e81',
+          primaryTextColor: '#e2e8f0',
+          primaryBorderColor: '#818cf8',
+          lineColor: '#a5b4fc',
+          secondaryColor: '#1e293b',
+          tertiaryColor: '#0f172a',
+          clusterBkg: '#1e293b',
+          clusterBorder: '#6366f1',
+          titleColor: '#f8fafc',
+          nodeTextColor: '#e2e8f0',
+        },
     flowchart: {
       curve: 'basis',
       htmlLabels: false,
       padding: 12,
     },
   });
-  mermaidReady = true;
+  mermaidTheme = theme;
 }
 
 function removeMermaidArtifacts(id) {
@@ -56,7 +72,7 @@ function removeMermaidArtifacts(id) {
   });
 }
 
-export default function MermaidChart({ definition }) {
+export default function MermaidChart({ definition, light = false }) {
   const reactId = useId().replace(/:/g, '');
   const [svg, setSvg] = useState('');
   const [error, setError] = useState(false);
@@ -71,7 +87,7 @@ export default function MermaidChart({ definition }) {
       return undefined;
     }
 
-    ensureMermaid();
+    ensureMermaid(light);
     const id = `mmd${reactId}${Math.random().toString(36).slice(2, 8)}`;
 
     mermaid
@@ -99,7 +115,7 @@ export default function MermaidChart({ definition }) {
       cancelled = true;
       removeMermaidArtifacts(id);
     };
-  }, [definition, reactId]);
+  }, [definition, reactId, light]);
 
   if (svg) {
     return (

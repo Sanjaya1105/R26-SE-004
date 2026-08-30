@@ -176,20 +176,35 @@ function buildPedagogicalPrompt(input = {}) {
 
   const mermaidInstructions = wantsMermaidDiagrams(visualVerbalStyle)
     ? `
-Diagram rule: If a process, cycle, comparison, or concept map would help this Visual/Intermediate learner, include one fenced Mermaid block the app will draw. Pick the matching type:
-- flowchart LR or flowchart TB for a process
-- mindmap for a concept tree
-- sequenceDiagram for an interaction
-- timeline for ordered events
-Quote every label, ASCII only, for example:
+Diagram rule (mandatory for Visual/Intermediate): include exactly one fenced Mermaid flowchart of the same steps. Use flowchart TB, quoted ASCII labels only, no subgraphs, no HTML, no markdown inside labels.
 
 \`\`\`mermaid
-flowchart LR
-  A["Sunlight"] --> B["Chlorophyll"]
-  B --> C["Glucose"]
+flowchart TB
+  S1["Step 1: Name"] --> S2["Step 2: Name"]
+  S2 --> S3["Step 3: Name"]
 \`\`\`
 `
     : "";
+
+  const analyticLayout =
+    analyticHolisticStyle === "Analytic"
+      ? `
+Analytic layout (mandatory):
+- Start with one short overview paragraph.
+- Then write the lesson as numbered steps, each as its own heading:
+
+### Step 1 — Short title
+- One or two short bullets. No walls of prose.
+
+### Step 2 — Short title
+- ...
+
+- Keep steps in order. Do not interleave later steps with earlier ones.
+- Do not use ASCII art, +--+ boxes, or a single numbered paragraph for all steps.
+`
+      : `
+Holistic layout: give the big picture first, then 3-6 connected points as short headings and bullets.
+`;
 
   const mathInstructions = containsMath
     ? `
@@ -228,7 +243,8 @@ Transformation Goal: If adaptation is needed, rewrite the knowledge chunk to red
 - Analytic-Holistic (${analyticHolisticStyle}): Analytic learners need sequential steps and parts-before-whole. Holistic learners need the big picture first, then how the parts connect.${learnerProfileInstruction}
 
 Visual layout rules:
-- Prefer Markdown headings, short paragraphs, and bullet lists over dense prose.${mermaidInstructions}${mathInstructions}`;
+- Prefer Markdown headings, short paragraphs, and bullet lists over dense prose.
+- Do not dump every step in one paragraph.${analyticLayout}${mermaidInstructions}${mathInstructions}`;
 }
 
 /**

@@ -216,7 +216,7 @@ export default function PaginatedAssistantContent({
         <p className="paginated-md__section">{appendedLabel}</p>
       ) : null}
       <div className="paginated-md__body">
-        <AssistantMarkdown canonicalEquations={canonicalEquations}>
+        <AssistantMarkdown canonicalEquations={canonicalEquations} variant="light">
           {current}
         </AssistantMarkdown>
       </div>

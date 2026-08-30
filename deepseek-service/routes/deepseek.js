@@ -64,10 +64,20 @@ function extractAnswer(payload) {
 }
 
 function shouldTryNextStatus(status) {
-  return status === 400 || status === 404 || status === 422;
+  return (
+    status === 400 ||
+    status === 404 ||
+    status === 422 ||
+    status === 429 ||
+    status === 502 ||
+    status === 503
+  );
 }
 
-async function callDeepseekChat(messages, { maxTokens = 8192 } = {}) {
+async function callDeepseekChat(
+  messages,
+  { maxTokens = 8192, temperature = 0.7 } = {}
+) {
   const { apiKey, baseUrl, model } = getDeepseekConfig();
   if (!apiKey) {
     const error = new Error("DEEPSEEK_API_KEY is not configured.");
@@ -75,10 +85,7 @@ async function callDeepseekChat(messages, { maxTokens = 8192 } = {}) {
     throw error;
   }
 
-  const bodyVariants = [
-    { thinking: { type: "disabled" } },
-    {},
-  ];
+  const bodyVariants = [{}, { thinking: { type: "disabled" } }];
 
   let lastFailure = null;
   for (const candidate of modelCandidates(model)) {
@@ -91,7 +98,7 @@ async function callDeepseekChat(messages, { maxTokens = 8192 } = {}) {
             model: candidate,
             messages,
             max_tokens: maxTokens,
-            temperature: 0.7,
+            temperature,
             stream: false,
             ...extraBody,
           },
@@ -197,7 +204,9 @@ router.post("/chat", verifyToken, async (req, res) => {
 
   console.log("[deepseek] /chat", { messageChars: message.length });
   try {
-    const { answer, model } = await callDeepseekChat(messages);
+    const { answer, model } = await callDeepseekChat(messages, {
+      temperature: message.length > 1500 ? 0.4 : 0.7,
+    });
     return res.status(200).json({
       success: true,
       data: { answer, model },

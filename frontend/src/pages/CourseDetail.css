@@ -557,6 +557,44 @@
   min-height: 48px;
 }
 
+.course-learn__personalize-form {
+  margin-top: 1rem;
+  padding: 1.1rem 1.15rem 1.2rem;
+  border-radius: 18px;
+  border: 1px solid #c7d2fe;
+  background:
+    radial-gradient(420px 120px at 100% 0%, rgba(99, 102, 241, 0.1), transparent 60%),
+    #f8fafc;
+}
+
+.course-learn__personalize-fields {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.85rem;
+}
+
+.course-learn__personalize-form .form-group {
+  margin: 0;
+}
+
+.course-learn__personalize-form .form-label {
+  display: block;
+  margin-bottom: 0.35rem;
+}
+
+.course-learn__personalize-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 1rem;
+}
+
+.course-learn__personalize-actions .btn {
+  min-height: 42px;
+  padding: 0.45rem 1.05rem;
+  font-weight: 700;
+}
+
 .course-learn__personalization {
   margin: 1.5rem 0 0;
   padding: 1.55rem 1.45rem 1.7rem;
@@ -807,6 +845,30 @@
   color: #4f46e5;
 }
 
+.course-learn__below .assistant-step-list > li {
+  border-color: #c7d2fe;
+  background: #ffffff;
+  box-shadow: 0 10px 24px -18px rgba(37, 99, 235, 0.45);
+}
+
+.course-learn__below .diagram-tree-label,
+.course-learn__below .diagram-seq-actor,
+.course-learn__below .diagram-boxes .simple-flow-node,
+.course-learn__below .simple-flow-node {
+  border-color: #c7d2fe;
+  background: #eef2ff;
+  color: #1e1b4b;
+}
+
+.course-learn__below .simple-flow {
+  border-color: #c7d2fe;
+  background: #f8faff;
+}
+
+.course-learn__below .simple-flow-arrow {
+  color: #4f46e5;
+}
+
 .course-learn__mini-metric {
   padding: 0.65rem 0.75rem;
   border-radius: 10px;
@@ -1025,6 +1087,10 @@
     width: auto;
     min-width: 14.5rem;
     align-self: center;
+  }
+
+  .course-learn__personalize-fields {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
