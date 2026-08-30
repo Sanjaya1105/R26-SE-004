@@ -3594,6 +3594,174 @@
   }
 }
 
+/* Student dashboard visual theme for the previous-lesson summary page. */
+.previous-lesson-summary-page.student-analyse-shell {
+  width: 100%;
+  max-width: none;
+  min-height: 100%;
+  margin: 0;
+  padding: 1.7rem max(2.75rem, calc((100% - 1180px) / 2)) 3rem;
+  gap: 1.25rem;
+  color: #172033;
+  background:
+    radial-gradient(circle at 92% -8%, rgba(96, 165, 250, 0.18), transparent 28rem),
+    radial-gradient(circle at 6% 18%, rgba(124, 58, 237, 0.08), transparent 22rem),
+    #f4f7fc;
+  border-radius: 0;
+}
+
+.previous-lesson-summary-page .student-analyse-header {
+  position: relative;
+  display: grid;
+  min-height: 190px;
+  padding: clamp(26px, 4vw, 46px);
+  overflow: hidden;
+  color: #ffffff;
+  background:
+    radial-gradient(circle at 88% 8%, rgba(191, 219, 254, 0.32), transparent 28%),
+    linear-gradient(135deg, #102b6a, #2563eb);
+  border: 1px solid rgba(147, 197, 253, 0.32);
+  border-radius: 22px;
+  box-shadow: 0 24px 50px -32px rgba(30, 64, 175, 0.78);
+}
+
+.previous-lesson-summary-page .student-analyse-header::after {
+  position: absolute;
+  right: -70px;
+  bottom: -110px;
+  width: 240px;
+  height: 240px;
+  pointer-events: none;
+  content: '';
+  border: 38px solid rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
+}
+
+.previous-lesson-summary-page .student-analyse-header > * {
+  position: relative;
+  z-index: 1;
+}
+
+.previous-lesson-summary-page .student-analyse-header .eyebrow {
+  color: #bfdbfe;
+}
+
+.previous-lesson-summary-page .student-analyse-header h1 {
+  margin: 0;
+  color: #ffffff;
+  font-size: clamp(1.8rem, 3vw, 2.3rem);
+  letter-spacing: -0.04em;
+}
+
+.previous-lesson-summary-page .student-analyse-header .hero-copy {
+  color: #dbeafe;
+}
+
+.previous-lesson-summary-page .back-button {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.previous-lesson-summary-page .back-button:hover,
+.previous-lesson-summary-page .back-button:focus-visible {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.2);
+  outline: none;
+}
+
+.previous-lesson-summary-page .glass-panel,
+.previous-lesson-summary-page .student-analyse-results {
+  background: #ffffff;
+  border: 1px solid #d8e6f8;
+  border-radius: 18px;
+  box-shadow: 0 18px 45px -36px rgba(30, 64, 175, 0.58);
+}
+
+.previous-lesson-summary-page .student-analyse-toolbar {
+  padding: 1.25rem;
+  border-top: 3px solid #2563eb;
+}
+
+.previous-lesson-summary-page .student-analyse-toolbar label {
+  color: #334155;
+  font-weight: 750;
+}
+
+.previous-lesson-summary-page .student-analyse-toolbar select {
+  min-height: 50px;
+  color: #172554;
+  background: #f8fbff;
+  border: 1px solid #cfe0f7;
+  border-radius: 12px;
+}
+
+.previous-lesson-summary-page .student-analyse-toolbar select:focus {
+  border-color: #2563eb;
+  outline: 0;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.previous-lesson-summary-page .student-summary-tabs-heading strong,
+.previous-lesson-summary-page .student-summary-section-heading h2 {
+  color: #102b6a;
+}
+
+.previous-lesson-summary-page .student-summary-tab-list button {
+  border-color: #d8e6f8;
+  border-radius: 14px;
+}
+
+.previous-lesson-summary-page .student-summary-tab-list button.is-active {
+  color: #ffffff;
+  background: linear-gradient(135deg, #17409a, #2563eb);
+  border-color: #2563eb;
+  box-shadow: 0 14px 26px -20px rgba(30, 64, 175, 0.85);
+}
+
+.previous-lesson-summary-page .student-summary-tab-list button.is-active small {
+  color: #dbeafe;
+}
+
+.previous-lesson-summary-page .student-summary-tab-list button.is-active .student-summary-tab-number {
+  color: #17409a;
+  background: #ffffff;
+}
+
+.previous-lesson-summary-page .student-summary-section-actions button:not(.is-secondary) {
+  background: linear-gradient(135deg, #2563eb, #17409a);
+  border-color: #2563eb;
+  box-shadow: 0 12px 24px -16px rgba(37, 99, 235, 0.8);
+}
+
+.previous-lesson-summary-page .student-summary-section-actions button.is-secondary {
+  color: #1d4ed8;
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.previous-lesson-summary-page .student-support-card,
+.previous-lesson-summary-page .recommendation-item,
+.previous-lesson-summary-page .technique-guide-card {
+  border-color: #d8e6f8;
+  background: #f8fbff;
+}
+
+.previous-lesson-summary-page .recommendation-item-number {
+  background: #2563eb;
+}
+
+@media (max-width: 680px) {
+  .previous-lesson-summary-page.student-analyse-shell {
+    padding: 1rem 1rem 2rem;
+  }
+
+  .previous-lesson-summary-page .student-analyse-header {
+    min-height: 0;
+    padding: 1.5rem;
+  }
+}
+
 /* Rounded custom lesson/student dropdowns. Native Windows select menus do not
    support reliable border-radius styling, so these controls render their own menu. */
 .student-analysis-dashboard-main .selection-workflow { overflow: visible; }
