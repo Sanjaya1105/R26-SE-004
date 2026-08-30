@@ -231,8 +231,52 @@ Visual layout rules:
 - Prefer Markdown headings, short paragraphs, and bullet lists over dense prose.${mermaidInstructions}${mathInstructions}`;
 }
 
+/**
+ * Separate optional supplement for extra learners. Do not reuse or mix with
+ * buildPedagogicalPrompt — this is not a style-matched rewrite of the lesson.
+ */
+function buildFurtherReadingPrompt(input = {}) {
+  const courseName = clean(input.courseName) || "(course)";
+  const subsectionTitle = clean(input.subsectionTitle) || "(subsection)";
+  const containsMath = isTruthyFlag(input.containsMath);
+  const uniqueText = (containsMath ? truncatePreservingMath : truncate)(
+    uniqueKnowledgeText(input),
+    12000
+  );
+
+  const knowledgeChunk = [
+    `Course: ${courseName}`,
+    `Subsection: ${subsectionTitle}`,
+    "",
+    uniqueText || "(none)",
+  ].join("\n");
+
+  return `System Role: You are a subject-matter tutor writing an OPTIONAL advanced supplement for a student who already finished the adapted lesson. This is not a rewrite of the original lesson and must not copy the pedagogical transformation prompt.
+
+Knowledge Chunk (the only source of lesson facts):
+${knowledgeChunk}
+
+Write Markdown with these three headings, in this order, and nothing else before them:
+
+## Further details
+Expand only ideas that already appear in the knowledge chunk. Give more precise explanation of those same facts. Do not invent new lesson claims.
+
+## Advanced concepts
+Add one or two deeper ideas that naturally follow from this knowledge chunk. Label them as advanced. If the chunk cannot support a deeper idea, say so in one sentence.
+
+## Recommended readings
+List 4 to 8 further-reading items tied to named concepts from the knowledge chunk: textbooks, standard references, or reputable educational pages. Include a full public URL when the resource is well known (for example Wikipedia, Khan Academy, a university course page, or a classic textbook). Mark these as suggested extra reading, not as sources that were in the original lesson.
+
+Rules:
+- Do not repeat the original adapted lesson.
+- Do not apply Visual/Verbal or Analytic/Holistic rewriting.
+- Do not invent formulas, names, or results that are absent from the knowledge chunk.
+- Keep sections clearly separated.`;
+}
+
 module.exports = {
   buildPedagogicalPrompt,
+  buildFurtherReadingPrompt,
   uniqueKnowledgeText,
   COGNITIVE_STYLES: Array.from(COGNITIVE_STYLES),
   VISUAL_VERBAL_STYLES: Array.from(VISUAL_VERBAL_STYLES),

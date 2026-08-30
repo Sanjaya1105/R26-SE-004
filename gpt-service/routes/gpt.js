@@ -4,6 +4,7 @@ const verifyToken = require("../middleware/verifyToken");
 const ChatMessage = require("../models/ChatMessage");
 const {
   buildPedagogicalPrompt,
+  buildFurtherReadingPrompt,
   COGNITIVE_STYLES,
   VISUAL_VERBAL_STYLES,
   ANALYTIC_HOLISTIC_STYLES,
@@ -46,7 +47,8 @@ function isHfGenerationEnabled() {
 router.post("/build-prompt", (req, res) => {
   try {
     const body = req.body || {};
-    const prompt = buildPedagogicalPrompt({
+    const kind = String(body.kind || "pedagogical").trim().toLowerCase();
+    const input = {
       courseName: body.courseName,
       subsectionTitle: body.subsectionTitle,
       knowledgeChunk: body.knowledgeChunk,
@@ -63,11 +65,19 @@ router.post("/build-prompt", (req, res) => {
       cognitiveStyle: body.cognitiveStyle,
       cognitiveLoad: body.cognitiveLoad,
       containsMath: body.containsMath,
-    });
+    };
+    const prompt =
+      kind === "furtherreading" || kind === "further-reading"
+        ? buildFurtherReadingPrompt(input)
+        : buildPedagogicalPrompt(input);
     return res.status(200).json({
       success: true,
       data: {
         prompt,
+        kind:
+          kind === "furtherreading" || kind === "further-reading"
+            ? "furtherReading"
+            : "pedagogical",
         schema: {
           cognitiveStyles: COGNITIVE_STYLES,
           visualVerbalStyles: VISUAL_VERBAL_STYLES,

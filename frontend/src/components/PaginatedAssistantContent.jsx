@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import AssistantMarkdown from './AssistantMarkdown';
 
 const TARGET_PAGE_CHARS = 1550;
@@ -136,46 +136,110 @@ export function splitIntoReadablePages(text, targetLen = TARGET_PAGE_CHARS) {
 
 export default function PaginatedAssistantContent({
   text,
+  appendedText = '',
+  appendedLabel = 'Extra reading',
+  appendedLoading = false,
   canonicalEquations = [],
   className = '',
+  lastPageExtra = null,
 }) {
-  const pages = useMemo(() => splitIntoReadablePages(text), [text]);
+  const extra = String(appendedText || '').trim();
+  const mainPages = useMemo(() => splitIntoReadablePages(text), [text]);
+  const extraPages = useMemo(
+    () => (extra ? splitIntoReadablePages(extra) : []),
+    [extra]
+  );
+  const pages = extraPages.length ? [...mainPages, ...extraPages] : mainPages;
+  const mainPageCount = Math.max(mainPages.length, 1);
   const [page, setPage] = useState(0);
+  const hadExtraRef = useRef(false);
 
   useEffect(() => {
     setPage(0);
+    hadExtraRef.current = false;
   }, [text]);
+
+  useLayoutEffect(() => {
+    if (extra && !hadExtraRef.current) {
+      setPage(mainPageCount);
+    }
+    hadExtraRef.current = Boolean(extra);
+  }, [extra, mainPageCount]);
 
   const safePage = Math.min(Math.max(page, 0), Math.max(pages.length - 1, 0));
   const current = pages[safePage] || '';
+  const isLastPage = safePage === Math.max(pages.length - 1, 0);
+  const isExtraPage = extraPages.length > 0 && safePage >= mainPageCount;
+  const showLastPageExtra =
+    Boolean(lastPageExtra) && !extra && safePage === mainPageCount - 1;
+  const totalPages = Math.max(pages.length, 1);
+  const progressPct = ((safePage + 1) / totalPages) * 100;
 
   return (
     <div className={`paginated-md ${className}`.trim()}>
-      <AssistantMarkdown canonicalEquations={canonicalEquations}>
-        {current}
-      </AssistantMarkdown>
-      {pages.length > 1 ? (
-        <nav className="paginated-md__nav" aria-label="Personalized content pages">
-          <button
-            type="button"
-            className="paginated-md__btn"
-            disabled={safePage === 0}
-            onClick={() => setPage((prev) => Math.max(0, prev - 1))}
-          >
-            Previous
-          </button>
-          <p className="paginated-md__status">
-            Page {safePage + 1} of {pages.length}
-          </p>
-          <button
-            type="button"
-            className="paginated-md__btn"
-            disabled={safePage === pages.length - 1}
-            onClick={() => setPage((prev) => Math.min(pages.length - 1, prev + 1))}
-          >
-            Next
-          </button>
-        </nav>
+      <div className="paginated-md__toolbar">
+        <div className="paginated-md__track" aria-hidden="true">
+          <span
+            className={`paginated-md__fill${isExtraPage ? ' is-extra' : ''}${
+              appendedLoading ? ' is-loading' : ''
+            }`}
+            style={{ width: `${appendedLoading && !extra ? 92 : progressPct}%` }}
+          />
+        </div>
+        <p className="paginated-md__status">
+          {isExtraPage ? appendedLabel : 'Lesson'}
+          {' · '}
+          Page {safePage + 1} of {totalPages}
+        </p>
+        {totalPages > 1 ? (
+          <div className="paginated-md__dots" role="tablist" aria-label="Pages">
+            {pages.map((_, index) => {
+              const extraDot = extraPages.length > 0 && index >= mainPageCount;
+              return (
+                <button
+                  key={`page-dot-${index}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={index === safePage}
+                  aria-label={`${extraDot ? appendedLabel : 'Lesson'} page ${index + 1}`}
+                  className={`paginated-md__dot${
+                    index === safePage ? ' is-current' : ''
+                  }${extraDot ? ' is-extra' : ''}`}
+                  onClick={() => setPage(index)}
+                />
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+      {isExtraPage ? (
+        <p className="paginated-md__section">{appendedLabel}</p>
+      ) : null}
+      <div className="paginated-md__body">
+        <AssistantMarkdown canonicalEquations={canonicalEquations}>
+          {current}
+        </AssistantMarkdown>
+      </div>
+      <nav className="paginated-md__nav" aria-label="Personalized content pages">
+        <button
+          type="button"
+          className="paginated-md__btn"
+          disabled={safePage === 0}
+          onClick={() => setPage((prev) => Math.max(0, prev - 1))}
+        >
+          Previous
+        </button>
+        <button
+          type="button"
+          className="paginated-md__btn paginated-md__btn--next"
+          disabled={isLastPage}
+          onClick={() => setPage((prev) => Math.min(pages.length - 1, prev + 1))}
+        >
+          Next
+        </button>
+      </nav>
+      {showLastPageExtra ? (
+        <div className="paginated-md__extra">{lastPageExtra}</div>
       ) : null}
     </div>
   );

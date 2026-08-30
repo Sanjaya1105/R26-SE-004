@@ -536,6 +536,25 @@ function resolveLearnerProfile(value) {
   return String(value ?? '').trim();
 }
 
+function resolveWinningAssistantModel(selectionMeta, gptAnswer, deepseekAnswer) {
+  const selected = String(selectionMeta?.selectedModel || '').toLowerCase();
+  if (
+    selected === 'huggingface' ||
+    selected === 'gpt' ||
+    selected === 'hf'
+  ) {
+    return 'huggingface';
+  }
+  if (selected === 'deepseek') return 'deepseek';
+  if (String(gptAnswer || '').trim() && !String(deepseekAnswer || '').trim()) {
+    return 'huggingface';
+  }
+  if (String(deepseekAnswer || '').trim() && !String(gptAnswer || '').trim()) {
+    return 'deepseek';
+  }
+  return '';
+}
+
 function buildLessonPromptPayload({
   courseName,
   subsectionTitle,
@@ -932,6 +951,10 @@ const CourseDetail = () => {
   const [gptLoading, setGptLoading] = useState(false);
   const [gptError, setGptError] = useState('');
   const [deepseekError, setDeepseekError] = useState('');
+  const [furtherReadingAnswer, setFurtherReadingAnswer] = useState('');
+  const [furtherReadingLoading, setFurtherReadingLoading] = useState(false);
+  const [furtherReadingError, setFurtherReadingError] = useState('');
+  const [furtherReadingModel, setFurtherReadingModel] = useState('');
   /** Pedagogical prompt (gpt-service prompt builder) */
   const [pedagogicalPrompt, setPedagogicalPrompt] = useState('');
   const [promptLoading, setPromptLoading] = useState(false);
@@ -1082,6 +1105,9 @@ const CourseDetail = () => {
     setShowBothOutputs(false);
     setGptError('');
     setDeepseekError('');
+    setFurtherReadingAnswer('');
+    setFurtherReadingError('');
+    setFurtherReadingModel('');
     setPedagogicalPrompt('');
     setPromptError('');
     setPlaybackPrompt(null);
@@ -1115,6 +1141,9 @@ const CourseDetail = () => {
     setShowBothOutputs(false);
     setGptError('');
     setDeepseekError('');
+    setFurtherReadingAnswer('');
+    setFurtherReadingError('');
+    setFurtherReadingModel('');
     setPedagogicalPrompt('');
     setPromptError('');
     setPlaybackPrompt(null);
@@ -2428,6 +2457,9 @@ const CourseDetail = () => {
     setSelectedAnswer('');
     setSelectionMeta(null);
     setShowBothOutputs(false);
+    setFurtherReadingAnswer('');
+    setFurtherReadingError('');
+    setFurtherReadingModel('');
 
     const token = localStorage.getItem('token');
     if (!token) {
@@ -2542,8 +2574,6 @@ const CourseDetail = () => {
         return;
       }
 
-      setShowBothOutputs(true);
-
       // Cross-check both outputs against original source; pick less-hallucinated / better-fit text.
       try {
         const selectRes = await postWithFallback(buildSelectBestUrls(), {
@@ -2602,6 +2632,130 @@ const CourseDetail = () => {
     }
   };
 
+  const askFurtherReading = async () => {
+    if (furtherReadingLoading || furtherReadingAnswer) return;
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setFurtherReadingError('Sign in to request additional reading.');
+      return;
+    }
+
+    const winningModel = resolveWinningAssistantModel(
+      selectionMeta,
+      gptAnswer,
+      deepseekAnswer
+    );
+    if (!winningModel) {
+      setFurtherReadingError(
+        'Additional reading is available after a model is selected by the faithfulness check.'
+      );
+      return;
+    }
+
+    const authHeaders = { Authorization: `Bearer ${token}` };
+    const postWithFallback = async (urls, body, retryStatuses = [404]) => {
+      let lastErr;
+      for (const url of urls) {
+        try {
+          const res = await axios.post(url, body, {
+            headers: authHeaders,
+            timeout: 180000,
+          });
+          return res;
+        } catch (e) {
+          lastErr = e;
+          const status = e.response?.status;
+          if (retryStatuses.includes(status)) continue;
+          if (
+            !e.response &&
+            (e.code === 'ERR_NETWORK' || e.code === 'ECONNABORTED')
+          ) {
+            continue;
+          }
+          throw e;
+        }
+      }
+      throw lastErr || new Error('No reachable endpoint.');
+    };
+
+    try {
+      setFurtherReadingLoading(true);
+      setFurtherReadingError('');
+      setFurtherReadingModel(winningModel);
+
+      const body = {
+        ...buildLessonPromptPayload({
+          courseName: course?.courseName,
+          subsectionTitle: mainVideo?.title,
+          knowledgeChunk: mainVideo?.knowledgeChunk,
+          containsMath: mainVideo?.containsMath,
+          studentYear,
+          learnerProfile,
+          visualVerbalStyle,
+          analyticHolisticStyle,
+          loadLevel,
+        }),
+        kind: 'furtherReading',
+      };
+
+      let promptText = '';
+      let lastErr;
+      for (const url of buildGptPromptUrls()) {
+        try {
+          const res = await axios.post(url, body);
+          promptText = String(res.data?.data?.prompt || '').trim();
+          lastErr = null;
+          break;
+        } catch (e) {
+          lastErr = e;
+          if (e.response?.status === 404) continue;
+          if (!e.response && e.code === 'ERR_NETWORK') continue;
+          throw e;
+        }
+      }
+      if (!promptText && lastErr) throw lastErr;
+      if (!promptText) {
+        throw new Error('Could not build the additional-reading prompt.');
+      }
+
+      let answer = '';
+      if (winningModel === 'huggingface') {
+        const res = await postWithFallback(buildGptAskUrls(), {
+          question: promptText,
+        });
+        const payload = res.data?.data;
+        if (payload?.skipped) {
+          throw new Error(
+            'Hugging Face did not generate a reply. Set HF_GENERATION_ENABLED=true and restart gpt-service.'
+          );
+        }
+        answer = String(payload?.answer || '').trim();
+      } else {
+        const res = await postWithFallback(
+          buildDeepseekChatUrls(),
+          { message: promptText, history: [] },
+          [404, 502, 503, 504]
+        );
+        const dsPayload = res.data?.data || res.data || {};
+        answer = String(dsPayload.answer || dsPayload.converted || '').trim();
+      }
+
+      if (!answer) {
+        throw new Error('The selected model returned an empty additional-reading reply.');
+      }
+      setFurtherReadingAnswer(answer);
+    } catch (err) {
+      setFurtherReadingError(
+        [err.response?.data?.message, err.response?.data?.detail, err.message]
+          .filter(Boolean)
+          .join('\n\n') || 'Could not load additional reading.'
+      );
+    } finally {
+      setFurtherReadingLoading(false);
+    }
+  };
+
   const startForcedHighPersonalization = async () => {
     if (personalizationAskInFlightRef.current) return;
     personalizationAskInFlightRef.current = true;
@@ -2609,7 +2763,6 @@ const CourseDetail = () => {
       dismissPlaybackPersonalizationPrompt();
       setLoadLevel('High');
       highLoadLevelRef.current = 'High';
-      setPromptBarOpen(true);
       askPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
       const body = buildLessonPromptPayload({
@@ -2666,7 +2819,6 @@ const CourseDetail = () => {
       promptFrustrationOverrideRef.current = '';
       setLoadLevel(normalized);
       highLoadLevelRef.current = normalized;
-      setPromptBarOpen(true);
       askPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       await new Promise((resolve) => {
         const started = Date.now();
@@ -2719,7 +2871,6 @@ const CourseDetail = () => {
       promptFrustrationOverrideRef.current = 'Very High';
       setLoadLevel('Very High');
       highLoadLevelRef.current = 'Very High';
-      setPromptBarOpen(true);
       askPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
       const body = buildLessonPromptPayload({
@@ -3894,6 +4045,16 @@ const CourseDetail = () => {
                       : 'Get personalized content'}
                   </button>
                 </header>
+                {gptLoading ? (
+                  <div
+                    className="course-learn__personalization-loading"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <span />
+                    <p>Preparing a clearer version of this lesson…</p>
+                  </div>
+                ) : null}
                 {promptBarOpen ? (
                   <div className="course-learn__personalization-card">
                     <p className="course-learn__personalization-panel-title">
@@ -4052,7 +4213,36 @@ const CourseDetail = () => {
                     ) : null}
                     <PaginatedAssistantContent
                       text={selectedAnswer}
+                      appendedText={furtherReadingAnswer}
+                      appendedLabel="Extra reading"
+                      appendedLoading={furtherReadingLoading}
                       canonicalEquations={canonicalEquations}
+                      lastPageExtra={
+                        <div className="further-reading-cta">
+                          <p>Need additional reading?</p>
+                          <span>
+                            Extra reading opens on the next page. You can keep
+                            using Next after that.
+                          </span>
+                          <button
+                            type="button"
+                            className="paginated-md__btn paginated-md__btn--next"
+                            disabled={furtherReadingLoading}
+                            onClick={() => {
+                              void askFurtherReading();
+                            }}
+                          >
+                            {furtherReadingLoading
+                              ? 'Opening next page…'
+                              : 'Read more'}
+                          </button>
+                          {furtherReadingError ? (
+                            <span className="further-reading-cta__error">
+                              {furtherReadingError}
+                            </span>
+                          ) : null}
+                        </div>
+                      }
                     />
                     <LessonImageGallery
                       afterGptOutput
