@@ -72,7 +72,7 @@ const PLAYBACK_PROMPT_COPY = {
     title: 'Personalization',
     body: 'Do you need any personalization for this lesson?',
     extraInstruction:
-      'The student asked for personalization for this lesson. Use the exact knowledge chunk. Match the visual-verbal and analytic-holistic styles from the student profile. Use the predicted cognitive load and the matching frustration level. Do not invent facts.',
+      'The student asked for personalization for this lesson. Use the exact knowledge chunk. Match the visual-verbal and analytic-holistic styles from the student profile. Use the stored learner profile if it is present; if it is empty, leave it empty and do not invent one. Use the predicted cognitive load and the matching frustration level. Do not invent facts.',
   },
   shortEnd: {
     title: 'Personalization',
@@ -84,7 +84,7 @@ const PLAYBACK_PROMPT_COPY = {
     title: 'Personalization',
     body: 'Do you need any personalization for this lesson?',
     extraInstruction:
-      'The student asked for personalization at the end of this lesson. Use the exact knowledge chunk. Match the visual-verbal and analytic-holistic styles from the student profile. Use the latest predicted cognitive load and the matching frustration level. Do not invent facts.',
+      'The student asked for personalization at the end of this lesson. Use the exact knowledge chunk. Match the visual-verbal and analytic-holistic styles from the student profile. Use the stored learner profile if it is present; if it is empty, leave it empty and do not invent one. Use the latest predicted cognitive load and the matching frustration level. Do not invent facts.',
   },
 };
 
@@ -235,8 +235,8 @@ function LessonImageGallery({ images, afterGptOutput = false }) {
         marginTop: '0.85rem',
         padding: '0.85rem',
         borderRadius: '10px',
-        border: '1px solid rgba(125, 211, 252, 0.28)',
-        background: 'rgba(14, 116, 144, 0.12)',
+        border: '1px solid #bfdbfe',
+        background: '#f8fbff',
       }}
     >
       <p
@@ -287,8 +287,8 @@ function LessonImageGallery({ images, afterGptOutput = false }) {
                   display: 'block',
                   borderRadius: '8px',
                   overflow: 'hidden',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  background: 'rgba(15, 23, 42, 0.55)',
+                  border: '1px solid #e2e8f0',
+                  background: '#ffffff',
                   height: '140px',
                 }}
               >
@@ -306,7 +306,7 @@ function LessonImageGallery({ images, afterGptOutput = false }) {
               <span
                 style={{
                   fontSize: '0.72rem',
-                  color: '#7dd3fc',
+                  color: '#2563eb',
                   lineHeight: 1.35,
                 }}
               >
@@ -485,6 +485,40 @@ function resolveAnalyticHolisticStyle(value) {
   if (key === 'holistic' || key === 'wholistic') return 'Holistic';
   if (key === 'analytic' || key === 'analytical') return 'Analytic';
   return raw;
+}
+
+function resolveLearnerProfile(value) {
+  return String(value ?? '').trim();
+}
+
+function buildLessonPromptPayload({
+  courseName,
+  subsectionTitle,
+  knowledgeChunk,
+  containsMath,
+  studentYear,
+  learnerProfile,
+  visualVerbalStyle,
+  analyticHolisticStyle,
+  loadLevel,
+  frustration,
+}) {
+  return {
+    courseName: courseName || '',
+    subsectionTitle: subsectionTitle || '',
+    knowledgeChunk: knowledgeChunk || '',
+    containsMath: Boolean(containsMath),
+    studentProfile: {
+      year: studentYear || '',
+      learnerProfile: learnerProfile || '',
+    },
+    visualVerbalCognitiveStyle: visualVerbalStyle,
+    analyticWholisticCognitiveStyle: analyticHolisticStyle,
+    cognitiveLoad: {
+      level: loadLevel,
+      ...(frustration ? { frustration } : {}),
+    },
+  };
 }
 
 function splitWords(text) {
@@ -667,83 +701,58 @@ function getCognitiveLoadTheme(load) {
 
   if (value.includes('very high')) {
     return {
-      bg: '#17181f',
-      border: 'rgba(248, 113, 113, 0.32)',
-      accent: '#f87171',
-      soft: 'rgba(127, 29, 29, 0.24)',
-      text: '#fecaca',
+      bg: '#fff7f7',
+      border: 'rgba(220, 38, 38, 0.28)',
+      accent: '#dc2626',
+      soft: '#fee2e2',
+      text: '#991b1b',
     };
   }
 
   if (value.includes('high')) {
     return {
-      bg: '#17181f',
-      border: 'rgba(251, 146, 60, 0.32)',
-      accent: '#fb923c',
-      soft: 'rgba(124, 45, 18, 0.24)',
-      text: '#fed7aa',
+      bg: '#fffaf5',
+      border: 'rgba(234, 88, 12, 0.28)',
+      accent: '#ea580c',
+      soft: '#ffedd5',
+      text: '#9a3412',
     };
   }
 
   if (value.includes('medium')) {
     return {
-      bg: '#17181f',
-      border: 'rgba(96, 165, 250, 0.32)',
-      accent: '#60a5fa',
-      soft: 'rgba(30, 64, 175, 0.22)',
-      text: '#bfdbfe',
+      bg: '#f8fbff',
+      border: 'rgba(37, 99, 235, 0.22)',
+      accent: '#2563eb',
+      soft: '#dbeafe',
+      text: '#1e40af',
     };
   }
 
   if (value.includes('low')) {
     return {
-      bg: '#17181f',
-      border: 'rgba(52, 211, 153, 0.3)',
-      accent: '#34d399',
-      soft: 'rgba(6, 78, 59, 0.24)',
-      text: '#bbf7d0',
+      bg: '#f4fdf8',
+      border: 'rgba(5, 150, 105, 0.24)',
+      accent: '#059669',
+      soft: '#d1fae5',
+      text: '#047857',
     };
   }
 
   return {
-    bg: '#17181f',
-    border: 'rgba(148, 163, 184, 0.28)',
-    accent: '#93c5fd',
-    soft: '#20232d',
-    text: '#dbeafe',
+    bg: '#ffffff',
+    border: 'rgba(148, 163, 184, 0.35)',
+    accent: '#2563eb',
+    soft: '#f1f5f9',
+    text: '#334155',
   };
 }
 
 function MiniMetric({ label, value }) {
   return (
-    <div
-      style={{
-        padding: '0.65rem 0.75rem',
-        borderRadius: '10px',
-        border: '1px solid rgba(148, 163, 184, 0.22)',
-        background: 'rgba(15, 23, 42, 0.58)',
-        minWidth: 0,
-      }}
-    >
-      <div
-        style={{
-          fontSize: '0.7rem',
-          color: '#cbd5e1',
-          marginBottom: '0.22rem',
-        }}
-      >
-        {label}
-      </div>
-      <div
-        style={{
-          fontSize: '0.95rem',
-          fontWeight: 700,
-          color: '#f8fafc',
-          overflowWrap: 'anywhere',
-        }}
-      >
-        {value}
-      </div>
+    <div className="course-learn__mini-metric">
+      <div className="course-learn__mini-metric-label">{label}</div>
+      <div className="course-learn__mini-metric-value">{value}</div>
     </div>
   );
 }
@@ -875,6 +884,7 @@ const CourseDetail = () => {
   const [promptLoading, setPromptLoading] = useState(false);
   const [promptError, setPromptError] = useState('');
   const [studentYear, setStudentYear] = useState('');
+  const [learnerProfile, setLearnerProfile] = useState('');
   const [visualVerbalStyle, setVisualVerbalStyle] = useState('Visual');
   const [analyticHolisticStyle, setAnalyticHolisticStyle] = useState('Analytic');
   const [loadLevel, setLoadLevel] = useState('Medium');
@@ -1897,10 +1907,12 @@ const CourseDetail = () => {
         setAnalyticHolisticStyle(
           resolveAnalyticHolisticStyle(student.analyticWholisticCognitiveStyle)
         );
+        setLearnerProfile(resolveLearnerProfile(student.learnerProfile));
       } catch {
         if (!cancelled) {
           setVisualVerbalStyle('Visual');
           setAnalyticHolisticStyle('Analytic');
+          setLearnerProfile('');
         }
       }
     })();
@@ -1922,23 +1934,18 @@ const CourseDetail = () => {
     const timer = window.setTimeout(async () => {
       setPromptLoading(true);
       setPromptError('');
-      const body = {
-        courseName: course?.courseName || '',
-        subsectionTitle: mainVideo.title || '',
-        knowledgeChunk: mainVideo.knowledgeChunk || '',
-        containsMath: Boolean(mainVideo.containsMath),
-        studentProfile: {
-          year: studentYear,
-        },
-        visualVerbalCognitiveStyle: visualVerbalStyle,
-        analyticWholisticCognitiveStyle: analyticHolisticStyle,
-        cognitiveLoad: {
-          level: loadLevel,
-          ...(promptFrustrationOverrideRef.current
-            ? { frustration: promptFrustrationOverrideRef.current }
-            : {}),
-        },
-      };
+      const body = buildLessonPromptPayload({
+        courseName: course?.courseName,
+        subsectionTitle: mainVideo.title,
+        knowledgeChunk: mainVideo.knowledgeChunk,
+        containsMath: mainVideo.containsMath,
+        studentYear,
+        learnerProfile,
+        visualVerbalStyle,
+        analyticHolisticStyle,
+        loadLevel,
+        frustration: promptFrustrationOverrideRef.current,
+      });
 
       const urls = buildGptPromptUrls();
       let lastErr;
@@ -1985,6 +1992,7 @@ const CourseDetail = () => {
     mainVideo?.containsMath,
     course?.courseName,
     studentYear,
+    learnerProfile,
     visualVerbalStyle,
     analyticHolisticStyle,
     loadLevel,
@@ -2461,16 +2469,17 @@ const CourseDetail = () => {
       setPromptBarOpen(true);
       askPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-      const body = {
-        courseName: course?.courseName || '',
-        subsectionTitle: mainVideo?.title || '',
-        knowledgeChunk: mainVideo?.knowledgeChunk || '',
-        containsMath: Boolean(mainVideo?.containsMath),
-        studentProfile: {
-          year: studentYear,
-        },
-        cognitiveLoad: { level: 'High' },
-      };
+      const body = buildLessonPromptPayload({
+        courseName: course?.courseName,
+        subsectionTitle: mainVideo?.title,
+        knowledgeChunk: mainVideo?.knowledgeChunk,
+        containsMath: mainVideo?.containsMath,
+        studentYear,
+        learnerProfile,
+        visualVerbalStyle,
+        analyticHolisticStyle,
+        loadLevel: 'High',
+      });
       let promptText = '';
       let lastErr;
       for (const url of buildGptPromptUrls()) {
@@ -2536,7 +2545,11 @@ const CourseDetail = () => {
         tick();
       });
       await askCourseGpt(
-        `The student asked for personalization for this lesson. Use the exact knowledge chunk. Match the student's visual-verbal style (${visualVerbalStyle}) and analytic-holistic style (${analyticHolisticStyle}) from their profile. Use cognitive load ${normalized} with the matching frustration level. Do not invent facts.`
+        `The student asked for personalization for this lesson. Use the exact knowledge chunk. Match the student's visual-verbal style (${visualVerbalStyle}) and analytic-holistic style (${analyticHolisticStyle}) from their profile.${
+          learnerProfile
+            ? ` Match the stored learner profile (${learnerProfile}).`
+            : ' Learner profile is empty; do not invent one.'
+        } Use cognitive load ${normalized} with the matching frustration level. Do not invent facts.`
       );
     } finally {
       personalizationAskInFlightRef.current = false;
@@ -2566,18 +2579,18 @@ const CourseDetail = () => {
       setPromptBarOpen(true);
       askPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-      const body = {
-        courseName: course?.courseName || '',
-        subsectionTitle: mainVideo?.title || '',
-        knowledgeChunk: mainVideo?.knowledgeChunk || '',
-        containsMath: Boolean(mainVideo?.containsMath),
-        studentProfile: {
-          year: studentYear,
-        },
-        visualVerbalCognitiveStyle: visualVerbalStyle,
-        analyticWholisticCognitiveStyle: analyticHolisticStyle,
-        cognitiveLoad: { level: 'Very High', frustration: 'Very High' },
-      };
+      const body = buildLessonPromptPayload({
+        courseName: course?.courseName,
+        subsectionTitle: mainVideo?.title,
+        knowledgeChunk: mainVideo?.knowledgeChunk,
+        containsMath: mainVideo?.containsMath,
+        studentYear,
+        learnerProfile,
+        visualVerbalStyle,
+        analyticHolisticStyle,
+        loadLevel: 'Very High',
+        frustration: 'Very High',
+      });
       let promptText = '';
       let lastErr;
       for (const url of buildGptPromptUrls()) {
@@ -2600,7 +2613,11 @@ const CourseDetail = () => {
       }
 
       await askCourseGpt(
-        `The student asked for personalized content. Use the exact knowledge chunk. Match the student's visual-verbal style (${visualVerbalStyle}) and analytic-holistic style (${analyticHolisticStyle}) from their profile. No predicted cognitive load was available, so use cognitive load Very High and frustration Very High. Do not invent facts.`
+        `The student asked for personalized content. Use the exact knowledge chunk. Match the student's visual-verbal style (${visualVerbalStyle}) and analytic-holistic style (${analyticHolisticStyle}) from their profile.${
+          learnerProfile
+            ? ` Match the stored learner profile (${learnerProfile}).`
+            : ' Learner profile is empty; do not invent one.'
+        } No predicted cognitive load was available, so use cognitive load Very High and frustration Very High. Do not invent facts.`
       );
     } catch (err) {
       setGptError(
@@ -3207,7 +3224,7 @@ const CourseDetail = () => {
                   rel="noopener noreferrer"
                   style={{
                     fontSize: '0.82rem',
-                    color: '#93c5fd',
+                    color: '#2563eb',
                   }}
                 >
                   Open video in new tab
@@ -3314,8 +3331,8 @@ const CourseDetail = () => {
                             padding: '0.28rem 0.65rem',
                             borderRadius: '999px',
                             fontSize: '0.75rem',
-                            background: 'rgba(59, 130, 246, 0.16)',
-                            color: '#bfdbfe',
+                            background: '#dbeafe',
+                            color: '#1e40af',
                           }}
                         >
                           Predicting...
@@ -3329,9 +3346,9 @@ const CourseDetail = () => {
                           margin: '0.85rem 0 0 0',
                           padding: '0.75rem 0.9rem',
                           borderRadius: '10px',
-                          background: 'rgba(127, 29, 29, 0.26)',
-                          border: '1px solid rgba(248, 113, 113, 0.22)',
-                          color: '#fecaca',
+                          background: '#fef2f2',
+                          border: '1px solid #fecaca',
+                          color: '#b91c1c',
                           fontSize: '0.82rem',
                           whiteSpace: 'pre-wrap',
                         }}
@@ -3563,10 +3580,10 @@ const CourseDetail = () => {
                           margin: '0.85rem 0 0 0',
                           padding: '0.75rem 0.85rem',
                           borderRadius: '10px',
-                          border: '1px solid rgba(148, 163, 184, 0.22)',
-                          background: 'rgba(15, 23, 42, 0.5)',
+                          border: '1px solid #e2e8f0',
+                          background: '#ffffff',
                           fontSize: '0.82rem',
-                          color: '#cbd5e1',
+                          color: '#475569',
                           lineHeight: 1.5,
                         }}
                       >
@@ -3601,6 +3618,7 @@ const CourseDetail = () => {
                   <div className="course-learn__personalization-chips" aria-label="Learner settings in use">
                     <span>{visualVerbalStyle}</span>
                     <span>{analyticHolisticStyle}</span>
+                    {learnerProfile ? <span>{learnerProfile}</span> : null}
                     <span>Load {loadLevel}</span>
                     {studentYear ? <span>{studentYear}</span> : null}
                   </div>
@@ -3668,6 +3686,7 @@ const CourseDetail = () => {
                         {[
                           visualVerbalStyle,
                           analyticHolisticStyle,
+                          learnerProfile,
                           studentYear,
                           `Load ${loadLevel}`,
                         ]
@@ -3681,7 +3700,7 @@ const CourseDetail = () => {
                     style={{
                       flexShrink: 0,
                       fontSize: '0.7rem',
-                      color: '#86efac',
+                      color: '#4f46e5',
                       transform: profileOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
                       transition: 'transform 0.18s ease',
                     }}
@@ -3699,9 +3718,9 @@ const CourseDetail = () => {
                     lineHeight: 1.45,
                   }}
                 >
-                  Adjust year if needed. Cognitive styles come from the student
-                  profile. Cognitive load starts at Medium and updates every two
-                  minutes from the video session.
+                  Adjust year if needed. Cognitive styles and learner profile
+                  come from the student profile. Cognitive load starts at Medium
+                  and updates every two minutes from the video session.
                 </p>
                 <div
                   style={{
@@ -3730,6 +3749,8 @@ const CourseDetail = () => {
                     Visual-Verbal: {visualVerbalStyle} · Analytic-Holistic:{' '}
                     {analyticHolisticStyle}
                     <br />
+                    Learner profile: {learnerProfile || '—'}
+                    <br />
                     Cognitive load: {loadLevel}
                   </div>
                 </div>
@@ -3748,7 +3769,7 @@ const CourseDetail = () => {
                     marginTop: '0.85rem',
                     paddingTop: '0.85rem',
                     border: 'none',
-                    borderTop: '1px solid rgba(34, 197, 94, 0.18)',
+                    borderTop: '1px solid #e2e8f0',
                     background: 'transparent',
                     color: 'inherit',
                     cursor: 'pointer',
@@ -3790,7 +3811,7 @@ const CourseDetail = () => {
                     style={{
                       flexShrink: 0,
                       fontSize: '0.7rem',
-                      color: '#86efac',
+                      color: '#4f46e5',
                       transform: promptBarOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
                       transition: 'transform 0.18s ease',
                     }}
@@ -3882,7 +3903,7 @@ const CourseDetail = () => {
                     style={{
                       margin: '0 0 0.65rem 0',
                       fontSize: '0.8rem',
-                      color: '#fbbf24',
+                      color: '#b45309',
                       lineHeight: 1.45,
                     }}
                   >
@@ -3900,7 +3921,7 @@ const CourseDetail = () => {
                 >
                   Ask sends the pedagogical prompt to Hugging Face and DeepSeek.
                   Open Full prompt above to review it, or type an extra question.{' '}
-                  <Link to="/login" style={{ color: '#93c5fd' }}>
+                  <Link to="/login" style={{ color: '#2563eb' }}>
                     Sign in
                   </Link>{' '}
                   to ask.
@@ -4024,8 +4045,8 @@ const CourseDetail = () => {
                               style={{
                                 padding: '0.45rem 0.55rem',
                                 borderRadius: '8px',
-                                border: '1px solid rgba(255,255,255,0.08)',
-                                background: 'rgba(15, 23, 42, 0.35)',
+                                border: '1px solid #e2e8f0',
+                                background: '#ffffff',
                               }}
                             >
                               <strong style={{ color: 'var(--text)' }}>
@@ -4067,8 +4088,6 @@ const CourseDetail = () => {
                       marginTop: '0.75rem',
                       width: '100%',
                       fontSize: '0.85rem',
-                      background: 'transparent',
-                      border: '1px solid rgba(255,255,255,0.14)',
                     }}
                   >
                     {showBothOutputs
@@ -4087,15 +4106,7 @@ const CourseDetail = () => {
                       gap: '0.75rem',
                     }}
                   >
-                    <div
-                      style={{
-                        padding: '0.75rem',
-                        borderRadius: '10px',
-                        border: '1px solid rgba(255,255,255,0.08)',
-                        background: 'rgba(15, 23, 42, 0.45)',
-                        minHeight: '140px',
-                      }}
-                    >
+                    <div className="course-learn__dual-pane">
                       <p
                         className="form-label"
                         style={{ marginBottom: '0.35rem', fontSize: '0.75rem' }}
@@ -4133,15 +4144,7 @@ const CourseDetail = () => {
                       ) : null}
                     </div>
 
-                    <div
-                      style={{
-                        padding: '0.75rem',
-                        borderRadius: '10px',
-                        border: '1px solid rgba(255,255,255,0.08)',
-                        background: 'rgba(15, 23, 42, 0.45)',
-                        minHeight: '140px',
-                      }}
-                    >
+                    <div className="course-learn__dual-pane">
                       <p
                         className="form-label"
                         style={{ marginBottom: '0.35rem', fontSize: '0.75rem' }}

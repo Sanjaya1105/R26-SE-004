@@ -130,7 +130,8 @@ function uniqueKnowledgeText(input = {}) {
  * @param {string} [input.pptText]
  * @param {string} [input.pdfText]
  * @param {boolean} [input.containsMath]
- * @param {{ year?: string }} [input.studentProfile]
+ * @param {{ year?: string, learnerProfile?: string }} [input.studentProfile]
+ * @param {string} [input.learnerProfile] - stored ASSIST learner profile; empty if unset
  * @param {string} [input.visualVerbalCognitiveStyle] - Visual | Verbal | Intermediate
  * @param {string} [input.analyticWholisticCognitiveStyle] - Analytic | Holistic
  * @param {string} [input.cognitiveStyle] - legacy alias for visual-verbal style
@@ -138,6 +139,9 @@ function uniqueKnowledgeText(input = {}) {
  */
 function buildPedagogicalPrompt(input = {}) {
   const year = clean(input.studentProfile?.year) || "[Year]";
+  const learnerProfile = clean(
+    input.studentProfile?.learnerProfile ?? input.learnerProfile
+  );
 
   const visualVerbalStyle = normalizeVisualVerbalStyle(
     input.visualVerbalCognitiveStyle ?? input.cognitiveStyle
@@ -202,10 +206,15 @@ $$
 `
     : "";
 
+  const learnerProfileInstruction = learnerProfile
+    ? `
+- Learner Profile (${learnerProfile}): Match this stored study approach from the student profile. Do not invent, infer, or replace a learner profile.`
+    : "";
+
   return `System Role: You are a pedagogical expert specializing in instructional content transformation. Your goal is to adapt a specific knowledge chunk for a student to maximize engagement and minimize cognitive fatigue.
 
 Inputs:
-Student Profile: {Year: ${year}}
+Student Profile: {Year: ${year}, Learner Profile: ${learnerProfile}}
 Cognitive Style: {Visual-Verbal: ${visualVerbalStyle} (Visual, Verbal, or Intermediate), Analytic-Holistic: ${analyticHolisticStyle} (Analytic or Holistic)}
 Current Cognitive Load: {Level: ${loadLevel} (1 of 5: Very Low, Low, Medium, High, Very High), Frustration: ${frustration} (Low, Moderate, High, Very High)}
 Knowledge Chunk: {Unique extractive lesson knowledge. Do not invent facts.}
@@ -216,7 +225,7 @@ Instructions:
 Assess Need: Analyze the knowledge chunk. If it is purely transitional or too simple, output it in its original form.
 Transformation Goal: If adaptation is needed, rewrite the knowledge chunk to reduce cognitive load and match both cognitive styles while preserving the original meaning.
 - Visual-Verbal (${visualVerbalStyle}): Visual learners need spatial layouts and diagrams. Verbal learners need prose, definitions, and spoken-style explanation. Intermediate learners need a mix of both.
-- Analytic-Holistic (${analyticHolisticStyle}): Analytic learners need sequential steps and parts-before-whole. Holistic learners need the big picture first, then how the parts connect.
+- Analytic-Holistic (${analyticHolisticStyle}): Analytic learners need sequential steps and parts-before-whole. Holistic learners need the big picture first, then how the parts connect.${learnerProfileInstruction}
 
 Visual layout rules:
 - Prefer Markdown headings, short paragraphs, and bullet lists over dense prose.${mermaidInstructions}${mathInstructions}`;

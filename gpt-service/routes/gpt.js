@@ -57,6 +57,7 @@ router.post("/build-prompt", (req, res) => {
       dedupedPptText: body.dedupedPptText,
       dedupedPdfText: body.dedupedPdfText,
       studentProfile: body.studentProfile,
+      learnerProfile: body.learnerProfile,
       visualVerbalCognitiveStyle: body.visualVerbalCognitiveStyle,
       analyticWholisticCognitiveStyle: body.analyticWholisticCognitiveStyle,
       cognitiveStyle: body.cognitiveStyle,

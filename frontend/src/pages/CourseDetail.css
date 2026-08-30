@@ -324,6 +324,7 @@
 .course-learn__stage.is-playing {
   align-items: stretch;
   justify-content: flex-start;
+  background: #f4f7fc;
 }
 
 .course-learn__stage:not(.is-playing) {
@@ -389,10 +390,49 @@
 }
 
 .course-learn__below {
+  --text: #0f172a;
+  --text-muted: #64748b;
+  --surface: #ffffff;
+  --learn-line: #e2e8f0;
+  flex: 1;
   padding: 1.25rem 1.2rem 2.2rem;
-  background:
-    linear-gradient(180deg, rgba(17, 18, 24, 0.4) 0%, transparent 28%),
-    var(--learn-panel);
+  color: #0f172a;
+  background: #f4f7fc;
+}
+
+.course-learn .course-learn__below .form-label {
+  color: #475569;
+}
+
+.course-learn .course-learn__below .form-input {
+  background: #ffffff;
+  border-color: #d5deea;
+  color: #0f172a;
+}
+
+.course-learn .course-learn__below .form-input:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16);
+}
+
+.course-learn .course-learn__below .btn {
+  background: #ffffff;
+  border-color: #d5deea;
+  color: #1e293b;
+}
+
+.course-learn .course-learn__below .btn:hover {
+  background: #f1f5f9;
+}
+
+.course-learn .course-learn__below .btn-primary {
+  background: linear-gradient(135deg, #6d28d9 0%, #2563eb 100%);
+  border-color: transparent;
+  color: #fff;
+}
+
+.course-learn .course-learn__below .btn-primary:hover {
+  background: linear-gradient(135deg, #5b21b6 0%, #1d4ed8 100%);
 }
 
 .course-learn__personalize-btn {
@@ -408,12 +448,12 @@
   margin-top: 1.35rem;
   padding: 1.25rem 1.2rem 1.35rem;
   border-radius: 20px;
-  border: 1px solid rgba(167, 139, 250, 0.28);
+  border: 1px solid #e2e8f0;
   background:
-    radial-gradient(720px 180px at 100% 0%, rgba(37, 99, 235, 0.18), transparent 58%),
-    radial-gradient(520px 160px at 0% 0%, rgba(124, 58, 237, 0.2), transparent 55%),
-    #1a1c24;
-  box-shadow: 0 24px 48px -32px rgba(0, 0, 0, 0.8);
+    radial-gradient(720px 180px at 100% 0%, rgba(37, 99, 235, 0.08), transparent 58%),
+    radial-gradient(520px 160px at 0% 0%, rgba(124, 58, 237, 0.07), transparent 55%),
+    #ffffff;
+  box-shadow: 0 18px 40px -28px rgba(15, 39, 92, 0.28);
   scroll-margin-top: 1rem;
 }
 
@@ -428,7 +468,7 @@
   font-size: 0.7rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #c4b5fd;
+  color: #4f46e5;
   font-weight: 600;
 }
 
@@ -437,7 +477,7 @@
   font-size: clamp(1.35rem, 2.4vw, 1.85rem);
   line-height: 1.2;
   letter-spacing: -0.03em;
-  color: #f8fafc;
+  color: #0f172a;
 }
 
 .course-learn__personalization-lead {
@@ -445,7 +485,7 @@
   max-width: 46rem;
   font-size: 0.92rem;
   line-height: 1.55;
-  color: #c4c4cc;
+  color: #475569;
 }
 
 .course-learn__personalization-chips {
@@ -459,9 +499,9 @@
   align-items: center;
   padding: 0.28rem 0.7rem;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(15, 16, 22, 0.55);
-  color: #e4e4e7;
+  border: 1px solid #dbe4f0;
+  background: #eef2ff;
+  color: #1e3a5f;
   font-size: 0.75rem;
   font-weight: 600;
 }
@@ -470,9 +510,9 @@
   margin: 0 0 1rem;
   padding: 0.9rem 1rem;
   border-radius: 14px;
-  border: 1px dashed rgba(196, 181, 253, 0.35);
-  background: rgba(15, 16, 22, 0.35);
-  color: #d4d4d8;
+  border: 1px dashed #c7d2fe;
+  background: #f8fafc;
+  color: #475569;
   font-size: 0.88rem;
   line-height: 1.55;
 }
@@ -482,28 +522,107 @@
   margin-top: 0.85rem;
   padding: 1rem 1.05rem;
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(14, 15, 20, 0.55);
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
 }
 
 .course-learn__personalization-ask {
-  border-color: rgba(129, 140, 248, 0.28);
-  background: rgba(49, 46, 129, 0.16);
+  border-color: #c7d2fe;
+  background: #f8faff;
 }
 
 .course-learn__personalization-output {
   margin-top: 1rem;
   padding: 1.05rem 1.1rem 1.15rem;
   border-radius: 16px;
-  border: 1px solid rgba(52, 211, 153, 0.28);
-  background:
-    linear-gradient(180deg, rgba(6, 95, 70, 0.18), rgba(15, 23, 42, 0.28));
+  border: 1px solid #bbf7d0;
+  background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 100%);
 }
 
 .course-learn__personalization .assistant-md {
   font-size: 1rem;
   line-height: 1.75;
-  color: #e2e8f0;
+  color: #1e293b;
+}
+
+.course-learn__below .assistant-md h1,
+.course-learn__below .assistant-md h2,
+.course-learn__below .assistant-md h3,
+.course-learn__below .assistant-md strong {
+  color: #0f172a;
+}
+
+.course-learn__below .assistant-md .assistant-md-table-wrap,
+.course-learn__below .assistant-md th,
+.course-learn__below .assistant-md td {
+  border-color: #e2e8f0;
+}
+
+.course-learn__below .assistant-md th {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.course-learn__below .assistant-md tr:nth-child(even) td {
+  background: #f8fafc;
+}
+
+.course-learn__below .assistant-md :not(pre) > code {
+  background: #eef2ff;
+  color: #3730a3;
+}
+
+.course-learn__below .assistant-md a {
+  color: #2563eb;
+}
+
+.course-learn__below .assistant-md a:hover {
+  color: #1d4ed8;
+}
+
+.course-learn__below .assistant-md blockquote {
+  color: #475569;
+  border-left-color: #6366f1;
+}
+
+.course-learn__below .assistant-md-mermaid,
+.course-learn__below .diagram-visual {
+  border-color: #c7d2fe;
+  background: #f8faff;
+}
+
+.course-learn__below .diagram-visual figcaption,
+.course-learn__below .assistant-md-mermaid figcaption {
+  color: #4f46e5;
+}
+
+.course-learn__mini-metric {
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  min-width: 0;
+}
+
+.course-learn__mini-metric-label {
+  font-size: 0.7rem;
+  color: #64748b;
+  margin-bottom: 0.22rem;
+}
+
+.course-learn__mini-metric-value {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #0f172a;
+  overflow-wrap: anywhere;
+}
+
+.course-learn__dual-pane {
+  padding: 0.75rem;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  min-height: 140px;
 }
 
 .paginated-md {
@@ -519,7 +638,7 @@
   gap: 0.75rem;
   flex-wrap: wrap;
   padding: 0.7rem 0.15rem 0.15rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid #e2e8f0;
 }
 
 .paginated-md__status {
@@ -528,23 +647,23 @@
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #a1a1aa;
+  color: #64748b;
 }
 
 .paginated-md__btn {
   min-width: 6.5rem;
   padding: 0.48rem 0.85rem;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: #2a2c34;
-  color: #f4f4f5;
+  border: 1px solid #d5deea;
+  background: #ffffff;
+  color: #1e293b;
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
 }
 
 .paginated-md__btn:hover:not(:disabled) {
-  background: #353844;
+  background: #f1f5f9;
 }
 
 .paginated-md__btn:disabled {
