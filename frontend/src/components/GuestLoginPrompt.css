@@ -1,0 +1,77 @@
+.guest-login-prompt {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 1.2rem;
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.guest-login-prompt__card {
+  width: min(420px, 100%);
+  padding: 1.5rem 1.4rem 1.2rem;
+  border-radius: 18px;
+  background: #fff;
+  color: #172033;
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.25);
+  text-align: center;
+}
+
+.guest-login-prompt__kicker {
+  margin: 0 0 0.35rem;
+  color: #2563eb;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.guest-login-prompt__card h2 {
+  margin: 0 0 0.55rem;
+  font-size: 1.35rem;
+}
+
+.guest-login-prompt__card p {
+  margin: 0 0 1.1rem;
+  color: #475569;
+  line-height: 1.55;
+}
+
+.guest-login-prompt__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+.guest-login-prompt__primary,
+.guest-login-prompt__secondary,
+.guest-login-prompt__dismiss {
+  min-height: 42px;
+  border-radius: 11px;
+  font: inherit;
+  font-weight: 750;
+  text-decoration: none;
+  display: grid;
+  place-items: center;
+}
+
+.guest-login-prompt__primary {
+  color: #fff;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+}
+
+.guest-login-prompt__secondary {
+  border: 1px solid #cfe0f7;
+  color: #1e3a8a;
+  background: #eff6ff;
+}
+
+.guest-login-prompt__dismiss {
+  width: 100%;
+  margin-top: 0.75rem;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+}

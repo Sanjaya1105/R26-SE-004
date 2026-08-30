@@ -357,6 +357,10 @@ const Course = () => {
       setActionMessage('Please log in as a student to enroll.');
       return;
     }
+    if (!user?.role || user.role === 'Teacher' || user.role === 'Admin') {
+      setActionMessage('Teachers can preview courses without enrolling.');
+      return;
+    }
 
     setEnrollingId(courseId);
     setActionMessage('');
@@ -454,9 +458,12 @@ const Course = () => {
     const isEnrolled = enrolledIds.has(courseId);
     const isFavorite = favoriteIds.has(courseId);
     const isEnrolling = enrollingId === courseId;
+    const isTeacher = Boolean(user && (!user.role || user.role === 'Teacher'));
     const lessonsPreparing = Number(c.preparingLessonCount || 0) > 0;
-    const canEnroll = courseAllowsEnrollment(c);
-    const enrollHint = lessonsPreparing
+    const canEnroll = !isTeacher && courseAllowsEnrollment(c);
+    const enrollHint = isTeacher
+      ? 'Teachers can preview this course without enrolling.'
+      : lessonsPreparing
       ? 'Enrollment opens when every subsection has finished processing.'
       : 'This course has no published lessons yet.';
     const progress = watchByCourse[courseId];
@@ -514,9 +521,11 @@ const Course = () => {
             <button
               type="button"
               className="btn btn-primary"
-              disabled={isEnrolled || isEnrolling || !canEnroll}
+              disabled={isTeacher || isEnrolled || isEnrolling || !canEnroll}
               title={
-                isEnrolled
+                isTeacher
+                  ? 'Teachers can preview without enrolling'
+                  : isEnrolled
                   ? 'You are already enrolled'
                   : !canEnroll
                     ? enrollHint
@@ -524,11 +533,14 @@ const Course = () => {
               }
               onClick={(event) => handleEnroll(event, c)}
               style={{
-                opacity: isEnrolled || !canEnroll ? 0.85 : 1,
-                cursor: isEnrolled || !canEnroll ? 'default' : 'pointer',
+                opacity: isTeacher || isEnrolled || !canEnroll ? 0.85 : 1,
+                cursor:
+                  isTeacher || isEnrolled || !canEnroll ? 'default' : 'pointer',
               }}
             >
-              {isEnrolled
+              {isTeacher
+                ? 'Preview only'
+                : isEnrolled
                 ? 'Enrolled'
                 : isEnrolling
                   ? 'Enrolling…'
@@ -538,7 +550,7 @@ const Course = () => {
                       ? 'Enroll now'
                       : 'Not ready yet'}
             </button>
-            {!isEnrolled && !canEnroll ? (
+            {!isEnrolled && (isTeacher || !canEnroll) ? (
               <p className="course-card__cta-hint">{enrollHint}</p>
             ) : null}
           </div>
@@ -625,6 +637,70 @@ const Course = () => {
         </nav>
       </header>
 
+      {showHome ? (
+        <section className="catalog-hero" id="top">
+          <div className="catalog-hero__atmosphere" aria-hidden="true">
+            <span className="catalog-hero__orb catalog-hero__orb--one" />
+            <span className="catalog-hero__orb catalog-hero__orb--two" />
+            <span className="catalog-hero__orb catalog-hero__orb--three" />
+            <span className="catalog-hero__beam" />
+            <span className="catalog-hero__spark catalog-hero__spark--a" />
+            <span className="catalog-hero__spark catalog-hero__spark--b" />
+            <span className="catalog-hero__spark catalog-hero__spark--c" />
+          </div>
+          <div className="catalog-hero__inner">
+            <div className="catalog-hero__copy">
+              <Link
+                to="/student/profile"
+                className="catalog-hero__avatar"
+                aria-label="Open my profile"
+              >
+                {initials}
+              </Link>
+              <p className="catalog-hero__kicker">Student catalog</p>
+              <h1>Welcome back, {firstName}.</h1>
+              <p>
+                Pick up a lesson, preview a new course, or keep going from where
+                you left off. Your learning path stays matched to how you learn.
+              </p>
+              <div className="catalog-hero__actions">
+                <a className="catalog-hero__cta" href="#start-learning">
+                  Start learning
+                </a>
+                <Link className="catalog-hero__ghost" to="/student/profile">
+                  Add occupation and interests
+                </Link>
+              </div>
+            </div>
+            <aside className="catalog-hero__panel" aria-label="Your learning snapshot">
+              <span className="catalog-hero__ring" aria-hidden="true" />
+              <p className="catalog-hero__panel-kicker">Your snapshot</p>
+              <strong>Keep the streak going</strong>
+              <div className="catalog-hero__stats">
+                <div>
+                  <strong>{enrolledIds.size}</strong>
+                  <span>Enrolled</span>
+                </div>
+                <div>
+                  <strong>{favoriteIds.size}</strong>
+                  <span>Favorites</span>
+                </div>
+                <div>
+                  <strong>{continueLearning.length}</strong>
+                  <span>In progress</span>
+                </div>
+              </div>
+              <div className="catalog-hero__meter" aria-hidden="true">
+                <span />
+              </div>
+            </aside>
+          </div>
+          <a className="catalog-hero__scroll" href="#start-learning">
+            Browse courses
+          </a>
+        </section>
+      ) : null}
+
       <main className="course-catalog__body">
         {actionMessage ? (
           <p className="course-catalog__flash">{actionMessage}</p>
@@ -639,41 +715,8 @@ const Course = () => {
 
         {!loading && !error && showHome ? (
           <>
-            <section className="home-hero">
-              <div className="home-welcome">
-              <Link
-                to="/student/profile"
-                className="home-welcome__avatar"
-                aria-label="Open my profile"
-              >
-                {initials}
-              </Link>
-              <div className="home-welcome__copy">
-                <p className="home-hero__eyebrow">Student catalog</p>
-                <h1>Welcome back, {firstName}</h1>
-                <Link to="/student/profile" className="home-welcome__link">
-                  Add occupation and interests
-                </Link>
-              </div>
-              <div className="home-hero__stats" aria-label="Your learning snapshot">
-                <div>
-                  <strong>{enrolledIds.size}</strong>
-                  <span>Enrolled</span>
-                </div>
-                <div>
-                  <strong>{favoriteIds.size}</strong>
-                  <span>Favorites</span>
-                </div>
-                <div>
-                  <strong>{continueLearning.length}</strong>
-                  <span>In progress</span>
-                </div>
-              </div>
-              </div>
-            </section>
-
             {continueLearning.length > 0 ? (
-              <section className="home-section">
+              <section className="home-section" id="start-learning">
                 <div className="home-section__head">
                   <h2>Let’s start learning</h2>
                   <button
@@ -729,7 +772,7 @@ const Course = () => {
                 </div>
               </section>
             ) : (
-              <section className="home-section">
+              <section className="home-section" id="start-learning">
                 <div className="home-section__head">
                   <h2>Let’s start learning</h2>
                 </div>

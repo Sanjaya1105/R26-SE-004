@@ -31,6 +31,7 @@ import GetExam from './pages/GetExam';
 import NextLessonRecommendation from './pages/NextLessonRecommendation';
 import TeacherPushBridge from './components/TeacherPushBridge';
 import StudentAppShell from './components/StudentAppShell';
+import Home from './pages/Home';
 import StudentHomeRedirect from './components/StudentHomeRedirect';
 import './index.css';
 
@@ -57,6 +58,39 @@ const StudentRoute = ({ children }) => {
   return isStudent ? children : <Navigate to="/student/login" replace />;
 };
 
+const CoursePreviewRoute = ({ children }) => {
+  const token = localStorage.getItem('token');
+  const user = getStoredUser();
+  const isStudent = Boolean(token && user?.role === 'Student');
+  const isTeacher = Boolean(token && (!user?.role || user.role === 'Teacher'));
+  if (!token || isStudent || isTeacher) return children;
+  return <Navigate to="/student/login" replace />;
+};
+
+const CourseWatchRoute = ({ children }) => {
+  const token = localStorage.getItem('token');
+  const user = getStoredUser();
+  const isStudent = Boolean(token && user?.role === 'Student');
+  const isTeacher = Boolean(token && (!user?.role || user.role === 'Teacher'));
+  if (isStudent || isTeacher) return children;
+  return <Navigate to="/student/login" replace />;
+};
+
+const CoursePreviewShell = ({ children }) => {
+  const token = localStorage.getItem('token');
+  const user = getStoredUser();
+  const isTeacher = Boolean(user && (!user.role || user.role === 'Teacher'));
+  if (!token || isTeacher) return children;
+  return <StudentAppShell>{children}</StudentAppShell>;
+};
+
+function RootPage() {
+  const token = localStorage.getItem('token');
+  const user = getStoredUser();
+  if (token && user) return <StudentHomeRedirect />;
+  return <Home />;
+}
+
 const AdminRoute = ({ children }) => {
   const token = localStorage.getItem('token');
   const user = getStoredUser();
@@ -69,7 +103,7 @@ function App() {
     <Router>
       <TeacherPushBridge />
       <Routes>
-        <Route path="/" element={<StudentHomeRedirect />} />
+        <Route path="/" element={<RootPage />} />
         <Route path="/student/login" element={
           <StudentAppShell>
             <StudentLogin />
@@ -96,16 +130,16 @@ function App() {
           </AdminRoute>
         } />
         <Route path="/course/:courseId/watch/:subsectionId" element={
-          <StudentRoute>
+          <CourseWatchRoute>
             <TrackedVideoPlayer />
-          </StudentRoute>
+          </CourseWatchRoute>
         } />
         <Route path="/course/:courseId" element={
-          <StudentRoute>
-            <StudentAppShell>
+          <CoursePreviewRoute>
+            <CoursePreviewShell>
               <CourseDetail />
-            </StudentAppShell>
-          </StudentRoute>
+            </CoursePreviewShell>
+          </CoursePreviewRoute>
         } />
         <Route path="/course" element={
           <StudentRoute>

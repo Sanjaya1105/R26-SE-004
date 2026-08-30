@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { getGatewayBaseUrl } from '../config/gateway';
+import { PLATFORM_NAME, PLATFORM_TAGLINE } from '../config/brand';
 import PaginatedAssistantContent from '../components/PaginatedAssistantContent';
+import GuestLoginPrompt from '../components/GuestLoginPrompt';
 import LearningStateIndicator from '../components/LearningStateIndicator';
 import { fetchLoadTrend } from '../cognitiveLoad/apiClient';
 import { selectBestOutputLocally } from '../utils/selectBestOutputLocal';
@@ -453,10 +455,53 @@ function getActiveStudentId() {
 function getLoggedInStudentId() {
   try {
     const user = JSON.parse(localStorage.getItem('user') || 'null');
+    if (!user || user.role === 'Teacher' || user.role === 'Admin') return '';
     return String(user?.id ?? user?._id ?? '').trim();
   } catch {
     return '';
   }
+}
+
+function isLoggedInTeacher() {
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || 'null');
+    return Boolean(user && (!user.role || user.role === 'Teacher'));
+  } catch {
+    return false;
+  }
+}
+
+const GUEST_PREVIEW_SECONDS = 60;
+
+function isGuestPreview() {
+  return !localStorage.getItem('token');
+}
+
+function findFirstPreviewSubsection(sections) {
+  const list = Array.isArray(sections) ? [...sections] : [];
+  list.sort((a, b) => {
+    const ao = typeof a.order === 'number' ? a.order : Number.MAX_SAFE_INTEGER;
+    const bo = typeof b.order === 'number' ? b.order : Number.MAX_SAFE_INTEGER;
+    return ao - bo;
+  });
+  for (const section of list) {
+    const subs = Array.isArray(section?.subsections)
+      ? [...section.subsections]
+      : [];
+    subs.sort((a, b) => {
+      const ao = typeof a.order === 'number' ? a.order : Number.MAX_SAFE_INTEGER;
+      const bo = typeof b.order === 'number' ? b.order : Number.MAX_SAFE_INTEGER;
+      return ao - bo;
+    });
+    const withVideo = subs.find((sub) => Boolean(sub?.videoUrl));
+    if (withVideo) {
+      return {
+        sectionId: String(section.id),
+        subsectionId: String(withVideo.id),
+      };
+    }
+  }
+  return null;
 }
 
 function resolveVisualVerbalStyle(value) {
@@ -849,6 +894,8 @@ function getActiveWindowKey(sessionStart, sessionId, now = new Date()) {
 const CourseDetail = () => {
   const { courseId } = useParams();
   const navigate = useNavigate();
+  const isTeacherPreview = isLoggedInTeacher();
+  const isGuest = isGuestPreview();
   /** Below this width, sidebar stacks full-width (fixed ¼ width is unreadable). */
   const [stackLayout, setStackLayout] = useState(() =>
     typeof window !== 'undefined'
@@ -866,6 +913,12 @@ const CourseDetail = () => {
   const [openSubsectionId, setOpenSubsectionId] = useState(null);
   /** video shown in main column when user activates Video link */
   const [mainVideo, setMainVideo] = useState(null);
+  const [guestLoginPromptOpen, setGuestLoginPromptOpen] = useState(false);
+  const [guestPreviewEnded, setGuestPreviewEnded] = useState(false);
+  const [guestPromptCopy, setGuestPromptCopy] = useState({
+    title: 'Sign in to continue',
+    body: 'Create a free student account or log in to unlock the full lesson.',
+  });
   /** About description: collapsed shows ~20 words */
   const [aboutExpanded, setAboutExpanded] = useState(false);
   /** Inline GPT assistant (when a subsection video is open) */
@@ -945,6 +998,8 @@ const CourseDetail = () => {
   const watchUiTimeoutRef = useRef(null);
   const watchUserIdRef = useRef(getWatchUserId());
   const courseIdRef = useRef(courseId);
+  const guestPreviewEndedRef = useRef(false);
+  const guestCurriculumPrimedRef = useRef(false);
 
   const toggleSection = (sectionId) => {
     const k = String(sectionId);
@@ -1013,6 +1068,10 @@ const CourseDetail = () => {
   useEffect(() => {
     setOpenSubsectionId(null);
     setMainVideo(null);
+    setGuestLoginPromptOpen(false);
+    setGuestPreviewEnded(false);
+    guestPreviewEndedRef.current = false;
+    guestCurriculumPrimedRef.current = false;
     setAboutExpanded(false);
     setGptQuestion('');
     setGptAnswer('');
@@ -1137,6 +1196,14 @@ const CourseDetail = () => {
         window.clearTimeout(predictTimeoutRef.current);
         predictTimeoutRef.current = null;
       }
+      return undefined;
+    }
+
+    if (isGuestPreview()) {
+      sessionStartRef.current = null;
+      setVideoSessionId('');
+      lastVideoTimeRef.current = 0;
+      lastPlaybackMarkRef.current = null;
       return undefined;
     }
 
@@ -1360,7 +1427,7 @@ const CourseDetail = () => {
   };
 
   const sendCognitiveLoadEvent = async (payload) => {
-    if (courseTrackingDisabled || !mainVideo?.url || !videoSessionId) return;
+    if (isGuest || courseTrackingDisabled || !mainVideo?.url || !videoSessionId) return;
 
     const eventTime = new Date().toISOString();
     const currentWindowKey = getActiveWindowKey(
@@ -1413,6 +1480,7 @@ const CourseDetail = () => {
 
     const send = async () => {
       persistWatchTimeoutRef.current = null;
+      if (isLoggedInTeacher() || isGuestPreview()) return;
       const token = localStorage.getItem('token');
       try {
         await axios.put(
@@ -1595,7 +1663,53 @@ const CourseDetail = () => {
     flushCurrentWatch();
   };
 
+  const openGuestLogin = (copy) => {
+    if (copy?.title || copy?.body) {
+      setGuestPromptCopy({
+        title: copy.title || 'Sign in to continue',
+        body:
+          copy.body ||
+          'Create a free student account or log in to unlock the full lesson.',
+      });
+    }
+    setGuestLoginPromptOpen(true);
+  };
+
+  const clampGuestVideo = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    try {
+      video.pause();
+    } catch {
+      // Native pause can fail if the element is mid-load.
+    }
+    if (Number(video.currentTime) > GUEST_PREVIEW_SECONDS) {
+      video.currentTime = GUEST_PREVIEW_SECONDS;
+    }
+  };
+
+  const enforceGuestPreviewLimit = () => {
+    if (!isGuest) return false;
+    const video = videoRef.current;
+    if (!video) return false;
+    const overLimit =
+      guestPreviewEndedRef.current ||
+      Number(video.currentTime || 0) >= GUEST_PREVIEW_SECONDS;
+    if (!overLimit) return false;
+    clampGuestVideo();
+    if (!guestPreviewEndedRef.current) {
+      guestPreviewEndedRef.current = true;
+      setGuestPreviewEnded(true);
+    }
+    openGuestLogin({
+      title: 'Log in to keep watching',
+      body: 'The free preview is one minute. Log in or sign up to continue this lecture and unlock the rest of the course.',
+    });
+    return true;
+  };
+
   const handleVideoPlay = () => {
+    if (enforceGuestPreviewLimit()) return;
     if (pauseConfirmTimeoutRef.current) {
       window.clearTimeout(pauseConfirmTimeoutRef.current);
       pauseConfirmTimeoutRef.current = null;
@@ -1617,6 +1731,7 @@ const CourseDetail = () => {
   };
 
   const handleVideoSeeked = () => {
+    if (enforceGuestPreviewLimit()) return;
     lastPlaybackMarkRef.current = Number(videoRef.current?.currentTime || 0);
     lastSeekEventTimeRef.current = Date.now();
     suppressPauseCountUntilRef.current = Date.now() + 2000;
@@ -1658,6 +1773,7 @@ const CourseDetail = () => {
   };
 
   const offerShortVideoEndPersonalization = () => {
+    if (isGuest) return;
     if (shortVideoEndNotifiedRef.current) return;
     const duration = Number(videoRef.current?.duration || 0);
     if (!isShortLessonVideo(duration)) return;
@@ -1677,6 +1793,7 @@ const CourseDetail = () => {
   };
 
   const offerLongVideoEndPersonalization = () => {
+    if (isGuest) return;
     if (longVideoEndNotifiedRef.current) return;
     const duration = Number(videoRef.current?.duration || 0);
     if (!Number.isFinite(duration) || duration <= 0) return;
@@ -1719,6 +1836,7 @@ const CourseDetail = () => {
   };
 
   const handleVideoTimeUpdate = () => {
+    if (enforceGuestPreviewLimit()) return;
     const currentTime = Number(videoRef.current?.currentTime || 0);
     const previousTime = Number(lastVideoTimeRef.current || 0);
     const jumpDistance = Math.abs(currentTime - previousTime);
@@ -1772,6 +1890,7 @@ const CourseDetail = () => {
     if (isShortLessonVideo(duration)) {
       twoMinuteNotifyDoneRef.current = true;
     }
+    if (enforceGuestPreviewLimit()) return;
   };
 
   const handleVideoEnded = () => {
@@ -1923,7 +2042,7 @@ const CourseDetail = () => {
   }, []);
 
   useEffect(() => {
-    if (!mainVideo?.url) {
+    if (!mainVideo?.url || isGuestPreview()) {
       setPedagogicalPrompt('');
       setPromptLoading(false);
       setPromptError('');
@@ -2103,6 +2222,15 @@ const CourseDetail = () => {
   }, [courseId]);
 
   useEffect(() => {
+    if (!isGuest || guestCurriculumPrimedRef.current) return;
+    const preview = findFirstPreviewSubsection(sections);
+    if (!preview?.sectionId) return;
+    guestCurriculumPrimedRef.current = true;
+    setSectionOpen((prev) => ({ ...prev, [preview.sectionId]: true }));
+    setOpenSubsectionId(preview.subsectionId);
+  }, [isGuest, sections]);
+
+  useEffect(() => {
     if (!courseId?.trim() || preparingLessonCount <= 0) return undefined;
     let cancelled = false;
     const timer = window.setInterval(async () => {
@@ -2152,6 +2280,7 @@ const CourseDetail = () => {
 
     const token = localStorage.getItem('token');
     (async () => {
+      if (isLoggedInTeacher() || isGuestPreview()) return;
       try {
         const res = await axios.get(
           `${getGatewayBaseUrl()}/api/public/courses/${encodeURIComponent(
@@ -2274,6 +2403,20 @@ const CourseDetail = () => {
     0
   );
   const watchSummary = summarizeCourseWatch(sections, watchLessons);
+  const firstPreviewLecture = findFirstPreviewSubsection(sections);
+  const firstPreviewSubsectionId = firstPreviewLecture?.subsectionId || '';
+  const requestLockedLessonLogin = () => {
+    openGuestLogin({
+      title: 'This lesson is locked',
+      body: 'Guests can preview the first lecture only. Log in or sign up to unlock the full course.',
+    });
+  };
+  const requestLockedFileLogin = () => {
+    openGuestLogin({
+      title: 'Files are locked',
+      body: 'Slides, notes, and extra files unlock after you log in or sign up.',
+    });
+  };
   const canonicalEquations = parseCanonicalEquations(mainVideo?.knowledgeChunk);
 
   const askCourseGpt = async (extraInstruction) => {
@@ -2632,12 +2775,36 @@ const CourseDetail = () => {
 
   return (
     <div className="course-learn">
+      {isGuest ? (
+        <header className="course-learn__guest-bar">
+          <Link className="course-learn__guest-brand" to="/">
+            <span aria-hidden="true">L</span>
+            <strong>{PLATFORM_NAME}</strong>
+            <small>{PLATFORM_TAGLINE}</small>
+          </Link>
+          <div className="course-learn__guest-auth">
+            <Link className="course-learn__guest-login" to="/student/login">
+              Log in
+            </Link>
+            <Link className="course-learn__guest-signup" to="/student/register">
+              Sign up
+            </Link>
+          </div>
+        </header>
+      ) : null}
       <div
         className={`course-learn__grid${stackLayout ? ' is-stack' : ''}`}
       >
         <aside className="glass-panel course-learn__curriculum">
-          <Link to="/course" className="course-learn__back">
-            ← All courses
+          <Link
+            to={isTeacherPreview ? '/uploads' : isGuest ? '/' : '/course'}
+            className="course-learn__back"
+          >
+            {isTeacherPreview
+              ? '← Uploaded lessons'
+              : isGuest
+                ? '← Home'
+                : '← All courses'}
           </Link>
 
           {loading && (
@@ -2669,7 +2836,21 @@ const CourseDetail = () => {
                   : 'Educator: —'}
               </p>
 
-              <CourseWatchRing summary={watchSummary} />
+              {isTeacherPreview ? (
+                <p className="course-learn__preview-note">
+                  Teacher preview. You can open lectures and files without
+                  enrolling. Enrollment is for students only.
+                </p>
+              ) : null}
+              {isGuest ? (
+                <p className="course-learn__preview-note">
+                  Guest preview. Only the first lecture is unlocked, and the
+                  video stops after one minute. Log in or sign up to enroll and
+                  continue.
+                </p>
+              ) : null}
+
+              {isGuest ? null : <CourseWatchRing summary={watchSummary} />}
 
               {course.description ? (
                 <div style={{ marginBottom: '1.25rem' }}>
@@ -2897,7 +3078,10 @@ const CourseDetail = () => {
                               >
                                 {subs.map((sub, si) => {
                                   const subKey = String(sub.id);
-                                  const linksOpen = openSubsectionId === subKey;
+                                  const lectureLocked =
+                                    isGuest && subKey !== firstPreviewSubsectionId;
+                                  const linksOpen =
+                                    !lectureLocked && openSubsectionId === subKey;
                                   const n =
                                     typeof sub.order === 'number'
                                       ? sub.order + 1
@@ -2916,7 +3100,9 @@ const CourseDetail = () => {
                                       key={subKey}
                                       className={`course-learn__lecture${
                                         linksOpen ? ' is-open' : ''
-                                      }${isActive ? ' is-active' : ''}`}
+                                      }${isActive ? ' is-active' : ''}${
+                                        lectureLocked ? ' is-locked' : ''
+                                      }`}
                                     >
                                         <div
                                           style={{
@@ -2927,12 +3113,18 @@ const CourseDetail = () => {
                                         >
                                         <button
                                           type="button"
-                                          onClick={() =>
-                                            toggleSubsectionLinks(sub.id)
-                                          }
+                                          onClick={() => {
+                                            if (lectureLocked) {
+                                              requestLockedLessonLogin();
+                                              return;
+                                            }
+                                            toggleSubsectionLinks(sub.id);
+                                          }}
                                           aria-expanded={linksOpen}
                                           aria-label={
-                                            linksOpen
+                                            lectureLocked
+                                              ? 'Lecture locked. Log in to open.'
+                                              : linksOpen
                                               ? 'Hide download links'
                                               : 'Show video and file links'
                                           }
@@ -2976,8 +3168,13 @@ const CourseDetail = () => {
                                               Files
                                             </span>
                                           )}
+                                          {lectureLocked ? (
+                                            <span className="course-learn__badge is-locked">
+                                              Locked
+                                            </span>
+                                          ) : null}
                                         </div>
-                                        {hasVideo ? (
+                                        {hasVideo && !isGuest ? (
                                           <MiniWatchRing
                                             percent={
                                               watchSummary.byLesson[subKey]
@@ -3006,9 +3203,19 @@ const CourseDetail = () => {
                                                     e.altKey ||
                                                     e.button !== 0
                                                   ) {
+                                                    if (isGuest) {
+                                                      e.preventDefault();
+                                                      if (lectureLocked) {
+                                                        requestLockedLessonLogin();
+                                                      }
+                                                    }
                                                     return;
                                                   }
                                                   e.preventDefault();
+                                                  if (lectureLocked) {
+                                                    requestLockedLessonLogin();
+                                                    return;
+                                                  }
                                                   setMainVideo({
                                                     url: sub.videoUrl,
                                                     title: `${
@@ -3040,7 +3247,11 @@ const CourseDetail = () => {
                                                 <span className="course-learn__resource-icon">▶</span>
                                                 <span className="course-learn__resource-copy">
                                                   <strong>Play lecture</strong>
-                                                  <em>Watch in this page</em>
+                                                  <em>
+                                                    {isGuest
+                                                      ? '1-minute preview'
+                                                      : 'Watch in this page'}
+                                                  </em>
                                                 </span>
                                               </a>
                                             ) : null}
@@ -3055,7 +3266,12 @@ const CourseDetail = () => {
                                                 download={
                                                   sub.pptFileName || 'lesson.pptx'
                                                 }
-                                                onClick={(event) =>
+                                                onClick={(event) => {
+                                                  if (isGuest) {
+                                                    event.preventDefault();
+                                                    requestLockedFileLogin();
+                                                    return;
+                                                  }
                                                   downloadSubsectionFile(
                                                     event,
                                                     subsectionDownloadUrl(
@@ -3065,8 +3281,8 @@ const CourseDetail = () => {
                                                     ),
                                                     sub.pptFileName ||
                                                       'lesson.pptx'
-                                                  )
-                                                }
+                                                  );
+                                                }}
                                               >
                                                 <span className="course-learn__resource-icon">PPT</span>
                                                 <span className="course-learn__resource-copy">
@@ -3086,7 +3302,12 @@ const CourseDetail = () => {
                                                 download={
                                                   sub.pdfFileName || 'lesson.pdf'
                                                 }
-                                                onClick={(event) =>
+                                                onClick={(event) => {
+                                                  if (isGuest) {
+                                                    event.preventDefault();
+                                                    requestLockedFileLogin();
+                                                    return;
+                                                  }
                                                   downloadSubsectionFile(
                                                     event,
                                                     subsectionDownloadUrl(
@@ -3096,8 +3317,8 @@ const CourseDetail = () => {
                                                     ),
                                                     sub.pdfFileName ||
                                                       'lesson.pdf'
-                                                  )
-                                                }
+                                                  );
+                                                }}
                                               >
                                                 <span className="course-learn__resource-icon">PDF</span>
                                                 <span className="course-learn__resource-copy">
@@ -3115,6 +3336,11 @@ const CourseDetail = () => {
                                                       href={img.url}
                                                       target="_blank"
                                                       rel="noopener noreferrer"
+                                                      onClick={(event) => {
+                                                        if (!isGuest) return;
+                                                        event.preventDefault();
+                                                        requestLockedFileLogin();
+                                                      }}
                                                     >
                                                       <span className="course-learn__resource-icon">IMG</span>
                                                       <span className="course-learn__resource-copy">
@@ -3177,7 +3403,8 @@ const CourseDetail = () => {
                   <video
                     key={mainVideo.url}
                     ref={videoRef}
-                    controls
+                    controls={!guestPreviewEnded}
+                    controlsList={isGuest ? 'nodownload noplaybackrate' : undefined}
                     playsInline
                     preload="metadata"
                     src={mainVideo.url}
@@ -3190,14 +3417,40 @@ const CourseDetail = () => {
                     onLoadedMetadata={handleVideoLoadedMetadata}
                     onEnded={handleVideoEnded}
                   />
-                  <LearningStateIndicator
-                    analysis={loadTrendAnalysis}
-                    loading={cognitiveLoadLoading || loadTrendLoading}
-                    className="learning-state-wrap--course-detail"
-                  />
+                  {isGuest && guestPreviewEnded ? (
+                    <div className="course-learn__guest-hold">
+                      <p>Preview paused at one minute</p>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={() =>
+                          openGuestLogin({
+                            title: 'Log in to keep watching',
+                            body: 'The free preview is one minute. Log in or sign up to continue this lecture and unlock the rest of the course.',
+                          })
+                        }
+                      >
+                        Log in to continue
+                      </button>
+                    </div>
+                  ) : null}
+                  {!isGuest ? (
+                    <LearningStateIndicator
+                      analysis={loadTrendAnalysis}
+                      loading={cognitiveLoadLoading || loadTrendLoading}
+                      className="learning-state-wrap--course-detail"
+                    />
+                  ) : null}
                 </div>
               </div>
               <div className="course-learn__below">
+              {isGuest ? (
+                <p className="course-learn__preview-note">
+                  This is a one-minute guest preview. Log in or sign up to keep
+                  watching, download files, and get personalized explanations.
+                </p>
+              ) : (
+              <>
               <p style={{ marginTop: 0, marginBottom: 0 }}>
                 <a
                   href={
@@ -3606,21 +3859,27 @@ const CourseDetail = () => {
                     <p className="course-learn__personalization-kicker">
                       For this lesson
                     </p>
-                    <h2 id="lesson-personalization-title">
-                      Personalized content
-                    </h2>
-                    <p className="course-learn__personalization-lead">
-                      Adapted to your cognitive style and the latest load for
-                      this video. Long answers open page by page so they stay
-                      easy to read.
-                    </p>
-                  </div>
-                  <div className="course-learn__personalization-chips" aria-label="Learner settings in use">
-                    <span>{visualVerbalStyle}</span>
-                    <span>{analyticHolisticStyle}</span>
-                    {learnerProfile ? <span>{learnerProfile}</span> : null}
-                    <span>Load {loadLevel}</span>
-                    {studentYear ? <span>{studentYear}</span> : null}
+                    <div className="course-learn__personalization-title-row">
+                      <h2 id="lesson-personalization-title">
+                        Personalized content
+                      </h2>
+                      <div
+                        className="course-learn__personalization-toggles"
+                        role="toolbar"
+                        aria-label="Personalization details"
+                      >
+                        <button
+                          type="button"
+                          className={`course-learn__toggle${
+                            promptBarOpen ? ' is-on' : ''
+                          }`}
+                          aria-pressed={promptBarOpen}
+                          onClick={() => setPromptBarOpen((open) => !open)}
+                        >
+                          Full prompt
+                        </button>
+                      </div>
+                    </div>
                   </div>
                   <button
                     type="button"
@@ -3635,269 +3894,48 @@ const CourseDetail = () => {
                       : 'Get personalized content'}
                   </button>
                 </header>
-                {!selectedAnswer && !gptLoading ? (
-                  <p className="course-learn__personalization-empty">
-                    Generate a version of this lesson matched to your cognitive
-                    style. Longer replies are split into pages so they stay easy
-                    to read.
-                  </p>
-                ) : null}
-              <div className="course-learn__personalization-card">
-                <button
-                  type="button"
-                  onClick={() => setProfileOpen((open) => !open)}
-                  aria-expanded={profileOpen}
-                  style={{
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '0.75rem',
-                    padding: 0,
-                    border: 'none',
-                    background: 'transparent',
-                    color: 'inherit',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                  }}
-                >
-                  <span>
-                    <span
-                      className="form-label"
-                      style={{
-                        display: 'block',
-                        margin: 0,
-                        fontSize: '0.8rem',
-                        letterSpacing: '0.02em',
-                      }}
-                    >
-                      Learner profile
-                    </span>
-                    {!profileOpen ? (
-                      <span
-                        style={{
-                          display: 'block',
-                          marginTop: '0.25rem',
-                          fontSize: '0.75rem',
-                          color: 'var(--text-muted)',
-                          lineHeight: 1.4,
-                        }}
-                      >
-                        {[
-                          visualVerbalStyle,
-                          analyticHolisticStyle,
-                          learnerProfile,
-                          studentYear,
-                          `Load ${loadLevel}`,
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </span>
-                    ) : null}
-                  </span>
-                  <span
-                    aria-hidden="true"
-                    style={{
-                      flexShrink: 0,
-                      fontSize: '0.7rem',
-                      color: '#4f46e5',
-                      transform: profileOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
-                      transition: 'transform 0.18s ease',
-                    }}
-                  >
-                    ▼
-                  </span>
-                </button>
-                {profileOpen ? (
-                  <>
-                <p
-                  style={{
-                    margin: '0.65rem 0 0.65rem 0',
-                    fontSize: '0.75rem',
-                    color: 'var(--text-muted)',
-                    lineHeight: 1.45,
-                  }}
-                >
-                  Adjust year if needed. Cognitive styles and learner profile
-                  come from the student profile. Cognitive load starts at Medium
-                  and updates every two minutes from the video session.
-                </p>
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
-                    gap: '0.5rem',
-                    marginBottom: '0.65rem',
-                  }}
-                >
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Year"
-                    value={studentYear}
-                    onChange={(e) => setStudentYear(e.target.value)}
-                    style={{ fontSize: '0.82rem' }}
-                  />
-                  <div
-                    style={{
-                      gridColumn: '1 / -1',
-                      fontSize: '0.82rem',
-                      color: 'var(--text-muted)',
-                      lineHeight: 1.45,
-                    }}
-                  >
-                    Visual-Verbal: {visualVerbalStyle} · Analytic-Holistic:{' '}
-                    {analyticHolisticStyle}
-                    <br />
-                    Learner profile: {learnerProfile || '—'}
-                    <br />
-                    Cognitive load: {loadLevel}
-                  </div>
-                </div>
-                  </>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => setPromptBarOpen((open) => !open)}
-                  aria-expanded={promptBarOpen}
-                  style={{
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '0.75rem',
-                    marginTop: '0.85rem',
-                    paddingTop: '0.85rem',
-                    border: 'none',
-                    borderTop: '1px solid #e2e8f0',
-                    background: 'transparent',
-                    color: 'inherit',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                  }}
-                >
-                  <span>
-                    <span
-                      className="form-label"
-                      style={{
-                        display: 'block',
-                        margin: 0,
-                        fontSize: '0.8rem',
-                        letterSpacing: '0.02em',
-                      }}
-                    >
-                      Full prompt
-                    </span>
-                    {!promptBarOpen ? (
-                      <span
-                        style={{
-                          display: 'block',
-                          marginTop: '0.25rem',
-                          fontSize: '0.75rem',
-                          color: 'var(--text-muted)',
-                          lineHeight: 1.4,
-                        }}
-                      >
-                        {promptLoading
-                          ? 'Building prompt…'
-                          : pedagogicalPrompt.trim()
-                            ? 'Pedagogical prompt is ready'
-                            : 'Open to review the prompt'}
-                      </span>
-                    ) : null}
-                  </span>
-                  <span
-                    aria-hidden="true"
-                    style={{
-                      flexShrink: 0,
-                      fontSize: '0.7rem',
-                      color: '#4f46e5',
-                      transform: promptBarOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
-                      transition: 'transform 0.18s ease',
-                    }}
-                  >
-                    ▼
-                  </span>
-                </button>
                 {promptBarOpen ? (
-                  <>
-                {promptLoading ? (
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: '0.82rem',
-                      color: 'var(--text-muted)',
-                    }}
-                  >
-                    Building prompt…
-                  </p>
+                  <div className="course-learn__personalization-card">
+                    <p className="course-learn__personalization-panel-title">
+                      Full prompt
+                    </p>
+                    {promptLoading ? (
+                      <p className="course-learn__profile-meta">Building prompt…</p>
+                    ) : null}
+                    {promptError ? (
+                      <p
+                        style={{
+                          margin: '0.35rem 0 0 0',
+                          fontSize: '0.82rem',
+                          color: 'var(--danger)',
+                          whiteSpace: 'pre-wrap',
+                        }}
+                      >
+                        {promptError}
+                      </p>
+                    ) : null}
+                    <textarea
+                      className="form-input"
+                      readOnly
+                      rows={10}
+                      value={pedagogicalPrompt}
+                      placeholder={
+                        promptLoading
+                          ? 'Building prompt…'
+                          : 'Prompt will appear here when the subsection has loaded.'
+                      }
+                      style={{
+                        resize: 'vertical',
+                        fontSize: '0.78rem',
+                        lineHeight: 1.45,
+                        fontFamily: 'ui-monospace, monospace',
+                        maxHeight: '280px',
+                      }}
+                    />
+                  </div>
                 ) : null}
-                {promptError ? (
-                  <p
-                    style={{
-                      margin: '0.35rem 0 0 0',
-                      fontSize: '0.82rem',
-                      color: 'var(--danger)',
-                      whiteSpace: 'pre-wrap',
-                    }}
-                  >
-                    {promptError}
-                  </p>
-                ) : null}
-                <p
-                  className="form-label"
-                  style={{
-                    margin: '0.85rem 0 0.45rem 0',
-                    fontSize: '0.8rem',
-                    letterSpacing: '0.02em',
-                  }}
-                >
-                  Pedagogical prompt (subsection)
-                </p>
-                <p
-                  style={{
-                    margin: '0 0 0.5rem 0',
-                    fontSize: '0.75rem',
-                    color: 'var(--text-muted)',
-                    lineHeight: 1.45,
-                  }}
-                >
-                  Review the prompt here, then use it in Ask.
-                </p>
-                <textarea
-                  className="form-input"
-                  readOnly
-                  rows={14}
-                  value={pedagogicalPrompt}
-                  placeholder={
-                    promptLoading
-                      ? 'Building prompt…'
-                      : 'Prompt will appear here when the subsection has loaded.'
-                  }
-                  style={{
-                    resize: 'vertical',
-                    fontSize: '0.78rem',
-                    lineHeight: 1.45,
-                    fontFamily: 'ui-monospace, monospace',
-                    maxHeight: '360px',
-                  }}
-                />
-                  </>
-                ) : null}
-              </div>
 
               <div className="course-learn__personalization-ask">
-                <p
-                  className="form-label"
-                  style={{
-                    margin: 0,
-                    fontSize: '0.8rem',
-                    marginBottom: '0.5rem',
-                    letterSpacing: '0.02em',
-                  }}
-                >
-                  Ask the assistant
-                </p>
                 {isLessonPreparing(mainVideo.knowledgeStatus) ? (
                   <p
                     style={{
@@ -3908,65 +3946,9 @@ const CourseDetail = () => {
                     }}
                   >
                     This lesson is still processing in the background (Whisper + MiniLM).
-                    Ask will work once the knowledge chunk is ready.
+                    Personalized content will work once the knowledge chunk is ready.
                   </p>
                 ) : null}
-                <p
-                  style={{
-                    margin: '0 0 0.65rem 0',
-                    fontSize: '0.75rem',
-                    color: 'var(--text-muted)',
-                    lineHeight: 1.45,
-                  }}
-                >
-                  Ask sends the pedagogical prompt to Hugging Face and DeepSeek.
-                  Open Full prompt above to review it, or type an extra question.{' '}
-                  <Link to="/login" style={{ color: '#2563eb' }}>
-                    Sign in
-                  </Link>{' '}
-                  to ask.
-                </p>
-                <div
-                  style={{
-                    display: 'flex',
-                    gap: '0.5rem',
-                    flexWrap: 'wrap',
-                    marginBottom: '0.5rem',
-                  }}
-                >
-                  <button
-                    type="button"
-                    className="btn"
-                    disabled={!pedagogicalPrompt.trim() || gptLoading}
-                    onClick={() => setGptQuestion(pedagogicalPrompt)}
-                    style={{ fontSize: '0.8rem' }}
-                  >
-                    Use full prompt
-                  </button>
-                </div>
-                <textarea
-                  className="form-input"
-                  rows={6}
-                  value={gptQuestion}
-                  onChange={(e) => setGptQuestion(e.target.value)}
-                  placeholder="Paste the pedagogical prompt here, or type a question…"
-                  style={{ resize: 'vertical', fontSize: '0.88rem' }}
-                />
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => askCourseGpt()}
-                      disabled={
-                        gptLoading ||
-                        !pedagogicalPrompt.trim() ||
-                        isLessonPreparing(mainVideo.knowledgeStatus)
-                      }
-                  style={{ marginTop: '0.5rem', width: '100%', fontSize: '0.85rem' }}
-                >
-                  {gptLoading
-                    ? 'Generating + selecting best output…'
-                    : 'Ask both models'}
-                </button>
 
                 {deepseekError ? (
                   <p
@@ -4191,18 +4173,22 @@ const CourseDetail = () => {
                 ) : null}
               </div>
               </section>
+              </>
+              )}
               </div>
             </>
           ) : (
            <p className="course-learn__empty">
               {preparingLessonCount > 0 && visibleLessonCount === 0
                 ? 'This lesson is still being prepared. The video will appear here after processing finishes.'
-                : 'Choose a lecture from Course content on the right, then play the video.'}
+                : isGuest
+                  ? 'Open the first lecture to preview one minute, then log in to continue.'
+                  : 'Choose a lecture from Course content on the right, then play the video.'}
             </p>
           )}
         </main>
       </div>
-      {mainVideo && playbackPrompt ? (
+      {mainVideo && playbackPrompt && !isGuest ? (
         <PlaybackPersonalizationPrompt
           kind={playbackPrompt}
           busy={gptLoading}
@@ -4223,6 +4209,12 @@ const CourseDetail = () => {
           }}
         />
       ) : null}
+      <GuestLoginPrompt
+        open={guestLoginPromptOpen}
+        title={guestPromptCopy.title}
+        body={guestPromptCopy.body}
+        onClose={() => setGuestLoginPromptOpen(false)}
+      />
     </div>
   );
 };
