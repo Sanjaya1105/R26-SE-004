@@ -77,6 +77,7 @@ def process_completed_windows_for_event(event_data: dict) -> dict:
     processed_windows = []
     window_start = next_window_start
 
+    # Only closed 2-minute windows are sent, so LIME gets complete behavior snapshots.
     while window_start + WINDOW_DURATION <= last_event_time:
         minute_index = int(((window_start - first_event_time).total_seconds() // WINDOW_DURATION.total_seconds()) + 1)
         window_end = window_start + WINDOW_DURATION
@@ -107,6 +108,7 @@ def _process_window(
     window_start: datetime,
     window_end: datetime,
 ) -> dict:
+    # Dispatch records make this safe to call repeatedly as new raw events arrive.
     if has_successful_feature_window_dispatch(
         student_id=student_id,
         lesson_id=lesson_id,
@@ -258,6 +260,7 @@ def _ensure_feature_window_saved(feature_window_data: dict):
 
 def _post_feature_window_to_lime(feature_window_data: dict) -> dict:
     endpoint = os.getenv("LIME_PREDICT_URL", "http://127.0.0.1:8110/api/v1/predict").strip()
+    # Send only the fields LIME AI needs for its explanation model.
     request_body = json.dumps(
         {
             key: _serialize_value(value)

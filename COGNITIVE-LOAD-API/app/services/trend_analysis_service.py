@@ -27,6 +27,7 @@ def analyze_cognitive_load_trend(
     session_id: str | None = None,
     limit: int = 12,
 ) -> CognitiveLoadTrendAnalysisResponse:
+    # Use a bounded recent history so the trend reflects the current lesson moment.
     rows = get_student_lesson_prediction_windows(
         student_id=student_id,
         lesson_id=lesson_id,
@@ -93,6 +94,7 @@ def _normalize_row(row: dict) -> dict:
 
 
 def _detect_trend(scores: list[int]) -> str:
+    # The latest few windows matter most for deciding whether load is rising or settling.
     recent_scores = [score for score in scores[-4:] if score > 0]
 
     if len(recent_scores) < 2:
@@ -119,6 +121,7 @@ def _detect_trend(scores: list[int]) -> str:
 
 
 def _detect_risk_level(current_score: int, trend: str, scores: list[int]) -> str:
+    # Risk combines the current load with whether high load is continuing.
     high_load_streak = _count_high_load_streak(scores)
 
     if current_score >= 5:

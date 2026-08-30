@@ -68,6 +68,7 @@ def get_feature_window_by_bounds(
 
 
 def save_feature_window(feature_data: dict):
+    # One student/session/window should have one latest feature row, not duplicates.
     query = """
         INSERT INTO feature_windows (
             student_id,
@@ -190,6 +191,7 @@ def has_successful_feature_window_dispatch(
 
 
 def save_prediction_log(prediction_data: dict):
+    # Keep prediction_logs aligned with the feature window that produced the score.
     query = """
         INSERT INTO prediction_logs (
             feature_window_id,
@@ -305,6 +307,7 @@ def get_student_lesson_prediction_windows(
     session_filter = ""
     values: tuple
 
+    # Session is optional so teachers can view either one session or the latest lesson history.
     if session_id:
         session_filter = "AND fw.session_id = %s"
         values = (student_id, lesson_id, session_id, limit)

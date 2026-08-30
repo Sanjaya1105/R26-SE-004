@@ -58,6 +58,7 @@ COGNITIVE_LOAD_LABELS = {
     5: "Very High",
 }
 
+# These limits protect the model from windows that mostly contain missing activity.
 MIN_TIME_ON_CONTENT_SECONDS = 60
 MAX_IDLE_SECONDS = 60
 MAX_PAUSED_SECONDS = 60
@@ -111,6 +112,7 @@ def _write_csv_row(file_path: str, row_data: dict):
 def get_prediction_logs(student_id: str | None = None, lesson_id: str | None = None, minute_index: int | None = None):
     records = []
 
+    # Read both CSV files because locked-file fallback rows are still valid predictions.
     for file_path in (CSV_FILE, FALLBACK_CSV_FILE):
         if not os.path.isfile(file_path):
             continue
@@ -211,6 +213,7 @@ def predict_cognitive_load(data, persist: bool | None = None):
 
     reliability = check_prediction_reliability(data)
     if not reliability["reliable"]:
+        # Return a clear "not reliable" result instead of forcing a weak prediction.
         return {
             "student_id": data.student_id,
             "lesson_id": data.lesson_id,
@@ -252,6 +255,7 @@ def predict_cognitive_load(data, persist: bool | None = None):
         columns=MODEL_FEATURE_FIELDS,
     )
 
+    # The trained model only expects video-behavior features in this exact order.
     prediction = model.predict(input_df)[0]
     proba = model.predict_proba(input_df)[0]
     confidence = max(proba)
@@ -282,6 +286,7 @@ def predict_cognitive_load(data, persist: bool | None = None):
     }
 
     if should_persist:
+        # Save the same result in MySQL and CSV so analytics and exports stay in sync.
         feature_window_id = save_feature_window(feature_window_data)
         save_prediction_log(
             {
