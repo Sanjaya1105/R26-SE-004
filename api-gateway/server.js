@@ -98,6 +98,13 @@ app.use(
     target: BACKEND_SERVICE_URL,
     changeOrigin: true,
     pathRewrite: (path) => `/api/enrollments${path}`,
+    on: {
+      proxyReq: (proxyReq) => {
+        if (GATEWAY_SHARED_SECRET) {
+          proxyReq.setHeader("x-gateway-secret", GATEWAY_SHARED_SECRET);
+        }
+      },
+    },
   })
 );
 
