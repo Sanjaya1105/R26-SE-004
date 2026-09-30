@@ -154,7 +154,7 @@ function App() {
           </StudentAppShell>
         } />
         <Route path="/split-screen" element={
-          <StudentAppShell>
+          <StudentAppShell hideFooter>
             <Module2 />
           </StudentAppShell>
         } />
