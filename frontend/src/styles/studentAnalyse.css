@@ -319,15 +319,110 @@
 }
 
 /* Student-facing previous lesson summary navigation */
+.previous-lesson-summary-page.student-analyse-shell {
+  max-width: none;
+  padding: 0 0 3.5rem;
+  gap: 1.35rem;
+  border-radius: 0;
+  background:
+    radial-gradient(circle at 8% 20%, rgba(191, 219, 254, 0.5), transparent 26%),
+    linear-gradient(180deg, #eef4ff 0%, #f4f7fc 36%, #f8fafc 100%);
+}
+
+.previous-lesson-summary-page .student-analyse-header {
+  position: relative;
+  isolation: isolate;
+  min-height: 230px;
+  padding: 40px max(clamp(20px, 6vw, 82px), calc((100% - 1180px) / 2));
+  overflow: hidden;
+  border: 0;
+  border-bottom: 1px solid rgba(191, 219, 254, 0.24);
+  border-radius: 0;
+  color: #ffffff;
+  background:
+    radial-gradient(circle at 82% 12%, rgba(147, 197, 253, 0.42), transparent 30%),
+    radial-gradient(circle at 12% 100%, rgba(167, 139, 250, 0.34), transparent 34%),
+    linear-gradient(118deg, #0b1f52 0%, #17409a 46%, #2563eb 76%, #4f46e5 100%);
+  box-shadow: 0 22px 50px -38px rgba(15, 39, 92, 0.9);
+}
+
+.previous-lesson-summary-page .student-analyse-header::after {
+  position: absolute;
+  z-index: -1;
+  top: -95px;
+  right: 8%;
+  width: 290px;
+  height: 290px;
+  border: 1px solid rgba(255, 255, 255, 0.17);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 46px rgba(255, 255, 255, 0.045),
+    0 0 0 92px rgba(255, 255, 255, 0.025);
+  content: '';
+}
+
+.previous-lesson-summary-page .student-analyse-header .eyebrow {
+  color: #bfdbfe;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.previous-lesson-summary-page .student-analyse-header h1 {
+  margin: 0.3rem 0 0.45rem;
+  color: #ffffff;
+  font-size: clamp(2rem, 4vw, 2.65rem);
+  letter-spacing: -0.045em;
+}
+
+.previous-lesson-summary-page .student-analyse-header .hero-copy {
+  margin: 0;
+  color: #dbeafe;
+  line-height: 1.65;
+}
+
+.previous-lesson-summary-page .student-analyse-header .back-button {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.42);
+  backdrop-filter: blur(10px);
+}
+
+.previous-lesson-summary-page .student-analyse-header .back-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.previous-lesson-summary-page > .alert,
+.previous-lesson-summary-page > .student-analyse-toolbar,
+.previous-lesson-summary-page > .student-analyse-results,
+.previous-lesson-summary-page > .student-summary-tabs,
+.previous-lesson-summary-page > .student-summary-content,
+.previous-lesson-summary-page > div,
+.previous-lesson-summary-page > nav,
+.previous-lesson-summary-page > section {
+  width: min(1120px, calc(100% - 40px));
+  margin-right: auto;
+  margin-left: auto;
+}
+
 .previous-lesson-summary-page .student-analyse-toolbar {
   position: relative;
   z-index: 2;
+  padding: 1.25rem;
+  border: 1px solid #dbe7f5;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 22px 55px -44px rgba(15, 39, 92, 0.68);
 }
 
 .student-summary-tabs {
   display: grid;
   gap: 1rem;
-  padding: 1rem;
+  padding: 1.15rem;
+  border: 1px solid #dbe7f5;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 22px 55px -44px rgba(15, 39, 92, 0.68);
 }
 
 .student-summary-tabs-heading {
@@ -424,6 +519,11 @@
 
 .student-summary-content {
   min-height: 360px;
+  padding: clamp(1.25rem, 3vw, 2rem);
+  border: 1px solid #dbe7f5;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 22px 55px -44px rgba(15, 39, 92, 0.68);
 }
 
 .student-summary-section {
@@ -497,6 +597,22 @@
 }
 
 @media (max-width: 720px) {
+  .previous-lesson-summary-page .student-analyse-header {
+    min-height: 0;
+    padding: 34px 20px;
+  }
+
+  .previous-lesson-summary-page > .alert,
+  .previous-lesson-summary-page > .student-analyse-toolbar,
+  .previous-lesson-summary-page > .student-analyse-results,
+  .previous-lesson-summary-page > .student-summary-tabs,
+  .previous-lesson-summary-page > .student-summary-content,
+  .previous-lesson-summary-page > div,
+  .previous-lesson-summary-page > nav,
+  .previous-lesson-summary-page > section {
+    width: min(100% - 24px, 1120px);
+  }
+
   .student-summary-tab-list {
     grid-template-columns: 1fr;
   }

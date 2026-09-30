@@ -4,6 +4,7 @@ import axios from 'axios';
 import { getGatewayBaseUrl } from '../config/gateway';
 import { PLATFORM_NAME, PLATFORM_TAGLINE } from '../config/brand';
 import { CatalogWatchPie } from '../components/CourseWatchRing';
+import StudentRoutineChatbot from '../components/StudentRoutineChatbot';
 import {
   getWatchUserId,
   loadLocalProgress,
@@ -977,6 +978,7 @@ const Course = () => {
           </div>
         </div>
       )}
+      <StudentRoutineChatbot />
     </div>
   );
 };

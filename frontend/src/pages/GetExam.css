@@ -1,23 +1,57 @@
 .get-exam-page {
   min-height: 100vh;
   color: #172033;
-  background: linear-gradient(180deg, #eef6ff 0%, #f7faff 45%, #f8fafc 100%);
+  background:
+    radial-gradient(circle at 8% 18%, rgba(191, 219, 254, 0.48), transparent 28%),
+    linear-gradient(180deg, #eef4ff 0%, #f4f7fc 34%, #f8fafc 100%);
 }
 
 .get-exam-header {
+  position: relative;
+  isolation: isolate;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  padding: 30px clamp(20px, 5vw, 70px);
-  background: rgba(255, 255, 255, 0.96);
-  border-bottom: 1px solid #d8e3f0;
+  min-height: 230px;
+  padding: 42px max(clamp(20px, 6vw, 82px), calc((100% - 1180px) / 2));
+  overflow: hidden;
+  color: #fff;
+  background:
+    radial-gradient(circle at 82% 12%, rgba(147, 197, 253, 0.42), transparent 30%),
+    radial-gradient(circle at 12% 100%, rgba(167, 139, 250, 0.34), transparent 34%),
+    linear-gradient(118deg, #0b1f52 0%, #17409a 46%, #2563eb 76%, #4f46e5 100%);
+  border-bottom: 1px solid rgba(191, 219, 254, 0.24);
+  box-shadow: 0 22px 50px -38px rgba(15, 39, 92, 0.9);
 }
 
-.get-exam-header p,
-.eyebrow {
+.get-exam-header::after {
+  position: absolute;
+  z-index: -1;
+  top: -95px;
+  right: 8%;
+  width: 290px;
+  height: 290px;
+  border: 1px solid rgba(255, 255, 255, 0.17);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 46px rgba(255, 255, 255, 0.045),
+    0 0 0 92px rgba(255, 255, 255, 0.025);
+  content: '';
+}
+
+.get-exam-header p {
   margin: 0;
-  color: #176b55;
+  color: #bfdbfe;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.get-exam-page .eyebrow {
+  margin: 0;
+  color: #1d4ed8;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -26,28 +60,36 @@
 
 .get-exam-header h1 {
   margin: 5px 0;
+  color: #fff;
   font-size: clamp(30px, 4vw, 42px);
+  letter-spacing: -0.045em;
 }
 
-.get-exam-header span,
 .get-exam-panel p,
 .lesson-list-heading span {
   color: #64748b;
 }
 
+.get-exam-header > div > span {
+  display: block;
+  max-width: 620px;
+  color: #dbeafe;
+  line-height: 1.65;
+}
+
 .get-exam-main {
   display: grid;
   gap: 24px;
-  width: min(1000px, calc(100% - 40px));
-  margin: 34px auto;
+  width: min(1120px, calc(100% - 40px));
+  margin: 34px auto 56px;
 }
 
 .get-exam-panel {
   padding: clamp(22px, 4vw, 34px);
   background: #fff;
-  border: 1px solid #d8e3f0;
-  border-radius: 14px;
-  box-shadow: 0 18px 45px -35px rgba(30, 64, 175, 0.55);
+  border: 1px solid #dbe7f5;
+  border-radius: 18px;
+  box-shadow: 0 22px 55px -42px rgba(15, 39, 92, 0.68);
 }
 
 .intro-panel,
@@ -70,32 +112,46 @@
 .get-exam-button {
   min-height: 42px;
   padding: 10px 17px;
-  border-radius: 8px;
+  border-radius: 10px;
   font-weight: 750;
   cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
 }
 
 .get-exam-button.primary {
   color: #fff;
-  background: #176b55;
-  border: 1px solid #176b55;
+  background: linear-gradient(135deg, #2563eb, #4f46e5);
+  border: 1px solid #2563eb;
+  box-shadow: 0 12px 24px -16px rgba(37, 99, 235, 0.9);
 }
 
 .get-exam-button.secondary {
-  color: #274f7d;
+  color: #1e40af;
   background: #fff;
-  border: 1px solid #9aabbe;
+  border: 1px solid #bfdbfe;
+}
+
+.get-exam-header .get-exam-button.secondary {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.42);
+  backdrop-filter: blur(10px);
 }
 
 .get-exam-button.download {
   color: #fff;
-  background: #274f7d;
-  border: 1px solid #274f7d;
+  background: #102b6a;
+  border: 1px solid #102b6a;
 }
 
 .get-exam-button.download:hover {
-  background: #1e3f66;
-  border-color: #1e3f66;
+  background: #17409a;
+  border-color: #17409a;
+}
+
+.get-exam-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 26px -18px rgba(30, 64, 175, 0.8);
 }
 
 .get-exam-button:disabled {
@@ -141,8 +197,8 @@
   font: inherit;
   font-weight: 600;
   background: #f8fbff;
-  border: 1px solid #aebdce;
-  border-radius: 8px;
+  border: 1px solid #c5d8ef;
+  border-radius: 10px;
 }
 
 .lesson-select-label select:focus {
@@ -175,8 +231,9 @@
 .quiz-question {
   min-width: 0;
   padding: 20px;
-  border: 1px solid #d8e3f0;
-  border-radius: 10px;
+  background: linear-gradient(180deg, #ffffff, #fbfdff);
+  border: 1px solid #dbe7f5;
+  border-radius: 14px;
 }
 
 .quiz-question legend {
@@ -202,7 +259,7 @@
   color: #334155;
   background: #f8fafc;
   border: 1px solid #dbe3ec;
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
 }
 
@@ -462,6 +519,11 @@
   .lesson-list-heading {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .get-exam-header {
+    min-height: 0;
+    padding: 34px 20px;
   }
 
   .selected-lesson-actions,
